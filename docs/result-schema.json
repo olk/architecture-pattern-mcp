@@ -1,0 +1,405 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "architecture-design-schema",
+  "title": "ArchitectureDesign",
+  "description": "Architecture Design Result schema — top-level fields match src/schemas/design.py::ArchitectureDesign; definition subschemas match their respective schema classes",
+  "type": "object",
+  "required": [
+    "overview",
+    "components"
+  ],
+  "properties": {
+    "overview": {
+      "$ref": "#/definitions/ArchitectureOverview"
+    },
+    "components": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/definitions/Component"
+      }
+    },
+    "relationships": {
+      "type": "array",
+      "default": [],
+      "items": {
+        "$ref": "#/definitions/Relationship"
+      }
+    },
+    "quality_attributes": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "number"
+      },
+      "default": {}
+    },
+    "api_contracts": {
+      "type": "array",
+      "default": [],
+      "description": "REST API contracts for code generation",
+      "items": {
+        "$ref": "#/definitions/ApiContract"
+      }
+    },
+    "shared_data_models": {
+      "type": "array",
+      "default": [],
+      "description": "Data models shared across components",
+      "items": {
+        "$ref": "#/definitions/DataModel"
+      }
+    },
+    "event_contracts": {
+      "type": "array",
+      "default": [],
+      "description": "Event contracts for async communication",
+      "items": {
+        "$ref": "#/definitions/EventContract"
+      }
+    }
+  },
+  "definitions": {
+    "ArchitectureOverview": {
+      "type": "object",
+      "required": [
+        "style",
+        "category",
+        "principles"
+      ],
+      "properties": {
+        "style": {
+          "type": "string",
+          "enum": [
+            "actor-based",
+            "aiml-centric",
+            "api-gateway",
+            "backend-for-frontend",
+            "blockchain-based",
+            "broker",
+            "command-query-responsibility-segregation",
+            "data-mesh",
+            "edge-computing",
+            "enterprise-service-bus",
+            "event-driven",
+            "event-sourcing",
+            "half-sync-half-async",
+            "hexagonal",
+            "hybrid-cloud",
+            "kappa-architecture",
+            "lambda-architecture",
+            "layered-monolith",
+            "microkernel-plugin",
+            "microservices",
+            "model-view-controller",
+            "modular-monolith",
+            "monolithic",
+            "multi-cloud",
+            "pipe-and-filter",
+            "presentation-abstraction-control",
+            "reactive-architecture",
+            "reflection-architecture",
+            "rule-based-system",
+            "saga",
+            "serverless",
+            "service-mesh",
+            "service-oriented-architecture",
+            "space-based",
+            "task-control-architecture"
+          ],
+          "description": "Architecture style from ArchitectureStyle enumeration"
+        },
+        "category": {
+          "type": "string",
+          "enum": [
+            "messaging",
+            "structural",
+            "cloud",
+            "data",
+            "ai_cognitive",
+            "specialized",
+            "api_gateway",
+            "coordination",
+            "dataflow",
+            "presentation"
+          ],
+          "description": "Architecture pattern category from PatternCategory enumeration"
+        },
+        "principles": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "constraints": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        }
+      }
+    },
+    "Component": {
+      "type": "object",
+      "required": [
+        "id",
+        "name",
+        "type",
+        "description",
+        "responsibilities"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_-]*$",
+          "description": "Unique component identifier"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "type": {
+          "type": "string",
+          "minLength": 1
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1
+        },
+        "responsibilities": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          }
+        },
+        "interfaces": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "technology_stack": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "api_contract": {
+          "$ref": "#/definitions/ApiContract"
+        },
+        "data_models": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/DataModel"
+          },
+          "default": []
+        },
+        "config_requirements": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        }
+      }
+    },
+    "Relationship": {
+      "type": "object",
+      "required": [
+        "source",
+        "target",
+        "type",
+        "description"
+      ],
+      "properties": {
+        "source": {
+          "type": "string"
+        },
+        "target": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        }
+      }
+    },
+    "ApiContract": {
+      "type": "object",
+      "required": [
+        "component_id",
+        "base_path"
+      ],
+      "properties": {
+        "component_id": {
+          "type": "string",
+          "description": "Reference to component this API belongs to"
+        },
+        "base_path": {
+          "type": "string",
+          "description": "Base path for all endpoints, e.g., '/api/v1/users'"
+        },
+        "endpoints": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ApiEndpoint"
+          },
+          "default": []
+        },
+        "description": {
+          "type": "string",
+          "default": ""
+        }
+      }
+    },
+    "ApiEndpoint": {
+      "type": "object",
+      "required": [
+        "method",
+        "path"
+      ],
+      "properties": {
+        "method": {
+          "type": "string",
+          "enum": [
+            "GET",
+            "POST",
+            "PUT",
+            "DELETE",
+            "PATCH"
+          ]
+        },
+        "path": {
+          "type": "string",
+          "description": "Endpoint path, e.g., '/users/{user_id}'"
+        },
+        "summary": {
+          "type": "string",
+          "default": ""
+        },
+        "request_schema": {
+          "type": "object",
+          "description": "JSON Schema for request body",
+          "additionalProperties": true
+        },
+        "response_schema": {
+          "type": "object",
+          "description": "JSON Schema for response body",
+          "additionalProperties": true
+        },
+        "auth_required": {
+          "type": "boolean",
+          "default": true
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        }
+      }
+    },
+    "DataModel": {
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Model name, e.g., 'User', 'Order'"
+        },
+        "fields": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ModelField"
+          },
+          "default": []
+        },
+        "description": {
+          "type": "string",
+          "default": ""
+        },
+        "is_shared": {
+          "type": "boolean",
+          "default": false
+        }
+      }
+    },
+    "ModelField": {
+      "type": "object",
+      "required": [
+        "name",
+        "type"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string",
+          "description": "Field type (str, int, float, bool, datetime, list, dict)"
+        },
+        "required": {
+          "type": "boolean",
+          "default": true
+        },
+        "description": {
+          "type": "string",
+          "default": ""
+        },
+        "default": {
+          "type": [
+            "string",
+            "number",
+            "boolean",
+            "null",
+            "array",
+            "object"
+          ]
+        }
+      }
+    },
+    "EventContract": {
+      "type": "object",
+      "required": [
+        "event_name",
+        "payload_schema",
+        "published_by"
+      ],
+      "properties": {
+        "event_name": {
+          "type": "string",
+          "description": "Event name, e.g., 'user.created', 'order.completed'"
+        },
+        "payload_schema": {
+          "type": "object",
+          "description": "JSON Schema for event payload",
+          "additionalProperties": true
+        },
+        "published_by": {
+          "type": "string",
+          "description": "Component ID that publishes this event"
+        },
+        "consumed_by": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "description": {
+          "type": "string",
+          "default": ""
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,124 @@
+{
+  "category": "messaging",
+  "name": "actor-based",
+  "context": "Distributed systems requiring high concurrency, fault tolerance, and location transparency where autonomous entities communicate via asynchronous message passing. The actor model treats each actor as the fundamental unit of computation—encapsulating state, behavior, and mailbox—organized in hierarchical supervision trees that enable automatic failure recovery.",
+  "benefits": [
+    "Native concurrency without locks—message passing eliminates race conditions",
+    "Fault isolation through supervision hierarchies—failures are contained and recovered automatically",
+    "Location transparency—actors operate identically whether local or remote",
+    "Elastic scalability—actors distribute across nodes dynamically via clustering and sharding",
+    "Backpressure built into mailbox semantics—bounded queues prevent memory exhaustion",
+    "Natural fit for event sourcing and event-driven architectures",
+    "Self-healing systems via \"let it crash\" supervision philosophy"
+  ],
+  "tradeoffs": [
+    "Debugging message flows is complex without proper distributed tracing tools",
+    "Async testing requires specialized test harnesses and techniques",
+    "Steep learning curve—demands fundamentally different mental model from OOP",
+    "Message ordering only guaranteed per-actor, not across actor interactions",
+    "Circular message waits can cause deadlocks in poorly designed flows",
+    "Per-message overhead makes actor-per-request patterns expensive at scale",
+    "Synchronous thinking defeats the async benefits"
+  ],
+  "quality_attributes": {
+    "scalability": 9,
+    "maintainability": 6,
+    "reliability": 9,
+    "security": 6,
+    "performance": 7,
+    "simplicity": 3
+  },
+  "suitable_domains": [
+    "telecom-and-real-time-messaging",
+    "financial-trading-platforms",
+    "iot-device-management",
+    "multi-agent-ai-systems",
+    "gaming-servers",
+    "distributed-data-pipelines"
+  ],
+  "unsuitable_domains": [
+    "cpu-bound-computation",
+    "simple-crud-applications",
+    "sub-millisecond-response-requirements",
+    "low-concurrency-single-node-apps",
+    "teams-without-distributed-systems-expertise"
+  ],
+  "use_cases": [
+    "Chat or collaboration platforms with thousands of concurrent sessions",
+    "Order processing systems with independent stateful handlers",
+    "IoT device gateways managing millions of connections",
+    "Multi-agent AI orchestrations with autonomous workers",
+    "Fault-tolerant distributed caches with automatic recovery",
+    "Event-sourced domains where state transitions are immutable events"
+  ],
+  "avoid_when": [
+    "Sub-millisecond latency requirements where mailbox queuing adds unpredictable delay",
+    "Stateless services that don't benefit from encapsulated state",
+    "Small teams with simple requirements that don't justify paradigm shift",
+    "CPU-intensive workloads where scheduling overhead hurts throughput",
+    "Environments where debugging async message flows is prohibitively difficult"
+  ],
+  "component_types": [
+    "ActorSystem: Container managing actor lifecycle, dispatching, and mailbox coordination",
+    "Actor: Primitive computation unit with private state, behavior, and mailbox",
+    "Mailbox: Queue of incoming messages per actor; processes messages sequentially one at a time",
+    "Dispatcher: Thread pool that drives actor execution and scheduling",
+    "Supervisor: Parent actor implementing restart/resume/stop/escalate strategies",
+    "Router: Partitions messages across actor instances for load distribution",
+    "ShardCoordinator: Manages actor sharding across cluster nodes",
+    "EventSourcedActor: Actor with persisted state via journal replay"
+  ],
+  "technology_stack": [
+    "Erlang/OTP",
+    "Akka/Pekko",
+    "Dapr",
+    "Orleans",
+    "MicrosoftAirframe",
+    "Pykka",
+    "Celluloid"
+  ],
+  "anti_patterns": [
+    "Actor-per-message (scheduling overhead at scale)",
+    "Unbounded mailboxes (memory exhaustion under load)",
+    "Blocking operations inside actors (starves other actors)",
+    "Physical addresses in messages (breaks location transparency)",
+    "Shared mutable state between actors (reintroduces race conditions)",
+    "Deeply nested hierarchies without timeout boundaries",
+    "Ignoring backpressure signals until mailbox overflows"
+  ],
+  "migration_from": [
+    "shared-memory-threading-models",
+    "monolithic-request-response-services",
+    "distributed-objects-with-synchronous-calls",
+    "polling-based-concurrency"
+  ],
+  "migration_to": [
+    "event-driven-microservices",
+    "reactive-streams",
+    "cqrs-event-sourcing",
+    "service-mesh",
+    "multi-agent-ai-systems"
+  ],
+  "design_principles": [
+    "Single Responsibility: Each actor performs one well-defined task or domain function",
+    "Statelessness: Prefer stateless actors; if state is required, externalize it to persistence",
+    "Location Transparency: Actors operate identically whether local or remote; never encode physical addresses",
+    "Non-Blocking Handlers: Handlers should not block on I/O; use async APIs and futures",
+    "Supervision Hierarchy: Parents supervise children; failures bubble up until handled at appropriate level",
+    "Bounded Mailboxes: Use backpressure to prevent memory exhaustion; monitor mailbox depths",
+    "Idempotency: Design message handlers to be safe for retry on failure recovery",
+    "Error Kernel Pattern: Place critical state high in hierarchy; dangerous operations deep in hierarchy"
+  ],
+  "best_practices": [
+    "Keep Actors Small: Treat actors like lightweight processes with clear, focused protocols",
+    "Use Bounded Queues: Configure mailbox capacities to enable backpressure and prevent memory exhaustion",
+    "Make Handlers Non-Blocking: Offload I/O to async APIs; avoid synchronous waits that starve other actors",
+    "Model Failures via Supervision: Use restart, resume, stop, escalate strategies appropriately",
+    "Prefer Sharding for Distribution: Use partitioning keys that avoid hotspots in actor state",
+    "Persist State with Event Sourcing: For durability requirements, journal state transitions; ensure idempotency on replay",
+    "Embrace Location Transparency: Never encode physical addresses in message protocols",
+    "Instrument with Metrics: Track per-actor metrics—mailbox depth, processing latency, restart counts",
+    "Build Hierarchies Explicitly: Structure actors by responsibilities and dependencies",
+    "Use OneForOne by Default: Only use AllForOne for tightly coupled actor ensembles"
+  ]
+}

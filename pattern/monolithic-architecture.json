@@ -1,0 +1,111 @@
+{
+  "name": "monolithic",
+  "category": "structural",
+  "context": "Traditional single-tier software architecture where all components are packaged into a single deployable unit with shared memory space and single database",
+  "benefits": [
+    "Single deployment unit simplifies operations and reduces coordination overhead",
+    "In-memory function calls provide lowest latency (nanoseconds vs milliseconds for network calls)",
+    "ACID transactions across modules ensure strong data consistency without distributed complexity",
+    "Full call stack visibility makes debugging straightforward across all layers",
+    "In-process testing enables simpler mocks and faster test execution",
+    "No network serialization overhead for internal calls"
+  ],
+  "tradeoffs": [
+    "Scalability constrained: must scale entire application even if only one component is stressed",
+    "Deployment coupling: any code change requires full redeployment of the entire application",
+    "Technology lock-in: all components must use the same language, framework, and library versions",
+    "Team coordination bottleneck: all teams work in the same codebase, creating merge conflicts",
+    "Reliability fragility: failure in any module crashes the entire process",
+    "Maintainability decline: codebase complexity grows as the system scales"
+  ],
+  "quality_attributes": {
+    "scalability": 3,
+    "maintainability": 5,
+    "reliability": 8,
+    "security": 6,
+    "performance": 9,
+    "simplicity": 8
+  },
+  "suitable_domains": [
+    "early-stage-startups",
+    "simple-crud-applications",
+    "small-teams",
+    "rapid-prototyping",
+    "mvp",
+    "internal-tools",
+    "prototypes"
+  ],
+  "unsuitable_domains": [
+    "enterprise-scale",
+    "multiple-teams",
+    "high-traffic",
+    "microservices-ready",
+    "complex-domain",
+    "multi-bounded-contexts"
+  ],
+  "use_cases": [
+    "Validating market fit with rapid iteration cycles",
+    "Applications with predictable, uniform load patterns",
+    "Teams new to distributed systems architecture",
+    "Limited budget for DevOps infrastructure and tooling",
+    "Strong consistency requirements across modules",
+    "Low-latency internal communication requirements"
+  ],
+  "avoid_when": [
+    "Team size exceeds 15-20 developers requiring parallel work",
+    "Traffic patterns require selective scaling of specific components",
+    "Domain complexity requires independent domain model evolution",
+    "Technology diversity needed across functional areas",
+    "Deployment frequency requirements exceed once per month",
+    "Individual component failure should not cascade"
+  ],
+  "component_types": [
+    "Presentation Layer: REST API, GraphQL resolvers, web UI components, handling HTTP requests and response formatting",
+    "Business Logic Layer: Domain services, business rules, workflow orchestration, transaction management",
+    "Data Access Layer: Repositories, ORMs, database connections, caching integration",
+    "Shared Database: Single relational database (PostgreSQL, MySQL) containing all domain data"
+  ],
+  "technology_stack": [
+    "Java/Spring Boot",
+    "Python/Django",
+    "Ruby/Rails",
+    "Node.js/Express",
+    "PostgreSQL",
+    "MySQL",
+    "Redis (caching)",
+    "Nginx (reverse proxy)"
+  ],
+  "anti_patterns": [
+    "Distributed monolith (services that cannot deploy independently)",
+    "Premature decomposition (splitting by technical layer instead of domain)",
+    "Big bang rewrite (complete replacement without incremental validation)",
+    "Shared database across extracted services",
+    "Deep module coupling without clear domain boundaries"
+  ],
+  "migration_from": [
+    "monolithic-legacy-systems",
+    "mainframe-systems",
+    "modular-monoliths"
+  ],
+  "migration_to": [
+    "modular-monolith",
+    "microservices",
+    "event-driven"
+  ],
+  "design_principles": [
+    "Single Responsibility: Each module should have a single, well-defined purpose within the bounded context",
+    "Modularity: Enforce internal module boundaries to prepare for future extraction",
+    "Strong Consistency: Leverage ACID transactions for data integrity across modules",
+    "In-Memory Communication: Prefer direct function calls over network boundaries for internal operations",
+    "Operational Simplicity: Design for single-unit deployment with straightforward rollback and monitoring",
+    "Domain-Driven Boundaries: Apply DDD principles within the monolith to identify natural seams before extraction",
+    "Interface Stability: Define stable interfaces between modules to enable future independent deployment"
+  ],
+  "best_practices": [
+    "Operational Simplicity: Single deployment artifact simplifies CI/CD pipelines, one database to backup/monitor/tune, straightforward rollback procedures",
+    "Performance Optimization: In-memory function calls achieve nanosecond latency, no network serialization overhead, optimal CPU cache utilization with shared memory",
+    "Consistency Guarantees: ACID transactions across all modules, no distributed state synchronization challenges, immediate read-your-writes consistency",
+    "Debugging and Observability: Full call stack visible in single process, stack traces don't span network boundaries, simpler profiling and performance analysis",
+    "Modular Monolith First: Enforce module boundaries with clear interfaces within a single deployable before committing to microservices"
+  ]
+}

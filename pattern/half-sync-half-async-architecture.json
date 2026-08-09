@@ -1,0 +1,119 @@
+{
+  "category": "coordination",
+  "name": "half-sync-half-async",
+  "context": "The Half-Sync/Half-Async pattern addresses the tension between concurrent programming simplicity and execution efficiency in complex software systems. Higher-level business logic benefits from synchronous processing models (blocking I/O, straightforward control flow), while lower-level I/O operations (interrupts, network events) require asynchronous processing for optimal performance. This pattern integrates both approaches through a queueing layer that mediates communication between the synchronous and asynchronous task layers.",
+  "benefits": [
+    "Simplified programming model for business logic using synchronous operations",
+    "High performance through efficient non-blocking I/O at lower levels",
+    "Strong decoupling between processing layers with well-defined boundaries",
+    "Horizontal scalability via multiple sync workers processing queued tasks",
+    "Fast responsiveness with immediate acknowledgment while processing continues",
+    "Multi-processor efficiency with simplified synchronous I/O programming",
+    "Centralized communication through queueing layer mediation"
+  ],
+  "tradeoffs": [
+    "Boundary-crossing penalty from context switching and synchronization overhead",
+    "Increased debugging complexity due to asynchronous callbacks",
+    "Queue management burden including flow control and backpressure",
+    "Data copying overhead from protection domain crossings",
+    "Concurrency control complexity for serialize access to shared resources",
+    "Asynchronous I/O limitations for higher-level tasks depending on framework"
+  ],
+  "quality_attributes": {
+    "scalability": 8,
+    "maintainability": 7,
+    "reliability": 7,
+    "security": 6,
+    "performance": 9,
+    "simplicity": 5
+  },
+  "suitable_domains": [
+    "web-servers",
+    "api-gateways",
+    "e-commerce-platforms",
+    "data-pipelines",
+    "microservices-communication",
+    "real-time-systems",
+    "gui-applications",
+    "operating-systems",
+    "iot-sensor-processing",
+    "messaging-systems"
+  ],
+  "unsuitable_domains": [
+    "purely-synchronous-workloads",
+    "simple-request-response",
+    "low-latency-critical-systems",
+    "single-threaded-environments",
+    "hard-real-time-systems",
+    "small-loosely-coupled-systems"
+  ],
+  "use_cases": [
+    "Web API with async offload for logging, notifications, and emails",
+    "E-commerce checkout with sync payment and async shipping/confirmation",
+    "Data pipeline ingestion with sync acknowledgment and async processing",
+    "Microservices enrichment with sync core logic and async external calls",
+    "Document processing with sync acceptance and async heavy computation",
+    "Database operations with sync queries and async replication/backup"
+  ],
+  "avoid_when": [
+    "Workloads are purely synchronous with no benefit from async offload",
+    "Only simple request-response without long-running tasks",
+    "Low latency is critical and boundary-crossing overhead cannot be tolerated",
+    "Limited threading capability or single-threaded runtime",
+    "Team lacks experience with concurrent programming and queue management",
+    "System is small enough that complexity outweighs benefits"
+  ],
+  "component_types": [
+    "Async Event Handler/Dispatcher: Receives requests non-blocking, enqueues for processing. Immediately returns control to caller",
+    "Message Queue/Buffer: Decouples async receiver from sync processing with bounded capacity. Provides thread-safe buffering",
+    "Sync Worker Thread Pool: Fixed-size pool processing queued tasks with blocking I/O. Executes long-running operations",
+    "Callback/Completion Handler: Notifies clients when processing completes. Handles result delivery and error propagation",
+    "Flow Control Manager: Implements backpressure, rate limiting, and adaptive throttling to prevent overwhelm",
+    "Queue Monitor: Tracks queue depth, latency, and health metrics for observability and alerting"
+  ],
+  "technology_stack": [
+    "Python: asyncio, queue.Queue, Celery, FastAPI with background tasks",
+    "Java: @Async Spring, java.util.concurrent, Netty framework",
+    "Node.js: Event loop, RabbitMQ, Kafka client",
+    "Go: Goroutines, channels, worker pools",
+    "Message Queues: RabbitMQ, Apache Kafka, Redis Streams",
+    "Enterprise: Spring Boot, Quarkus, Akka",
+    "C++: Boost.Asio, libuv-inspired event loops"
+  ],
+  "anti_patterns": [
+    "Shared database between layers creating tight coupling",
+    "Blocking the async layer instead of delegating to sync workers",
+    "Unbounded queues causing memory exhaustion risk",
+    "Ignoring backpressure leading to sync layer overwhelm",
+    "Complex nested callbacks without structure causing callback hell"
+  ],
+  "migration_from": [
+    "thread-per-connection-models",
+    "fully-synchronous-monoliths",
+    "distributed-monolith",
+    "single-threaded-event-loops-with-blocking-operations"
+  ],
+  "migration_to": [
+    "reactor-proactor-pattern",
+    "event-driven-microservices",
+    "full-async-await-patterns",
+    "service-mesh-with-async-messaging"
+  ],
+  "design_principles": [
+    "Layer Isolation: Synchronous and asynchronous layers must only communicate through the queueing layer",
+    "Non-Blocking Async: Async handlers must never block—they enqueue and return immediately",
+    "Bounded Queues: Use bounded queues with backpressure to prevent memory exhaustion",
+    "Fixed Worker Pool: Sync workers should use a fixed-size thread pool to control resource usage",
+    "Clear Responsibility Division: Sync layer handles business logic; async layer handles I/O events",
+    "Flow Control: Implement backpressure mechanisms to prevent sync layer overwhelm"
+  ],
+  "best_practices": [
+    "Queue Sizing: Size queues based on expected load and acceptable latency; monitor for saturation",
+    "Thread Pool Tuning: Adjust worker pool size based on workload characteristics (CPU vs I/O bound)",
+    "Backpressure Implementation: Use flow control to regulate task submission when workers are saturated",
+    "Error Handling: Implement retry mechanisms and dead letter queues for failed processing",
+    "Monitoring: Add metrics for queue depth, processing latency, worker utilization, and rejection rates",
+    "Graceful Degradation: Implement circuit breakers when downstream services fail",
+    "Callback Management: Use structured callback patterns to avoid callback hell; consider futures/promises"
+  ]
+}

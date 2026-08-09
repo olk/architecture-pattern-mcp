@@ -1,0 +1,140 @@
+{
+  "name": "hybrid-cloud",
+  "category": "cloud",
+  "context": "Organizations combining on-premises infrastructure with public cloud services to balance workload placement based on regulatory, latency, cost, and scalability requirements. Hybrid-cloud architecture integrates private cloud, public cloud, and on-premises datacenters into a unified distributed computing environment, enabling workloads to run where they make most sense economically and operationally.",
+  "benefits": [
+    "Workload placement flexibility: Run each workload where it makes most sense economically and operationally",
+    "Gradual migration path: Enable incremental cloud adoption without big-bang rewrites",
+    "Regulatory compliance: Keep sensitive data on-premises to meet data residency and sovereignty requirements",
+    "Elastic capacity on-demand: Burst to cloud during peak loads without permanent overprovisioning",
+    "Risk management: Avoid putting all infrastructure in a single cloud or location",
+    "Cost optimization: Convert CapEx to OpEx and leverage cloud elasticity for variable workloads",
+    "Leverage existing investments: Maximize value from existing on-premises infrastructure",
+    "Business continuity: Use cloud as disaster recovery site without duplicating all infrastructure"
+  ],
+  "tradeoffs": [
+    "Network complexity: Additional latency, reliability, and management overhead for cross-environment connectivity",
+    "Data consistency challenges: Syncing data across environments with varying consistency guarantees",
+    "Operational overhead: Managing two distinct platforms simultaneously",
+    "Security surface expansion: Consistent policy enforcement across multiple trust zones",
+    "Skill requirements: Teams need expertise in both cloud and on-premises technologies",
+    "Hidden costs: Egress fees, data transfer, and dual management can erode cloud savings",
+    "Integration complexity: API interfaces needed to connect legacy systems with cloud-native services",
+    "Governance fragmentation: Different tooling and processes across environments"
+  ],
+  "quality_attributes": {
+    "scalability": 8,
+    "maintainability": 6,
+    "reliability": 7,
+    "security": 7,
+    "performance": 6,
+    "simplicity": 5
+  },
+  "suitable_domains": [
+    "enterprise",
+    "regulated-industries",
+    "high-traffic",
+    "companies-undertaking-multi-year-cloud-migration-journeys",
+    "low-latency-requirements",
+    "geographical-expansion-without-building-datacenters",
+    "backup-and-disaster-recovery-scenarios"
+  ],
+  "unsuitable_domains": [
+    "greenfield-projects-with-no-legacy-constraints",
+    "cloud-native",
+    "cloud-first-mandate-with-no-regulatory-barriers",
+    "steady,-predictable-loads-with-no-need-for-bursting",
+    "high-scaling-needs",
+    "small-teams-with-low-operational-maturity",
+    "sub-millisecond-response-requirements"
+  ],
+  "use_cases": [
+    "Regulatory data residency requirements forcing sensitive data to remain on-premises",
+    "Gradual migration of legacy applications to cloud with API integration",
+    "Cloud bursting for seasonal demand spikes (e-commerce, retail, gaming)",
+    "Disaster recovery as a service using cloud for elastic site replication",
+    "Edge computing extension where cloud services extend on-premises to remote locations",
+    "SaaS integration extending on-premises ERP/CRM with cloud AI/analytics services",
+    "Development and test environment provisioning in cloud while production stays on-prem",
+    "Cross-border expansion without building new datacenters"
+  ],
+  "avoid_when": [
+    "All workloads can run in public cloud without regulatory or latency constraints",
+    "Team lacks expertise to manage both on-premises and cloud environments",
+    "Application requires constant low-latency communication between services across environments",
+    "Tight deadlines where establishing hybrid connectivity would slow delivery",
+    "Simple workloads where pure cloud or pure on-prem would be significantly cheaper",
+    "Organizations ready to fully commit to cloud-native without legacy constraints"
+  ],
+  "component_types": [
+    "VPN Gateway: Encrypted connectivity between on-prem and cloud",
+    "Direct Connect: Dedicated physical connection for low-latency, high-bandwidth",
+    "Cloud Interconnect: Cloud-provider direct link for enterprise connectivity",
+    "Hybrid Storage Gateway: Data tiering between on-prem SAN and cloud object storage",
+    "Identity Federation: Centralized identity management across environments",
+    "Cloud Management Platform: Unified control plane across environments",
+    "Hybrid DNS: Name resolution spanning on-premises and cloud",
+    "Backup & Recovery Appliance: Continuous replication to cloud for DR",
+    "Network Load Balancer: Distributing traffic across hybrid endpoints",
+    "Observability Platform: Unified monitoring and logging across environments"
+  ],
+  "technology_stack": [
+    "Network connectivity: AWS Direct Connect, Azure ExpressRoute, Google Cloud Interconnect, VPN Tunnel",
+    "Compute: AWS Outposts, Azure Stack HCI, Google Cloud Local, VMware Cloud on AWS",
+    "Storage: AWS Storage Gateway, Azure File Sync, Google Cloud Storage Transfer Service",
+    "Container orchestration: Kubernetes (Rancher, OpenShift), Amazon EKS Anywhere, Azure Arc-enabled Kubernetes",
+    "Infrastructure as Code: Terraform, Ansible, Pulumi",
+    "Identity: Active Directory, Entra ID, Okta, AWS IAM Identity Center",
+    "Monitoring: Azure Monitor, AWS CloudWatch, Google Cloud Monitoring, Datadog, New Relic",
+    "Backup: Veeam, Zerto, Druva, cloud-native backup services",
+    "Service mesh: Istio, Linkerd (for hybrid Kubernetes clusters)"
+  ],
+  "anti_patterns": [
+    "Lift-and-ignore: Rehosting applications to cloud without addressing underlying inefficiencies",
+    "Cloud spaghetti: Uncoordinated deployment of cloud resources creating chaos",
+    "Hidden cloud lock-in: Using cloud-specific services that create dependency on single provider",
+    "Inconsistent identity: Separate credentials on each platform enabling lateral movement risk",
+    "Data gravity neglect: Moving data without considering where it will be accessed most frequently",
+    "Split-brain operations: Separate operational processes for each environment causing drift",
+    "Uneven security posture: Strong security in cloud but weak controls on-premises or vice versa",
+    "Cost blindness: Failing to track egress fees and data transfer costs eroding cloud savings",
+    "Manual synchronization: Hand-coding data sync logic instead of using managed services",
+    "Ignoring network RTT: Assuming cloud and on-prem are equally fast for all workloads"
+  ],
+  "migration_from": [
+    "monolithic-architecture",
+    "layered-monolith-architecture",
+    "all-on-premises-datacenter"
+  ],
+  "migration_to": [
+    "microservices-architecture",
+    "serverless-architecture",
+    "event-driven-architecture",
+    "multi-cloud-architecture"
+  ],
+  "design_principles": [
+    "Unified Management: Use a single control plane (Azure Arc, AWS Systems Manager) to manage both environments consistently",
+    "Identity as the Perimeter: Implement zero-trust identity federation so credentials work seamlessly across environments",
+    "Data Locality Awareness: Place workloads where data is accessed most frequently to minimize egress costs and latency",
+    "Network Isolation by Default: Implement defense-in-depth with private connectivity between environments",
+    "Automation First: Use Infrastructure as Code (Terraform, Pulumi) to ensure consistent deployment across environments",
+    "Observable Hybrid: Deploy unified monitoring that tracks requests across both on-prem and cloud boundaries"
+  ],
+  "best_practices": [
+    "Use dedicated connectivity (Direct Connect/ExpressRoute) for production workloads to minimize latency and maximize bandwidth",
+    "Implement VPN as fallback for resilience but don't rely on it as primary for high-throughput workloads",
+    "Design for network partition tolerance: ensure workloads can operate independently if connectivity is lost",
+    "Implement consistent identity federation (Entra ID, Okta) across environments to prevent lateral movement",
+    "Apply uniform security policies through cloud management platforms; don't treat on-prem security as separate",
+    "Use encryption for all data in transit between environments; never rely on internal network alone",
+    "Implement least-privilege access for cross-environment access; regularly audit hybrid permissions",
+    "Classify data sensitivity first, then decide placement: don't move data without considering access patterns",
+    "Use managed data sync services (Storage Gateway, File Sync) instead of custom scripts",
+    "Monitor egress costs continuously: data transfer can quickly erode cloud savings",
+    "Implement consistent backup strategies across both environments with regular DR testing",
+    "Standardize tooling and processes across both environments to prevent operational drift",
+    "Use Infrastructure as Code for all environment changes: no manual configuration",
+    "Implement unified observability with correlated metrics across hybrid boundaries",
+    "Regular testing of failover and failback procedures to ensure business continuity"
+  ]
+}

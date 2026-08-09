@@ -1,0 +1,127 @@
+{
+  "name": "edge-computing",
+  "category": "structural",
+  "context": "Distributed computing paradigm that processes data near its source to reduce latency and bandwidth costs. Suitable for IoT, industrial control, retail, and scenarios requiring low-latency responses or offline operation. Moves computation and data storage closer to data sources rather than relying solely on centralized cloud data centers.",
+  "benefits": [
+    "Ultra-low latency through local processing at data source",
+    "Significant bandwidth savings by filtering/aggregating before transmission",
+    "Offline operation capability independent of cloud connectivity",
+    "Enhanced data sovereignty for sensitive information",
+    "Distributed scalability across edge nodes",
+    "Fault isolation from cloud outages",
+    "Reduced cloud ingestion costs (70-95% reduction possible)"
+  ],
+  "tradeoffs": [
+    "Higher operational complexity at fleet scale",
+    "Device and hardware constraints (limited compute/storage)",
+    "Physical security concerns for distributed edge devices",
+    "Synchronization complexity and eventual consistency challenges",
+    "Difficult firmware/software updates across distributed nodes",
+    "Cross-layer observability requirements"
+  ],
+  "quality_attributes": {
+    "scalability": 8.0,
+    "maintainability": 5.0,
+    "reliability": 9.0,
+    "security": 6.0,
+    "performance": 9.0,
+    "simplicity": 4.0
+  },
+  "suitable_domains": [
+    "iot-industrial",
+    "smart-retail",
+    "healthcare-medical",
+    "autonomous-vehicles",
+    "smart-cities",
+    "video-analytics",
+    "industrial-automation",
+    "serverless",
+    "event-driven-workflows"
+  ],
+  "unsuitable_domains": [
+    "simple-crud-applications",
+    "batch-analytics-only",
+    "low-data-volume-monitoring",
+    "always-online-desktop-apps"
+  ],
+  "use_cases": [
+    "Real-time sensor processing with <10ms latency requirements",
+    "Industrial IoT with intermittent connectivity",
+    "Video analytics at camera for object detection",
+    "Local ML inference for immediate decisions",
+    "Retail point-of-sale with offline capability",
+    "Content delivery with geographic distribution",
+    "Telemetry aggregation in high-frequency sensor estates",
+    "Safety-critical alarm systems requiring <5ms response"
+  ],
+  "avoid_when": [
+    "Latency tolerance exceeds 100ms",
+    "Strong consistency is required across all nodes",
+    "Data volumes are low and central processing is cost-effective",
+    "Reliable high-bandwidth connectivity is always available",
+    "Simple CRUD operations without time constraints",
+    "Batch processing workloads without real-time requirements"
+  ],
+  "component_types": [
+    "EdgeDevice: Computing at data source (sensors, cameras, wearables)",
+    "EdgeGateway: Protocol translation, local aggregation, buffering",
+    "EdgeNode: Compute cluster at edge location for running workloads",
+    "EdgeAnalyticsEngine: Local data processing and ML inference",
+    "SyncEngine: Data synchronization with cloud (full/delta/event-based)",
+    "LocalCache: Low-latency data access with eventual consistency",
+    "MessageBroker: Async communication and buffering between layers",
+    "DeviceManager: Fleet management, provisioning, health monitoring",
+    "ConfigurationAgent: Declarative config management, GitOps at edge",
+    "TelemetryCollector: Metrics, logs, traces aggregation with smart sampling"
+  ],
+  "technology_stack": [
+    "Kubernetes (k3s for constrained environments)",
+    "Docker/Containerd",
+    "MQTT, AMQP, OPC-UA (protocols)",
+    "EMQX, Mosquitto (message brokers)",
+    "Redis, SQLite (local storage)",
+    "NATS, RabbitMQ (messaging)",
+    "TensorFlow Lite, ONNX Runtime (ML inference)",
+    "Cloudflare Workers, Vercel Edge (serverless edge)",
+    "AWS Greengrass, Azure IoT Edge",
+    "Prometheus, Grafana (observability)"
+  ],
+  "anti_patterns": [
+    "Distributed monolith (unnecessary complexity at edge)",
+    "Full cloud dependency for critical operations",
+    "Edge as miniature hyperscaler (forcing cloud patterns onto edge)",
+    "Memory-only buffers without durability",
+    "Chained synchronous calls at edge (latency compounds)",
+    "Static routing without site health awareness"
+  ],
+  "migration_from": [
+    "centralized-cloud-architecture",
+    "monolithic-applications",
+    "cloud-only-iot",
+    "client-server-architecture"
+  ],
+  "migration_to": [
+    "edge-native-serverless",
+    "hybrid-edge-cloud",
+    "event-driven-microservices",
+    "fog-computing"
+  ],
+  "design_principles": [
+    "Design for Autonomy: Edge nodes must operate independently during cloud outages",
+    "Embrace Eventual Consistency: Strong consistency is impractical at scale across unreliable networks",
+    "Minimize Data Movement: Process locally, transmit only summaries and critical events",
+    "Standardize Operations: Use Kubernetes and GitOps everywhere for fleet management",
+    "Latency-Aware Routing: Prefer local decisions first, cloud only when necessary",
+    "Defense in Depth: Assume hostile environment with physical access and limited trust"
+  ],
+  "best_practices": [
+    "Hierarchical Processing: Match processing to appropriate edge layer (device → near → regional → cloud)",
+    "Durable Buffering: Use SSD-backed queues for store-and-forward; never use memory-only buffers",
+    "Smart Telemetry: Aggregate locally before transmitting; sample only what matters",
+    "Declarative Configuration: Use GitOps patterns for fleet-wide config management",
+    "Graceful Degradation: Implement circuit breakers and offline-first capabilities",
+    "Minimal Footprint: Use lightweight runtimes (Wasm, microVMs) on constrained devices",
+    "Zero-Trust Security: Implement mutual TLS, code signing, and hardware attestation",
+    "Horizontal Scaling: Deploy edge nodes in pairs for critical workloads with automatic failover"
+  ]
+}

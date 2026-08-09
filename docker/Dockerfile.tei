@@ -1,0 +1,144 @@
+# Thin override of ghcr.io/huggingface/text-embeddings-inference:cpu-1.9.
+#
+# The previous base image (geheimschutz/tei-qwen3-embedding:0.6b-cpu-1.9)
+# is a private artifact that is not pullable from public registries. We
+# switched to the upstream TEI image and download weights at build time
+# via huggingface_hub.
+#
+# Why we use the community ONNX artifact
+# (`onnx-community/Qwen3-Embedding-0.6B-ONNX`) instead of the upstream
+# `Qwen/Qwen3-Embedding-0.6B`:
+#
+#   TEI tries the ORT (ONNX Runtime) backend first, then falls back to
+#   candle. The upstream Qwen3-Embedding-0.6B repo ships PyTorch /
+#   Safetensors weights only — no `onnx/model.onnx` — so ORT fails to
+#   start, the server logs an `ERROR Could not start ORT backend`, and
+#   candle is loaded as a fallback. Two consequences:
+#
+#     1. The ORT error adds ~2 min to warmup (the probe + load attempt
+#        is non-trivial).
+#     2. The candle backend on the cpu-1.9 image hard-caps
+#        `max_batch_requests` at 4, so the llama-index client's
+#        `embed_batch_size=8` is split into 2 sequential batches of 4.
+#
+#   The community ONNX artifact ships float32 ONNX weights (plus int8
+#   and fp16 variants) and is verified working with TEI's ORT backend
+#   (see TEI issue #714). Switching to it makes ORT the actual backend
+#   — no more ORT probe, no more candle batch-size cap.
+#
+# We use the float32 ONNX variant (`onnx/model.onnx` +
+# `onnx/model.onnx_data`, ~4.7 GB) for best accuracy. The int8
+# variant is available at `onnx/model_int8.onnx` (~1.2 GB, 2-4× faster
+# CPU inference, small accuracy drop) if the image size is a concern;
+# swap `allow_patterns` below to pick it.
+#
+# Why we override the base image's CMD (which is unset/empty for the
+# public image):
+#
+# 1. `--max-batch-tokens 8192` is the per-batch token budget; raising
+#    it to 32768 crashes the warmup on CPU (PR #634, #725: warmup
+#    allocates `max_batch_requests × max_input_length` of state,
+#    8 × 32768 fp32 OOMs). 8192 is enough because chunks are bounded
+#    by `max_embedder_input_chars=8000` in config.json (~2400 tokens
+#    each for German); the Qwen team's own usage example also uses
+#    `max_length=8192`.
+#
+# 2. The per-request batch-size cap (`--max-client-batch-size 32`) and
+#    the concurrent-request cap (`--max-concurrent-requests 32`) must
+#    both be ≥ the llama-index client's `embed_batch_size` (capped from
+#    config.json's `tei_max_client_batch_size`, default 8). With
+#    fewer permits, the batch handler returns HTTP 429 with
+#    `try_acquire_permit: no permits available` (core/src/infer.rs:102)
+#    because TEI acquires a semaphore permit *per input*
+#    (router/src/http/server.rs, batch branch), not per request.
+#
+# Silence the "maximum input length 32768 exceeds --max-batch-tokens=8192"
+# warning at router/src/lib.rs:214 by aligning the model's advertised
+# `max_position_embeddings` with the operational token cap. After this
+# patch, `base_input_length` (parsed from config.json) becomes 8192, the
+# warning branch is never taken, and warmup uses 8192. The community
+# ONNX model inherits `max_position_embeddings: 32768` from the
+# original Qwen3-Embedding-0.6B config, so the same sed patch applies.
+#
+# Persistent warnings (genuinely unfixable from the command line):
+#   - "Could not find a Sentence Transformers config" (lib.rs:203) —
+#     the model artifact lacks the ST config file; TEI falls back to
+#     config.json's max_position_embeddings (which we patch above).
+#   - "Backend does not support a batch size > 8" + "forcing
+#     max_batch_requests=8" (lib.rs:303-304) — the ORT backend's
+#     intrinsic batch cap for this model on the cpu-1.9 image. Set by
+#     the backend in `backend.max_batch_size.inspect(...)` and exposed
+#     via `/info`. The check fires against the backend's capability,
+#     not against `--max-batch-requests`; setting the flag does not
+#     silence the warning. 8 happens to match the llama-index client's
+#     `embed_batch_size=8` exactly, so no client-side splitting is
+#     needed. The earlier private base image (candle backend) also
+#     reported 8; cpu-1.9 + candle reported 4 — switching to ORT
+#     doubled the cap back to 8. Raising it further requires a GPU
+#     image (cuda-1.9 et al.) or a different ONNX export.
+#
+# No model weights are re-downloaded at runtime — they are baked into
+# the image at build time and served with `HF_HUB_OFFLINE=1` in
+# docker-compose.yaml.
+#
+# NOTE: CMD must be in JSON exec form (not shell form) so that the args
+# are appended to the entrypoint instead of being wrapped in `/bin/sh -c`.
+
+# Stage 1: Download the Qwen3-Embedding-0.6B ONNX weights.
+# The TEI runtime image is a pure Rust binary with no Python, so we use
+# a slim Python image purely for the download step and copy the result
+# into the runtime stage.
+FROM python:3.10-slim AS model-downloader
+
+ARG http_proxy
+ARG https_proxy
+ARG HTTP_PROXY
+ARG HTTPS_PROXY
+
+ENV http_proxy=${http_proxy} \
+    https_proxy=${https_proxy} \
+    HTTP_PROXY=${HTTP_PROXY} \
+    HTTPS_PROXY=${HTTPS_PROXY}
+
+RUN pip install --no-cache-dir huggingface_hub
+
+# Qwen3-Embedding-0.6B-ONNX is public on the Hub, so HF_TOKEN is optional.
+# We use the BuildKit secret if present (see docker-compose.yaml
+# `secrets: - hf_token`); otherwise the download proceeds anonymously.
+# `allow_patterns` picks the float32 ONNX variant + tokenizer files.
+# To switch to int8 (~1.2 GB, 2-4× faster CPU), replace
+# `onnx/model.onnx` and `onnx/model.onnx_data` with
+# `onnx/model_int8.onnx` below and drop the .onnx_data line.
+RUN --mount=type=secret,id=hf_token \
+    HF_TOKEN="$(cat /run/secrets/hf_token 2>/dev/null || true)" \
+    python -c "import os; \
+from huggingface_hub import snapshot_download; \
+snapshot_download( \
+    'onnx-community/Qwen3-Embedding-0.6B-ONNX', \
+    token=os.environ.get('HF_TOKEN') or None, \
+    local_dir='/data/qwen3-embedding-0.6b', \
+    allow_patterns=[ \
+        '*.json', '*.txt', 'tokenizer*', 'special_tokens*', \
+        'added_tokens*', 'chat_template*', \
+        'onnx/model.onnx', 'onnx/model.onnx_data', \
+    ], \
+)"
+
+# Stage 2: Runtime image with the model baked in and config patched.
+FROM ghcr.io/huggingface/text-embeddings-inference:cpu-1.9
+
+COPY --from=model-downloader /data /data
+
+RUN sed -i -E 's/("max_position_embeddings"[[:space:]]*:[[:space:]]*)32768/\18192/' \
+        /data/qwen3-embedding-0.6b/config.json
+
+CMD ["--model-id", "/data/qwen3-embedding-0.6b", \
+     "--hostname", "0.0.0.0", \
+     "--port", "8080", \
+     "--pooling", "last-token", \
+     "--max-concurrent-requests", "32", \
+     "--max-batch-tokens", "8192", \
+     "--max-client-batch-size", "32", \
+     "--dtype", "float32", \
+     "--auto-truncate", \
+     "--prometheus-port", "0"]

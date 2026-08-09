@@ -1,0 +1,106 @@
+{
+  "category": "api_gateway",
+  "name": "backend-for-frontend",
+  "context": "Multi-client distributed systems where different frontend applications (mobile, web, desktop, TV) have divergent data requirements, performance constraints, and authentication flows. The BFF pattern introduces a dedicated server-side service between frontend clients and backend microservices, tailored specifically to each client type's needs. This pattern is particularly relevant in microservices architectures where backend services are organized by domain rather than by client experience.",
+  "benefits": [
+    "Client-optimized responses with data shaped specifically for each frontend",
+    "Bandwidth efficiency for mobile clients through minimal payload sizes",
+    "Frontend team autonomy over their API layer without backend dependencies",
+    "Technology flexibility allowing each BFF to use different languages or frameworks",
+    "Isolated changes where modifications to one client don't impact others",
+    "Fault isolation ensuring one client's BFF failure doesn't affect other clients",
+    "Support for complex client-specific features like real-time updates and offline support"
+  ],
+  "tradeoffs": [
+    "Code duplication across BFFs for similar aggregation logic",
+    "Additional infrastructure overhead for deploying and monitoring multiple services",
+    "Requires frontend teams to have full-stack capabilities",
+    "Consistency challenges when backend APIs change",
+    "Added latency from the intermediary layer",
+    "Increased operational complexity with multiple deployment pipelines"
+  ],
+  "quality_attributes": {
+    "scalability": 7,
+    "maintainability": 6,
+    "reliability": 8,
+    "security": 7,
+    "performance": 8,
+    "simplicity": 4
+  },
+  "suitable_domains": [
+    "e-commerce-platforms",
+    "enterprise-saas",
+    "mobile-first-applications",
+    "multi-tenant-platforms",
+    "organizations-with-separate-client-teams"
+  ],
+  "unsuitable_domains": [
+    "simple-crud-applications",
+    "small-teams-without-fullstack-capabilities",
+    "projects-with-limited-operational-maturity",
+    "applications-with-identical-client-needs",
+    "systems-with-strong-consistency-requirements"
+  ],
+  "use_cases": [
+    "Mobile applications requiring bandwidth-optimized payloads and aggressive caching",
+    "Web SPAs needing rich data aggregation and real-time updates via SSE/WebSockets",
+    "Admin portals requiring different auth flows and data access patterns",
+    "Desktop applications with distinct data requirements from mobile/web",
+    "Partner APIs needing different rate limiting and response formats",
+    "IoT/device clients with severely constrained bandwidth and battery considerations"
+  ],
+  "avoid_when": [
+    "Only one client type exists and no plans for additional clients",
+    "Simple authentication sufficient for all clients",
+    "Development team lacks full-stack capabilities",
+    "All client types have identical data requirements and update frequencies",
+    "Operational maturity is low (no CI/CD, monitoring, or distributed tracing)",
+    "Client requirements are stable and unlikely to diverge"
+  ],
+  "component_types": [
+    "Client-Specific BFF Service: Dedicated backend per client type (mobile, web, desktop) that owns the API contract and evolves independently",
+    "Data Aggregator: Combines and transforms data from multiple backend services into a single client-optimized response",
+    "Protocol Adapter: Translates between client protocols (REST, GraphQL, WebSocket) and backend protocols",
+    "Authentication Facade: Handles client-specific auth flows (OAuth/PKCE for mobile, sessions for web, API keys for internal)",
+    "Caching Layer: Client-optimized caching strategies with appropriate TTLs for domain and user data",
+    "Error Normalizer: Transforms backend errors into client-friendly, consistent error responses (RFC 9457 problem details)",
+    "Data Transformer: Converts data formats, date types, field names, and payload shapes for specific client needs"
+  ],
+  "technology_stack": [
+    "Node.js, Express, NestJS, FastAPI, Azure Functions, AWS Lambda",
+    "Kong, AWS API Gateway, Azure APIM, NGINX",
+    "Redis, in-memory caching, CDN",
+    "REST, GraphQL Federation, gRPC, Server-Sent Events",
+    "Distributed tracing (Jaeger, Zipkin), structured logging, correlation IDs",
+    "OAuth 2.0/PKCE, JWT, HTTP-only cookies, mTLS"
+  ],
+  "anti_patterns": [
+    "Shared BFF",
+    "BFF Monolith",
+    "Business Logic in BFF",
+    "Logic Creep",
+    "Neglected Observability",
+    "Frontend Team Exclusion"
+  ],
+  "migration_from": [
+    "monolithic-backend-with-client-conditionals",
+    "shared-generic-api-gateway",
+    "direct-client-to-microservices",
+    "legacy-backend-with-complex-responses"
+  ],
+  "migration_to": [
+    "graphql-federation",
+    "service-mesh",
+    "stranger-fig-pattern",
+    "event-driven-architecture"
+  ],
+  "design_principles": [
+    "Client-Specific Optimization: Each BFF should be tailored to its specific client's needs, optimizing data shape, payload size, and delivery mechanism",
+    "Thin Orchestration Layer: BFFs should only aggregate, transform, and normalize—no business logic that belongs in domain services",
+    "Stateless Design: BFFs should be stateless to enable horizontal scaling behind load balancers without complex session management",
+    "Clear Ownership Boundaries: Frontend teams should own their respective BFFs end-to-end: code, deployment, monitoring, and on-call",
+    "Explicit API Versioning: BFF APIs must be versioned to support multiple client versions simultaneously, especially for mobile apps with long update tails",
+    "Cross-Cutting Concerns Separated: Monitoring, logging, rate limiting, and authorization should be abstracted or handled via API Management"
+  ],
+  "best_practices": []
+}

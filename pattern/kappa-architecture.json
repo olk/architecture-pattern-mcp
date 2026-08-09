@@ -1,0 +1,120 @@
+{
+  "name": "kappa-architecture",
+  "context": "Stream-first data systems requiring unified processing for real-time and historical data with a single codebase. Best suited for organizations already using Kafka or similar streaming infrastructure.",
+  "category": "dataflow",
+  "benefits": [
+    "Single codebase: One processing pipeline to maintain instead of separate batch and streaming paths",
+    "Simpler operations: No separate batch system to manage; only streaming infrastructure required",
+    "No merge complexity: Serving layer reads from single output without reconciling batch and speed layers",
+    "Easy reprocessing: Redeploy streaming job with offset=0 to recompute historical data",
+    "Consistent semantics: Same code processes both real-time events and historical replays",
+    "Reduced testing burden: One code path to test and monitor",
+    "Lower operational overhead: Single pipeline to deploy, monitor, and maintain"
+  ],
+  "tradeoffs": [
+    "Streaming expertise required: All processing logic must be expressed as streaming operations",
+    "Log retention cost: Full history must fit in the message queue retention policy",
+    "Reprocessing time: Replaying large historical datasets can be slower than optimized batch",
+    "Not universal: Complex batch algorithms (global sorts, full-history aggregations) may not translate to streaming",
+    "Late events handling: Watermarks and session windows add complexity",
+    "State management complexity: Stateful operators require careful RocksDB state backend design",
+    "Exactly-once complexity: Achieving exact-once semantics requires careful checkpoint coordination"
+  ],
+  "quality_attributes": {
+    "scalability": 9,
+    "maintainability": 7,
+    "reliability": 8,
+    "security": 6,
+    "performance": 9,
+    "simplicity": 7
+  },
+  "suitable_domains": [
+    "real-time-analytics",
+    "event-driven-systems",
+    "activity-feeds",
+    "notifications",
+    "clickstream-analytics",
+    "iot-data-processing",
+    "fraud-detection",
+    "anomaly-detection"
+  ],
+  "unsuitable_domains": [
+    "ml-training-pipelines-requiring-global-batch-processing",
+    "complex-window-functions-over-full-history",
+    "teams-with-batch-focused-expertise",
+    "organizations-without-streaming-infrastructure"
+  ],
+  "use_cases": [
+    "Processing logic is identical for batch and streaming workloads",
+    "Team is streaming-native with Kafka/Flink expertise",
+    "Log retention is affordable for the required data volume",
+    "Frequent reprocessing needed for logic changes or bug fixes",
+    "Organization already uses Kafka/streaming infrastructure",
+    "Low-latency (<seconds) insights are critical",
+    "Building activity feeds, notifications, or analytics pipelines",
+    "Backfill streaming pipelines (Uber's Kappa pattern)"
+  ],
+  "avoid_when": [
+    "Batch and streaming logic are fundamentally different",
+    "Team expertise is batch-focused (Spark, Hive)",
+    "Historical data volume too large for queue retention",
+    "Strict exact-once guarantees require batch semantics",
+    "Reprocessing would take days while business needs hours",
+    "Global aggregations or complex algorithms that cannot be expressed incrementally",
+    "No streaming infrastructure in place"
+  ],
+  "component_types": [
+    "Event Log: Immutable, append-only log storing all events in order",
+    "Stream Processor: Engine reading from log and producing results",
+    "Serving Layer: Materialized views serving query results",
+    "State Backend: Persistent state storage for stateful operators",
+    "Schema Registry: Schema storage and evolution enforcement"
+  ],
+  "technology_stack": [
+    "Apache Kafka",
+    "Apache Pulsar",
+    "Apache Flink",
+    "Kafka Streams",
+    "Apache Spark Structured Streaming",
+    "Delta Lake",
+    "Apache Iceberg",
+    "ClickHouse",
+    "RocksDB (state backend)"
+  ],
+  "anti_patterns": [
+    "Choosing Kappa when Lambda is actually needed for complex batch workloads",
+    "Under-engineering without idempotent destination writes",
+    "Insufficient Kafka retention causing incomplete replays",
+    "Running reprocessing jobs on same cluster as live processing",
+    "Not planning atomic cutover between old and new output tables",
+    "Neglecting schema evolution for event contracts",
+    "Shared database across stream processing jobs (distributed monolith)"
+  ],
+  "migration_from": [
+    "Lambda Architecture"
+  ],
+  "migration_to": [
+    "Event-driven microservices",
+    "CQRS (Command Query Responsibility Segregation)",
+    "Event Sourcing"
+  ],
+  "design_principles": [
+    "Log as Source of Truth: Treat the immutable event log (Kafka/Pulsar) as the single source of truth. All historical data resides in the log; there is no separate batch store.",
+    "Unified Processing Paradigm: Express all processing logic as streaming operations. If batch and streaming logic are fundamentally different, consider Lambda instead.",
+    "Replayability First: Size log retention to cover your worst-case reprocessing window. Calculate max(replay time) × safety_factor (2x) before setting retention policies.",
+    "Semantic Preservation: Processing logic must produce identical results whether processing live events or replaying historical data. Preserve event-time semantics, watermarks, and windowing.",
+    "Atomic Cutover: When deploying new processing logic, run新旧 versions in parallel until new version catches up, then atomically switch serving layer.",
+    "Schema Evolution: Use Schema Registry with backward/forward compatibility rules. Historical events must deserialize correctly in future job versions.",
+    "Separation of Concerns: Keep reprocessing jobs on separate cluster resources from live processing to prevent resource starvation."
+  ],
+  "best_practices": [
+    "Retention Sizing: Calculate worst-case reprocessing duration at 20x ingestion throughput before choosing retention. Enable tiered storage before you need it.",
+    "State Management: Use RocksDB state backend with regular checkpointing. Design state schemas for efficient fault recovery and rebalancing.",
+    "Parallelism: Scale parallelism linearly with Kafka partition count. Each partition can be processed by one task manager slot.",
+    "Schema Registry: Enforce schema compatibility (BACKWARD_TRANSITIVE or FULL) at write time. Test deserialization on sampled historical window before full replay.",
+    "Observability: Track consumer lag, processing latency, and checkpoint duration. Set up alerts for reprocessing progress.",
+    "Idempotent Writes: Design sink connectors for idempotent writes to handle exactly-once requirements and replay scenarios.",
+    "Backpressure Handling: Configure buffer sizes and timeout settings to handle varying processing speeds gracefully.",
+    "Replay Separation: Run replay jobs on separate task manager pool or during off-peak windows to avoid starving live processing."
+  ]
+}

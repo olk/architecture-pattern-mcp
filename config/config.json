@@ -1,0 +1,49 @@
+{
+  "generator": {
+    "provider": "{env:GENERATOR_PROVIDER:-openai}",
+    "config": {
+      "model": "{env:GENERATOR_MODEL:-gpt-4o-mini}",
+      "base_url": "{env:GENERATOR_BASE_URL:-https://api.openai.com/v1}",
+      "api_key": "{env:GENERATOR_API_KEY}",
+      "temperature": "{env:GENERATOR_TEMPERATURE:-0.7}",
+      "top_p": "{env:GENERATOR_TOP_P:-1.0}",
+      "top_k": "{env:GENERATOR_TOP_K:-20}"
+    }
+  },
+  "embedder": {
+    "provider": "{env:EMBEDDER_PROVIDER:-tei}",
+    "config": {
+      "model": "{env:EMBEDDER_MODEL:-data/qwen3-embedding-0.6b}",
+      "base_url": "{env:EMBEDDER_BASE_URL:-http://localhost:8080}",
+      "api_key": "{env:EMBEDDER_API_KEY}",
+      "embed_batch_size": "{env:EMBEDDER_BATCH_SIZE:-16}",
+      "embedding_dim": "{env:EMBEDDER_EMBEDDING_DIM:-1024}"
+    }
+  },
+  "retrieval": {
+    "bm25_top_k": "{env:RETRIEVAL_BM25_TOP_K:-0}",
+    "dense_top_k": "{env:RETRIEVAL_DENSE_TOP_K:-0}",
+    "top_k_patterns": "{env:RETRIEVAL_TOP_K_PATTERNS:-5}",
+    "mode": "{env:RETRIEVAL_MODE:-reciprocal_rerank}",
+    "retriever_weights": "{env:RETRIEVER_WEIGHTS:-[0.5,0.5]}",
+    "min_fusion_score": "{env:RETRIEVAL_MIN_FUSION_SCORE:-0.0}",
+    "enable_reranking": "{env:RETRIEVAL_ENABLE_RERANKING:-false}",
+    "rerank_top_n": "{env:RETRIEVAL_RERANK_TOP_N:-10}",
+    "max_tries": "{env:RETRIEVAL_MAX_TRIES:-3}",
+    "min_quality_score": "{env:RETRIEVAL_MIN_QUALITY_SCORE:-50.0}",
+    "pattern_context_limits": {
+      "benefits": "{env:RETRIEVAL_PATTERN_BENEFITS:-3}",
+      "tradeoffs": "{env:RETRIEVAL_PATTERN_TRADEOFFS:-3}",
+      "best_practices": "{env:RETRIEVAL_PATTERN_BEST_PRACTICES:-3}",
+      "component_types": "{env:RETRIEVAL_PATTERN_COMPONENT_TYPES:-5}",
+      "technology_stack": "{env:RETRIEVAL_PATTERN_TECHNOLOGY_STACK:-5}",
+      "anti_patterns": "{env:RETRIEVAL_PATTERN_ANTI_PATTERNS:-3}",
+      "suitable_domains": "{env:RETRIEVAL_PATTERN_SUITABLE_DOMAINS:-5}"
+    }
+  },
+  "pattern_directory": "{env:PATTERN_DIRECTORY:-~/.config/architecture-pattern-mcp/pattern}",
+  "validation": {
+    "max_retries": "{env:VALIDATION_MAX_RETRIES:-2}",
+    "retry_on_fail": "{env:VALIDATION_RETRY_ON_FAIL:-true}"
+  }
+}

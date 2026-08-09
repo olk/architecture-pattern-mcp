@@ -1,0 +1,89 @@
+# FR-273: The system SHALL support containerized deployment via Docker
+# ADR-5: Containerized Deployment with Docker and Helm
+# TECH-7: Docker containerized deployment for reproducible builds
+
+services:
+  architecture-pattern-mcp:
+    # Service name per task specification
+    image: architecture-pattern-mcp:latest
+    container_name: architecture-pattern-mcp
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    # CPARA-1: CONFIG_PATH for configuration JSON file
+    environment:
+      - CONFIG_PATH=/app/config/config.json
+      - GENERATOR_PROVIDER=minimax
+      - GENERATOR_MODEL=minimax/MiniMax-M2.7
+      - GENERATOR_BASE_URL=https://api.minimax.io/v1
+      - GENERATOR_API_KEY=${MINIMAXAI_API_KEY}
+      - GENERATOR_TEMPERATURE=0.7
+      - GENERATOR_TOP_P=1.0
+      - GENERATOR_TOP_K=20
+
+      - EMBEDDER_PROVIDER=tei
+      - EMBEDDER_MODEL=data/qwen3-embedding-0.6b
+      - EMBEDDER_BASE_URL=http://127.0.0.1:8080/v1
+      - EMBEDDER_TIMEOUT=60
+      - EMBEDDER_BATCH_SIZE=8
+      - EMBEDDER_EMBEDDING_DIM=1024
+      - EMBEDDER_API_KEY=not-needed
+
+      - PATTERN_DIRECTORY=./pattern
+
+      - RETRIEVAL_BM25_TOP_K=20
+      - RETRIEVAL_DENSE_TOP_K=20
+      - RETRIEVAL_SIMILARITY_TOP_K=20
+      - RETRIEVAL_TOP_K_PATTERNS=5
+      - RETRIEVAL_MODE=reciprocal_rerank
+      - RETRIEVER_WEIGHTS=[0.5,0.5]
+      - RETRIEVAL_MIN_FUSION_SCORE=0.015
+      - RETRIEVAL_QUALITY_WEIGHT=0.0
+      - RETRIEVAL_ENABLE_RERANKING=true
+      - RETRIEVAL_RERANK_TOP_N=10
+    depends_on:
+      tei:
+        condition: service_healthy
+    network_mode: host
+    volumes:
+      - ${HOME}/.config/architecture-pattern-mcp:/app/config
+    # Restart policy on-failure per PRD.deployment_specifications
+    restart: on-failure
+    # Healthcheck with test python -m src.server --health
+    healthcheck:
+      test: ["CMD", "python", "-m", "src.main", "--health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # TEI Embedding Server — Qwen3-Embedding-0.6B weights baked in at build time
+  tei:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.tei
+    # Local-only tag. The previous tag pointed at a private registry
+    # image (`geheimschutz/tei-qwen3-embedding:0.6b-cpu-1.9`) that
+    # `docker compose up --build` would try to re-resolve on every
+    # invocation. Using a local-only name (no registry path) means the
+    # build always produces the tag and Compose never falls back to a
+    # pull. If you ever want to publish the built image, change this to
+    # a fully-qualified name.
+    image: architecture-pattern-tei:local
+    container_name: architecture-pattern-tei
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      - HF_HUB_OFFLINE=1
+      - HUGGINGFACE_HUB_CACHE=/data
+      # Redundant with the CMD in docker/Dockerfile.tei but kept here as
+      # documentation of the value and as a single source of truth. Both
+      # flags must be >= the client's embed_batch_size (see config.json
+      # embedder.config.tei_max_client_batch_size).
+      - MAX_CLIENT_BATCH_SIZE=32
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8080/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 120s

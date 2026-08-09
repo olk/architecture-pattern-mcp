@@ -1,0 +1,132 @@
+{
+  "name": "serverless",
+  "category": "cloud",
+  "context": "Event-driven workloads where application code runs without server management, scaling automatically from zero based on event triggers while paying only for actual execution time",
+  "benefits": [
+    "Cost efficiency: pay only for execution time, no idle resources",
+    "Auto-scaling: zero to massive scale automatically based on demand",
+    "No server management: managed infrastructure, no provisioning or patching",
+    "Rapid development: focus on business logic, faster time-to-market",
+    "Elasticity: handle traffic spikes without pre-provisioning capacity",
+    "Operational simplicity: no server-level operational overhead"
+  ],
+  "tradeoffs": [
+    "Cold starts: initial latency for idle functions (100-500ms typical)",
+    "Execution limits: timeout, memory, and disk constraints (Lambda: 15min max, 10GB memory)",
+    "Vendor lock-in: cloud-specific implementations and APIs",
+    "Testing complexity: hard to replicate environment locally",
+    "Debugging challenges: limited observability into execution",
+    "Statelessness constraint: must externalize state to managed services"
+  ],
+  "quality_attributes": {
+    "scalability": 9,
+    "maintainability": 7,
+    "reliability": 8,
+    "security": 7,
+    "performance": 6,
+    "simplicity": 8
+  },
+  "suitable_domains": [
+    "event-driven-workloads",
+    "file-processing",
+    "queue-processing",
+    "webhooks",
+    "request-response-apis",
+    "scheduled-tasks",
+    "data-transformation-pipelines",
+    "backend-for-frontend",
+    "iot-data-ingestion",
+    "stream-processing",
+    "rapid-prototyping"
+  ],
+  "unsuitable_domains": [
+    "long-running-processes",
+    "steady-high-traffic",
+    "stateful-compute-intensive-tasks",
+    "persistent-websocket-connections",
+    "gpu-specialized-hardware",
+    "complex-local-testing",
+    "strong-consistency-requirements",
+    "strict-data-residency-requirements"
+  ],
+  "use_cases": [
+    "Image resizing or document conversion triggered by S3 uploads",
+    "Webhook handlers for third-party API integrations",
+    "Scheduled report generation and email dispatch",
+    "IoT device data ingestion and processing",
+    "Background job processing from message queues",
+    "API backends with sporadic traffic patterns",
+    "Chatbot and voice assistant backends",
+    "Real-time file validation and virus scanning",
+    "ETL pipelines triggered by file or database events"
+  ],
+  "avoid_when": [
+    "Applications require predictable sub-100ms latency under consistent load",
+    "Long-running computational workflows (ML training, video rendering)",
+    "Strong ACID transaction requirements spanning multiple function invocations",
+    "Deep recursion or algorithms requiring extended execution time",
+    "Applications with persistent in-memory state requirements",
+    "Complex distributed transactions requiring saga coordination",
+    "Strict compliance requirements for data locality and auditability"
+  ],
+  "component_types": [
+    "Function-as-a-Service (FaaS): Single-purpose stateless functions that execute in response to events",
+    "API Gateway: HTTP routing, request/response transformation, rate limiting, and authentication",
+    "Event Sources: Queue polling, stream processing, scheduled triggers, and event publishers",
+    "Backend-as-a-Service (BaaS): Managed databases, authentication, storage, and messaging services",
+    "Workflow Orchestration: Multi-step business processes using state machines (Step Functions, Durable Functions)",
+    "Dead-Letter Queue (DLQ): Failed event handling, retry logic, and error capture for async invocations"
+  ],
+  "technology_stack": [
+    "Compute: AWS Lambda, Azure Functions, Google Cloud Functions",
+    "API Gateway: AWS API Gateway, Azure API Management, Google Cloud Endpoints",
+    "Databases: DynamoDB, Aurora Serverless, Cosmos DB, Firestore",
+    "Storage: S3, Azure Blob Storage, Google Cloud Storage",
+    "Message Queues: SQS, Azure Service Bus, Google Cloud Pub/Sub",
+    "Workflow: AWS Step Functions, Azure Logic Apps",
+    "Monitoring: CloudWatch, Azure Monitor, Google Cloud Monitoring",
+    "Authentication: Cognito, Azure AD B2C, Firebase Authentication"
+  ],
+  "anti_patterns": [
+    "Monolithic Lambda: stuffing entire application logic into single large function",
+    "Synchronous Chain: creating long chains of function-to-function calls instead of async events",
+    "Ignoring Idempotency: not designing functions to safely handle retries",
+    "Synchronous Database Writes: blocking database operations within function execution",
+    "Excessive Dependencies: large deployment packages causing slow cold starts",
+    "No DLQ Strategy: failing to handle failed async invocations",
+    "VPC Penalty: placing Lambda in VPC without proper optimization causing cold start issues",
+    "Hardcoded Configuration: embedding environment-specific values instead of using parameter stores"
+  ],
+  "migration_from": [
+    "monolith",
+    "layered-monolith",
+    "microservices (partial migration of specific endpoints)"
+  ],
+  "migration_to": [
+    "event-driven-architecture",
+    "service-mesh (hybrid with containerized services)",
+    "CQRS (for complex domain patterns)"
+  ],
+  "design_principles": [
+    "Single Responsibility: Each function performs one well-defined task triggered by a specific event type",
+    "Statelessness: Functions should not rely on internal state; externalize state to managed services (DynamoDB, S3, etc.)",
+    "Idempotency: Functions must produce the same result for the same input, enabling safe retries",
+    "Short Execution: Design functions to complete quickly (under 15 minutes for Lambda); use async for long-running tasks",
+    "Event-Driven: Use events (SQS, SNS, EventBridge) to trigger processing rather than synchronous chains",
+    "Graceful Degradation: Implement circuit breakers and DLQ handling for failures",
+    "Minimal Dependencies: Keep deployment packages small to reduce cold start latency",
+    "Connection Pooling: Reuse database connections across invocations to avoid exhausting connection limits"
+  ],
+  "best_practices": [
+    "Cold Start Mitigation: Use provisioned concurrency for latency-sensitive functions; optimize package size",
+    "Error Handling: Implement retry mechanisms with exponential backoff; use dead-letter queues for failed events",
+    "Idempotent Design: Include idempotency keys in event processing; check for duplicate processing",
+    "Resource Configuration: Right-size memory allocation; higher memory also provides more CPU",
+    "Structured Logging: Use structured logging (JSON) for better log querying and analysis",
+    "Distributed Tracing: Implement X-Ray, Application Insights, or Cloud Trace for cross-function debugging",
+    "Secrets Management: Store secrets in parameter stores (SSM, Secrets Manager) rather than environment variables",
+    "VPC Optimization: Place functions in VPC only when necessary; use NAT Gateway or VPC endpoints for private resources",
+    "Cost Monitoring: Set budget alerts; monitor invocation counts and duration; use reserved concurrency for steady workloads",
+    "Version Control: Use semantic versioning for functions; implement canary deployments for safe updates"
+  ]
+}

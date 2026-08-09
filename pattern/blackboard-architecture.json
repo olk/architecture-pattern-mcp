@@ -1,0 +1,123 @@
+{
+  "name": "blackboard",
+  "category": "ai_cognitive",
+  "context": "Complex problems requiring multiple specialized knowledge sources where no deterministic solution strategy exists and approximate or uncertain solutions are acceptable",
+  "benefits": [
+    "Reusable knowledge sources: each KS can be reused across different problem domains",
+    "Fault tolerance and robustness: wrong hypotheses are filtered out, surviving hypotheses are strongly supported",
+    "Support for changeability and maintainability: KSs, control algorithm, and central data structure are strictly separated",
+    "Support for experimentation: allows heuristically-driven problem solving",
+    "Opportunistic problem solving: direction determined by current state rather than predetermined sequence",
+    "Parallel execution potential: all knowledge sources can potentially work concurrently",
+    "Handles uncertain data and approximate solutions gracefully",
+    "Supports both bottom-up (data-driven) and top-down (goal-driven) reasoning"
+  ],
+  "tradeoffs": [
+    "Difficulty of testing: computations do not follow deterministic algorithms, results often not reproducible",
+    "No guaranteed good solution: may never converge to acceptable answer",
+    "Difficulty establishing a good control strategy: requires experimental approach and domain expertise",
+    "Low computational efficiency: overhead from opportunistic scheduling and hypothesis management",
+    "High development effort: requires careful design of KSs, control strategy, and vocabulary",
+    "No built-in parallelism: concurrent access to blackboard must be explicitly synchronized",
+    "Debugging complexity: non-deterministic execution makes issues hard to trace"
+  ],
+  "quality_attributes": {
+    "scalability": 7,
+    "maintainability": 6,
+    "reliability": 6,
+    "security": 3,
+    "performance": 4,
+    "simplicity": 4
+  },
+  "suitable_domains": [
+    "artificial-intelligence",
+    "speech-recognition",
+    "image-processing",
+    "expert-systems",
+    "pattern-recognition",
+    "complex-scheduling",
+    "signal-processing",
+    "natural-language-processing",
+    "decision-support-systems",
+    "sensor-fusion"
+  ],
+  "unsuitable_domains": [
+    "simple-crud",
+    "real-time-deterministic",
+    "low-latency-required",
+    "single-algorithm",
+    "strongly-consistent",
+    "small-teams",
+    "tight-coupling-acceptable"
+  ],
+  "use_cases": [
+    "Speech recognition where multiple specialized processors handle different acoustic features",
+    "Image recognition combining edge detection, feature extraction, and classification modules",
+    "Complex diagnostic systems combining multiple expert knowledge bases",
+    "Risk assessment systems integrating diverse data sources and detection algorithms",
+    "Multi-sensor fusion systems combining readings from heterogeneous sensors",
+    "Financial trading systems combining technical analysis, news analysis, and sentiment analysis"
+  ],
+  "avoid_when": [
+    "Problem has a clear, sequential solution path",
+    "Single module can handle all requirements adequately",
+    "Real-time deterministic response is required",
+    "Strong consistency guarantees are needed",
+    "Low-latency local calls within a single process",
+    "Debugging direct interactions is required",
+    "Team has limited experience with AI/heuristic approaches"
+  ],
+  "component_types": [
+    "Blackboard: Central structured global memory containing objects from the solution space",
+    "Knowledge Source (KS): Independent specialist module with domain expertise",
+    "Control Component (Scheduler): Coordinates problem-solving by managing KS execution cycle",
+    "Signal Key Registry: Pattern matching system for KS notification",
+    "Hypothesis Manager: Tracks competing hypotheses and their confidence scores",
+    "KS Condition Evaluator: Determines which KSs are applicable given current blackboard state",
+    "KS Action Executor: Executes the selected KS's action part"
+  ],
+  "technology_stack": [
+    "Python (rule-based KS implementation)",
+    "Prolog (logic-based KS)",
+    "CLIPS (production rule system)",
+    "Redis (distributed blackboard)",
+    "Kafka (event-driven KS notification)",
+    "PostgreSQL (persistent blackboard storage)"
+  ],
+  "anti_patterns": [
+    "Knowledge sources communicating directly with each other",
+    "Tight coupling between KSs and blackboard schema",
+    "Monolithic knowledge source doing everything",
+    "Static control strategy without adaptation",
+    "Synchronous blocking access to blackboard",
+    "Premature optimization of control heuristics"
+  ],
+  "migration_from": [
+    "monolithic",
+    "layered-monolith",
+    "pipe-and-filter",
+    "master-slave"
+  ],
+  "migration_to": [
+    "event-driven",
+    "actor-model",
+    "agent-based",
+    "service-mesh"
+  ],
+  "design_principles": [
+    "Knowledge Source Isolation: KSs must not communicate directly with each other—only through the blackboard. This ensures independent evolution and testing of each specialist.",
+    "Opportunistic Problem Solving: The control strategy should prioritize based on current blackboard state, not predetermined sequences. Let the data drive the solution direction.",
+    "Abstraction Hierarchy: Organize the blackboard into levels (raw data → features → hypotheses → solutions). Each level represents increasing abstraction of the problem domain.",
+    "Condition-Action Separation: Each KS should clearly separate its applicability condition (when it can contribute) from its action (what it contributes). This enables flexible control strategies.",
+    "Non-Deterministic Execution Acceptance: Embrace the fact that different runs may produce different paths to solutions. Design for convergence, not reproducibility.",
+    "Hypothesis Validation: Implement explicit mechanisms for hypothesis strengthening and weakening based on evidence. This provides fault tolerance and progressive refinement."
+  ],
+  "best_practices": [
+    "Design Clear Signal Hierarchies: Use consistent naming conventions (e.g., `request.*.risk`, `response.detector.*`) to enable effective pattern matching and subscription management.",
+    "Implement Incremental Confidence Building: Structure KSs to produce partial results that increase confidence over time, allowing early termination when acceptable.",
+    "Use Separate Control Knowledge Sources: Implement domain-specific control knowledge sources that calculate metrics (potential for progress, computational cost) separate from domain KSs.",
+    "Monitor and Adapt Control Strategy: Collect metrics on KS effectiveness and dynamically adjust scheduling priorities based on historical performance.",
+    "Design for Graceful Degradation: When high-confidence hypotheses are not achieved, ensure the system can provide best-effort solutions with clear confidence levels.",
+    "Separate Persistence Concerns: Use event sourcing or periodic snapshots for blackboard persistence to enable recovery without impacting real-time processing."
+  ]
+}

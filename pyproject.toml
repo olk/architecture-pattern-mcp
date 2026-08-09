@@ -1,0 +1,176 @@
+# FR-1: The system SHALL define the project name as architecture-pattern-mcp
+# FR-2: The system SHALL define the project version as 0.2.0
+# FR-3: The system SHALL require Python version 3.12 or higher
+# FR-4: The system SHALL depend on fastmcp version 3.4.4 or higher for MCP protocol support
+# FR-5: The system SHALL depend on llama-index-core and llama-index-llms-litellm for multi-provider LLM access
+# FR-6: The system SHALL depend on pydantic version 2.11.7 or higher for data validation
+# FR-7: The system SHALL depend on python-dotenv version 1.0.0 or higher for environment variable management
+# FR-200: The system SHALL depend on sentence-transformers>=3.0 and faiss-cpu>=1.14.3
+# IC-1: Python version SHALL be 3.12 or higher
+# IC-2: fastmcp version SHALL be 3.4.4 or higher
+# IC-3: llama-index-core and llama-index-llms-litellm version SHALL be as specified
+# IC-4: pydantic version SHALL be 2.11.7 or higher
+# IC-5: python-dotenv version SHALL be 1.0.0 or higher
+# IC-34: sentence-transformers>=3.0 and faiss-cpu>=1.14.3
+# IC-41: The system SHALL use hatchling as the build backend
+# IC-42: The system SHALL provide entry points `python -m src.server` and `architecture-pattern-mcp`
+
+[project]
+name = "architecture-pattern-mcp"
+version = "0.2.0"
+requires-python = ">=3.12"
+description = "MCP Architect Server providing comprehensive architectural expertise through lightweight pipeline coordinator and domain-specific tools"
+license = { text = "MIT" }
+authors = [
+    { name = "Oliver Kowalke", email = "oliver.kowalke@gmail.com" }
+]
+keywords = ["mcp", "architecture", "design", "pattern", "fastmcp", "ai"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+
+# FR-4, IC-2: MCP protocol support via FastMCP (factmcp)
+# FR-5, IC-3: Multi-provider LLM access via LlamaIndex LiteLLM integration
+# FR-6, IC-4: Data validation via Pydantic v2
+# FR-7, IC-5: Environment variable management via python-dotenv
+# FR-200, IC-34: Vector similarity search via llama-index-vector-stores-faiss and LiteLLMEmbedding
+dependencies = [
+    "fastmcp>=3.4.4",
+    "llama-index-core>=0.14.23,<0.15",
+    "llama-index-llms-litellm>=0.7.1,<0.8",
+    "llama-index-embeddings-litellm>=0.5.0,<0.6",
+    "llama-index-vector-stores-faiss>=0.6.0,<0.7",
+    "llama-index-retrievers-bm25>=0.7.1,<0.8",
+    "pydantic>=2.11.7",
+    "python-dotenv>=1.0.0",
+    "sentence-transformers>=3.0,<6.0",
+    "faiss-cpu>=1.14.3",
+    "boto3>=1.34.0",
+    "httpx>=0.27.0",
+]
+
+[build-system]
+requires = ["hatchling>=1.0.0"]
+build-backend = "hatchling.build"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "pytest-cov>=4.1.0",
+    "hypothesis>=6.0.0",
+    "ruff>=0.2.0",
+    "mypy>=1.8.0",
+    "pyright>=1.1.300",
+    "pre-commit>=3.6.0",
+    "tomli>=2.0.0; python_version < '3.11'",
+]
+docs = [
+    "sphinx>=7.2.0",
+    "sphinx-autoapi>=3.0.0",
+    "pydata-sphinx-theme>=0.15.0",
+]
+all = [
+    "architecture-pattern-mcp[dev,docs]",
+]
+
+[project.urls]
+Homepage = "https://github.com/architecture-pattern/architecture-pattern-mcp"
+Documentation = "https://github.com/architecture-pattern/architecture-pattern-mcp.readthedocs.io"
+Repository = "https://github.com/architecture-pattern/architecture-pattern-mcp"
+Issues = "https://github.com/architecture-pattern/architecture-pattern-mcp/issues"
+
+# FR-245: Entry point for the MCP server
+# IC-42: python -m src.server command and architecture-pattern-mcp command
+[project.scripts]
+architecture-pattern-mcp = "src.main:cli"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "/src",
+    "/README.md",
+    "/LICENSE",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "C4", "DTZ", "T10", "ISC", "PIE", "PT", "RET", "SIM", "ARG", "PL", "TRY", "RUF"]
+ignore = [
+    # Pre-existing violations — resolve in a dedicated cleanup PR
+    "TRY003",
+    "TRY301",
+    "TRY300",
+    "TRY400",
+    "E501",
+    "E741",
+    "E401",
+    "E402",
+    "PLC0415",
+    "PLR2004",
+    "PLR0913",
+    "ARG001",
+    "ARG002",
+    "ARG005",
+    "W293",
+    "W291",
+    "W292",
+    "I001",
+    "F401",
+    "F811",
+    "F841",
+    "RUF012",
+    "RUF013",
+    "RUF022",
+    "RUF002",
+    "RUF100",
+    "UP035",
+    "UP036",
+    "UP042",
+    "DTZ001",
+    "DTZ003",
+    "PT011",
+    "PT015",
+    "PT017",
+    "PT018",
+    "SIM102",
+    "SIM103",
+    "SIM108",
+    "SIM110",
+    "SIM117",
+    "SIM118",
+    "RET504",
+    "PLW0108",
+    "B007",
+    "B011",
+    "B017",
+    "B904",
+]
+
+[tool.pyright]
+pythonVersion = "3.12"
+include = ["src"]
+exclude = ["tests", "examples"]
+typeCheckingMode = "off"
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+filterwarnings = ["ignore::DeprecationWarning"]

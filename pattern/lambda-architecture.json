@@ -1,0 +1,138 @@
+{
+  "name": "lambda-architecture",
+  "category": "data",
+  "context": "Large-scale data processing systems requiring both batch (historical) and real-time (low-latency) analytical capabilities. Designed to balance data accuracy, throughput, and fault-tolerance for massive datasets by combining batch processing for comprehensive views with stream processing for real-time views.",
+  "benefits": [
+    "Accuracy + Latency: Batch layer ensures accuracy, speed layer provides low latency",
+    "Fault Tolerance: Speed layer bugs corrected by next batch run",
+    "Human Fault-Tolerance: Can fix bugs by recomputing from raw data",
+    "Scalability: Both layers scale independently",
+    "Flexibility: Different technologies for batch and stream processing",
+    "Eventual Consistency: System always converges to correct answer",
+    "Immutable Data Store: Eliminates update/delete corruption vectors"
+  ],
+  "tradeoffs": [
+    "Dual Codebase: Batch and speed layers often require different code/implementations",
+    "Merge Complexity: Serving layer must correctly merge batch and real-time views",
+    "Operational Complexity: Maintaining two processing pipelines doubles monitoring overhead",
+    "Consistency Divergence: Results may differ between batch and speed views during reconciliation",
+    "High Total Cost of Ownership: Two systems mean double infrastructure, double maintenance",
+    "Testing Complexity: Must test both paths and their merge logic"
+  ],
+  "quality_attributes": {
+    "scalability": 9,
+    "performance": 8,
+    "reliability": 8,
+    "maintainability": 4,
+    "security": 6,
+    "simplicity": 3
+  },
+  "suitable_domains": [
+    "big-data-analytics",
+    "real-time-analytics-dashboards",
+    "iot-sensor-networks",
+    "fraud-detection",
+    "financial-compliance",
+    "event-driven-architectures",
+    "recommendation-engines"
+  ],
+  "unsuitable_domains": [
+    "simple-crud-applications",
+    "low-data-volume-scenarios",
+    "teams-with-limited-batch-stream-expertise",
+    "single-codebase-preferences",
+    "strong-consistency-requirements",
+    "small-to-medium-scale-data-processing"
+  ],
+  "use_cases": [
+    "Financial reporting dashboards displaying live transaction feeds alongside daily/weekly reports",
+    "IoT monitoring systems requiring real-time alerts and historical trend analysis",
+    "E-commerce analytics combining real-time inventory with historical sales trends",
+    "Security information and event management (SIEM) with real-time threat detection",
+    "User behavior analysis needing both session-level real-time metrics and long-term cohorts",
+    "Healthcare systems combining real-time patient monitoring with batch reporting",
+    "Ad tech platforms needing real-time bid optimization and batch ROI reporting"
+  ],
+  "avoid_when": [
+    "Simple queries with no real-time requirements",
+    "Low data volume where batch-only processing is sufficient",
+    "Team lacks expertise in both batch and stream processing paradigms",
+    "Strong consistency requirements at all times (batch lag unacceptable)",
+    "Organizations with single-team, single-codebase preferences",
+    "Data volumes manageable with pure streaming approaches",
+    "When sub-second latency is not required for core business functions",
+    "Over-engineering for small to medium-scale data processing"
+  ],
+  "component_types": [
+    "BatchLayer: Master dataset storage and full recompute processing; produces accurate batch views",
+    "SpeedLayer: Real-time incremental processing; produces approximate real-time views",
+    "ServingLayer: Merges batch and speed views; indexes and answers queries",
+    "MasterDataset: Immutable, append-only raw data storage (HDFS/S3)",
+    "BatchView: Precomputed query results from full dataset recompute",
+    "RealtimeView: Incremental query results from recent data only",
+    "MessageQueue: Kafka/Kinesis/Pulsar for durable event ingestion",
+    "BatchProcessor: Spark/Hive/MapReduce for scheduled full recompute",
+    "StreamProcessor: Flink/Spark Streaming/Kafka Streams for real-time processing",
+    "MergeQueryEngine: Combines batch and speed outputs at query time"
+  ],
+  "technology_stack": [
+    "Apache Spark",
+    "Apache Hive",
+    "Hadoop MapReduce",
+    "Apache Flink",
+    "Apache Kafka Streams",
+    "Apache Spark Streaming",
+    "Amazon Kinesis",
+    "Apache Pulsar",
+    "HDFS",
+    "Amazon S3",
+    "Azure Data Lake",
+    "Apache Cassandra",
+    "Elasticsearch",
+    "Apache Druid",
+    "Redis",
+    "Apache Pinot",
+    "Apache Airflow",
+    "Prefect",
+    "Dagster"
+  ],
+  "anti_patterns": [
+    "Distributed Monolith: Using Lambda but coupling batch and speed layers so tightly they cannot scale independently",
+    "Shared Codebase Without Abstraction: Duplicating business logic in both layers without shared libraries causing drift",
+    "Neglecting Merge Logic: Underestimating the complexity of the serving layer merge operation",
+    "Ignoring Divergence Monitoring: Not implementing reconciliation checks between batch and speed outputs",
+    "Insufficient Testing: Only testing individual layers without end-to-end merge verification",
+    "Schema-less Core: Storing data without schemas causing merge failures and data quality issues"
+  ],
+  "migration_from": [
+    "monolithic-batch-processing",
+    "single-purpose-etl-pipelines",
+    "realtime-only-systems",
+    "direct-database-polling-architectures"
+  ],
+  "migration_to": [
+    "kappa-architecture",
+    "medallion-architecture",
+    "event-driven-microservices",
+    "unified-stream-processing-flink"
+  ],
+  "design_principles": [
+    "Immutable Master Dataset: Store all historical data in append-only storage; never update or delete",
+    "Batch Layer Guarantees Accuracy: The batch layer always produces correct results eventually",
+    "Speed Layer Provides Approximation: Real-time views are temporary and will be overwritten by batch",
+    "Serving Layer Merges Views: Combine batch and speed outputs for complete query results",
+    "Eventual Consistency: Accept transient inconsistencies; system converges over time",
+    "Separation of Concerns: Batch and speed layers serve different analytical purposes"
+  ],
+  "best_practices": [
+    "Shared Transformation Libraries: Build shared UDF libraries used by both batch and speed paths to avoid logic drift",
+    "Drift Detection: Implement reconciliation jobs comparing speed output vs latest batch truth continuously",
+    "Merge Precedence Rules: Define explicit rules (typically batch wins when views overlap, speed fills gap windows)",
+    "Late Data Handling: Explicitly handle events arriving after processing window closes; plan for watermarks",
+    "Bounded Speed Views: Keep speed layer state bounded; discard after batch view incorporates that period",
+    "Incremental Rollout: Start with one domain, validate through two full batch cycles before expanding",
+    "Owner Matrix: Publish clear ownership for ingest, speed, batch, and serving layers",
+    "Replay Drills: Run weekly drills to verify late-data and replay capabilities",
+    "Cost Validation: Continuously validate cost and replay feasibility as data volume grows"
+  ]
+}

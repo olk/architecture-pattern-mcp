@@ -1,0 +1,143 @@
+{
+  "category": "data",
+  "name": "command-query-responsibility-segregation",
+  "context": "Separates read and write operations into distinct models, allowing each to be optimized independently. Best for domains with asymmetric read/write patterns where read and write workloads differ significantly in volume, shape, or scaling needs.",
+  "benefits": [
+    "Independent scaling of read/write paths allows each side to match its actual demand profile",
+    "Optimized storage technologies: each model can use storage optimized for its workload",
+    "Pre-computed projections: read models use denormalized, query-optimized structures",
+    "Flexible querying: multiple read models for different query patterns without affecting write side",
+    "Reduced contention: eliminates contention between read and write workloads",
+    "Clear separation of concerns: commands and queries are fundamentally different operations",
+    "Event-driven integration: natural fit with event sourcing and domain events for audit trails"
+  ],
+  "tradeoffs": [
+    "Eventual consistency: read models updated asynchronously (50-1000ms lag under normal load)",
+    "Increased operational complexity: two models to maintain, projection pipelines",
+    "Code duplication risk: some logic may need to exist in both models",
+    "Event schema evolution burden: old events must remain compatible with new handlers",
+    "Projection lag monitoring required: without lag monitoring, stale views go undetected",
+    "Storage overhead: maintaining multiple denormalized views increases data storage costs"
+  ],
+  "quality_attributes": {
+    "scalability": 9,
+    "maintainability": 5,
+    "reliability": 6,
+    "security": 7,
+    "performance": 9,
+    "simplicity": 3
+  },
+  "suitable_domains": [
+    "e-commerce",
+    "financial-trading-platforms",
+    "real-time-dashboards",
+    "collaborative-applications",
+    "high-traffic-systems",
+    "microservices-architecture",
+    "systems-requiring-audit-trails"
+  ],
+  "unsuitable_domains": [
+    "simple-crud-applications",
+    "systems-requiring-strong-consistency",
+    "small-teams-with-low-operational-maturity",
+    "low-traffic-applications",
+    "static-reference-data",
+    "teams-unfamiliar-with-event-driven-patterns"
+  ],
+  "use_cases": [
+    "Read-to-write ratio heavily skewed (10:1 or higher)",
+    "Multiple query patterns that don't map to write schema",
+    "Need to scale reads and writes independently",
+    "Different storage technologies needed for reads vs writes",
+    "Complex domain with many query patterns requiring optimized views",
+    "Audit trail of all changes provides business value",
+    "UI needs different data shapes than domain model",
+    "Collaborative features where multiple users modify same entities"
+  ],
+  "avoid_when": [
+    "Simple CRUD operations dominate the domain",
+    "Traffic is low to moderate",
+    "Business logic is straightforward",
+    "Strong consistency is mandatory everywhere",
+    "Team lacks operational maturity for managing distributed systems",
+    "A well-designed CRUD system with caching and read replicas is sufficient",
+    "Team cannot yet operate replay and projection recovery tooling"
+  ],
+  "component_types": [
+    "CommandModel: Handles operations that change state; commands express intent",
+    "QueryModel: Handles data retrieval; queries never modify state",
+    "CommandBus: Routes commands to their respective handlers",
+    "QueryBus: Routes query requests to appropriate query handlers",
+    "CommandHandler: Execute business logic for commands, validate rules, persist to write store, emit domain events",
+    "QueryHandler: Fetch and transform data from read store into DTOs; no domain logic",
+    "EventHandler: Subscribe to domain events and update read models asynchronously",
+    "Projection: Subscribe to domain events and update read models asynchronously",
+    "ReadStore: Denormalized data optimized for query performance",
+    "WriteStore: Normalized data optimized for consistency"
+  ],
+  "technology_stack": [
+    "Apache Kafka",
+    "RabbitMQ",
+    "Amazon SNS/SQS",
+    "Azure Service Bus",
+    "PostgreSQL",
+    "MySQL",
+    "MongoDB",
+    "Elasticsearch",
+    "Redis",
+    "Amazon DynamoDB",
+    "Apache Cassandra",
+    "EventStoreDB",
+    "Axon Framework",
+    "Akka Persistence",
+    "AWS Lambda",
+    "Azure Event Hubs",
+    "Google Cloud Pub/Sub"
+  ],
+  "anti_patterns": [
+    "Distributed monolith: using CQRS without proper domain boundaries",
+    "Shared database: same database for read and write models defeats purpose",
+    "Dual-writing: writing to both models synchronously removes CQRS safety benefits",
+    "Missing idempotency: projection handlers must be idempotent",
+    "Ignoring projection lag: not monitoring lag leads to stale data",
+    "CRUD on read side: rebuilding CRUD logic on read side",
+    "Missing freshness budgets: not defining acceptable lag SLOs",
+    "Premature event sourcing: adding event sourcing when not needed"
+  ],
+  "migration_from": [
+    "monolithic-crud-architecture",
+    "layered-architecture",
+    "shared-database-per-service",
+    "anemic-domain-model"
+  ],
+  "migration_to": [
+    "event-sourcing",
+    "event-driven-microservices",
+    "service-mesh",
+    "serverless-workflows"
+  ],
+  "design_principles": [
+    "Command/Query Separation: Commands change state and return nothing (or an ID), Queries read state and return DTOs",
+    "Write Model Authoritative: The write side is the only place where business invariants should be enforced",
+    "Read Models Derivative: Query stores are downstream materializers with no write authority and no business logic",
+    "Eventual Consistency Acceptance: Acknowledge that read models will lag behind write models; define freshness budgets",
+    "Idempotent Projections: Events will be delivered multiple times; projection handlers must be idempotent",
+    "Separate Optimization: Each model can use storage technology optimized for its specific workload",
+    "Explicit Boundary: CQRS is a control boundary between write truth and read convenience",
+    "Outbox Pattern: Atomic writes with event publishing to avoid dual-writing pitfalls"
+  ],
+  "best_practices": [
+    "Start with one bounded context: Prove value in one domain before expanding",
+    "Define freshness budgets per read surface: Acceptable lag, pager threshold, replay procedure",
+    "Make projections idempotent: Events will be delivered multiple times (at-least-once delivery)",
+    "Track SLIs/SLOs separately: Command latency, query latency, projection lag, event delivery",
+    "Use outbox pattern: Atomic writes with event publishing",
+    "Version command and query payloads: Enable debugging and schema evolution",
+    "Keep command side authoritative: Queries never invent state",
+    "Automate projection rebuilds: With throttling and snapshot usage",
+    "Rollback capability: Feature flags for event schema changes",
+    "Observe lag per read surface: Not just at the broker level",
+    "Treat projection recovery as first-class runbook: Not an afterthought",
+    "Keep team in communication: CQRS patterns require deep understanding across the team"
+  ]
+}

@@ -1,0 +1,113 @@
+{
+  "category": "coordination",
+  "name": "task-control-architecture",
+  "context": "Framework for building task-level control systems in autonomous robots and agents, providing hierarchical task decomposition, temporal constraint management, and implicit invocation communication",
+  "benefits": [
+    "Hierarchical task decomposition for complex goal breakdown",
+    "Implicit invocation for decoupled task producers and consumers",
+    "Concurrent execution with temporal constraint management",
+    "Fault tolerance via redundant multiple handlers",
+    "Execution monitoring with automated condition watching",
+    "Human-in-the-loop interaction at any hierarchy level",
+    "Cross-language support (Lisp and C via TCP/IP)"
+  ],
+  "tradeoffs": [
+    "Central server bottleneck limits horizontal scalability",
+    "Complexity requires understanding of task trees, temporal constraints, monitors, exception handlers",
+    "Single point of failure in central server",
+    "Not appropriate for hard real-time control systems",
+    "Task tree coordination adds network latency across processes"
+  ],
+  "quality_attributes": {
+    "scalability": 7,
+    "maintainability": 7,
+    "reliability": 8,
+    "security": 6,
+    "performance": 6,
+    "simplicity": 5
+  },
+  "suitable_domains": [
+    "autonomous-mobile-robots",
+    "multi-agent-coordination",
+    "space-mission-control",
+    "robotic-systems",
+    "hierarchical-task-decomposition",
+    "human-oversight-systems"
+  ],
+  "unsuitable_domains": [
+    "hard-real-time-control",
+    "simple-single-task-automation",
+    "high-throughput-trading",
+    "microservices-architectures",
+    "edge-computing-bandwidth"
+  ],
+  "use_cases": [
+    "NASA rovers: Ambler, Ratler, Nomad for planetary exploration",
+    "Dante robot: Volcanic exploration with autonomous navigation",
+    "Autonomous spacecraft simulation with mission-level control",
+    "Xavier mobile robot: Indoor navigation with complex task hierarchies",
+    "Heterogeneous multi-robot coordination projects",
+    "Teleoperator interfaces with supervisory control"
+  ],
+  "avoid_when": [
+    "System requires sub-millisecond response times",
+    "Simple CRUD operations without complex coordination needs",
+    "Centralized architecture is prohibited by policy",
+    "Team lacks experience with hierarchical task management",
+    "Project needs simple lightweight task sequencing"
+  ],
+  "component_types": [
+    "Task Decomposition: Hierarchical decomposition of goals into subtasks with temporal constraints",
+    "Scheduler: Executes planned behaviors based on temporal constraints; manages execution order",
+    "Monitor: Watches selected sensors and triggers actions when conditions are met",
+    "Resource Manager: Orderly access to shared resources; handles queuing of resource requests",
+    "Exception Handler: Context-dependent error procedures: terminate, suspend, patch, or retry plans",
+    "Message Server: Central hub for publish/subscribe and client/server communication",
+    "Human Interface: Interactive task monitoring and modification at any hierarchy level"
+  ],
+  "technology_stack": [
+    "Languages: Lisp, C (cross-language TCP/IP socket communication)",
+    "Evolution: TCA -> TCM (C++ library) -> TDL (C++ superset) -> IPC",
+    "Message passing: TCP/IP sockets with automatic marshalling/unmarshalling",
+    "Robot applications: ControlShell integration for real-time control",
+    "Distributed: MTDL for multi-robot coordination"
+  ],
+  "anti_patterns": [
+    "Sequential sense-plan-act (failing to exploit concurrent execution)",
+    "Tight coupling (direct module-to-module communication bypassing implicit invocation)",
+    "Single handler per signal (not utilizing fault tolerance through redundant handlers)",
+    "Ignoring temporal constraints (over-sequential execution prevents parallel optimization)"
+  ],
+  "migration_from": [
+    "Sequential task control architectures",
+    "Ad-hoc task management without formal decomposition",
+    "Direct procedure call coordination between modules",
+    "Single-threaded robot control loops"
+  ],
+  "migration_to": [
+    "TDL (Task Description Language) with C++ syntax",
+    "TCM (Task Control Management) library for C++ implementations",
+    "IPC (Inter-Process Communication) for flexible message passing",
+    "Modern agentic loops: hierarchical planning -> execution monitoring -> exception handling"
+  ],
+  "design_principles": [
+    "Hierarchical Task Design: Break complex goals into clear subtask hierarchies with well-defined temporal constraints",
+    "Redundant Handler Registration: Register multiple handlers for critical signals to ensure fault tolerance",
+    "Monitor Placement: Place monitors strategically to watch key sensors and conditions for early fault detection",
+    "Temporal Constraint Optimization: Leverage concurrent execution opportunities by analyzing temporal constraints",
+    "Resource Queuing: Use Resource Manager for orderly access to prevent conflicts in shared resources",
+    "Checkpoint Progress: Save execution state periodically for recovery from failures",
+    "Cross-Language Communication: Use TCP/IP socket communication for Lisp and C process integration",
+    "Human Intervention Points: Designate checkpoints for human oversight and approval in critical workflows"
+  ],
+  "best_practices": [
+    "Hierarchical Task Design: Break complex goals into clear subtask hierarchies with well-defined temporal constraints",
+    "Redundant Handler Registration: Register multiple handlers for critical signals to ensure fault tolerance",
+    "Monitor Placement: Place monitors strategically to watch key sensors and conditions for early fault detection",
+    "Temporal Constraint Optimization: Leverage concurrent execution opportunities by analyzing temporal constraints",
+    "Resource Queuing: Use Resource Manager for orderly access to prevent conflicts in shared resources",
+    "Checkpoint Progress: Save execution state periodically for recovery from failures",
+    "Cross-Language Communication: Use TCP/IP socket communication for Lisp and C process integration",
+    "Human Intervention Points: Designate checkpoints for human oversight and approval in critical workflows"
+  ]
+}

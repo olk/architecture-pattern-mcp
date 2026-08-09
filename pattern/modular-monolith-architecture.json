@@ -1,0 +1,117 @@
+{
+  "name": "modular-monolith",
+  "category": "structural",
+  "context": "Single deployable unit organized into loosely coupled, domain-oriented modules with clear boundaries while retaining operational simplicity",
+  "benefits": [
+    "Team autonomy: Teams own modules independently without stepping on each other",
+    "Clear boundaries: Domain-driven module decomposition reduces coupling between bounded contexts",
+    "Operational simplicity: Single deployment, single database, simpler operations than microservices",
+    "Independent development: Modules can be developed by separate teams with minimal coordination",
+    "Evolution path: Modules that need independence can be extracted to services later",
+    "Testability: Modules can be tested in isolation with mocked dependencies",
+    "Refactoring safety: Clear module boundaries make large-scale refactoring safer",
+    "Improved performance: In-process communication eliminates network latency overhead",
+    "Easier transaction management: Modules can share the same database",
+    "Lower operational complexity: Reduced overhead compared to distributed microservices"
+  ],
+  "tradeoffs": [
+    "Module discipline required: Developers must respect boundaries; refactoring needed when boundaries blur",
+    "Shared kernel maintenance: Keeping shared kernel small and stable requires governance",
+    "Deployment coupling: All modules deployed together; one module's bug affects all",
+    "Database schema coordination: Schema changes affecting multiple modules require coordination",
+    "Scaling limitations: Scales as a single unit; cannot scale individual modules independently",
+    "Boundary erosion risk: Without enforcement tools, modular monoliths can degrade into traditional monoliths"
+  ],
+  "quality_attributes": {
+    "scalability": 7,
+    "maintainability": 8,
+    "reliability": 7,
+    "security": 7,
+    "performance": 8,
+    "simplicity": 8
+  },
+  "suitable_domains": [
+    "e-commerce-platforms-with-multiple-product-categories",
+    "enterprise-applications-with-distinct-business-capabilities",
+    "saas-applications-with-multi-tenant-requirements",
+    "teams-sized-5-50-with-domain-aligned-module-ownership",
+    "applications-planning-eventual-extraction-to-microservices",
+    "domain-driven-design",
+    "systems-requiring-strong-consistency-within-modules"
+  ],
+  "unsuitable_domains": [
+    "small-teams-simple-requirements",
+    "multi-bounded-contexts",
+    "systems-with-very-high-transaction-throughput-requirements",
+    "multi-team-organizations",
+    "cases-where-technology-stack-heterogeneity-is-critical",
+    "real-time-systems-where-any-latency-overhead-is-unacceptable"
+  ],
+  "use_cases": [
+    "Team size is 5-50 with domain-aligned ownership and clear module boundaries",
+    "Needing domain-driven boundaries without microservices operational overhead",
+    "Planning eventual extraction of modules to services (migration path)",
+    "Domain has clear bounded contexts that map to business capabilities",
+    "Needing operational simplicity while maintaining modularity",
+    "Starting a new project where domain boundaries are well-understood",
+    "Improving an existing monolith with clear module boundaries",
+    "Requiring faster development velocity without distributed complexity"
+  ],
+  "avoid_when": [
+    "Small teams with simple requirements that don't warrant modularization overhead",
+    "Independent scaling of specific modules is a primary requirement",
+    "Very high transaction throughput requirements that demand per-module scaling",
+    "Strict isolation between teams with different deployment cadences is required",
+    "Team prefers pure microservices approach with mature DevOps maturity",
+    "Domain boundaries are not yet clear and exploration is needed"
+  ],
+  "component_types": [
+    "Domain Module: Self-contained module with domain logic, entities, services, repositories, and events",
+    "Shared Kernel: Minimal common types, interfaces, and utilities shared across modules",
+    "Module Facade: Stable public API that encapsulates module implementation details",
+    "Module Registry: Central registry for module discovery and service resolution",
+    "Event Bus: In-process event publication/subscription for asynchronous module communication",
+    "Plugin Interface: Abstract interface (IPlugin) for hot-swappable extensions",
+    "Plugin Registry: Discovery, loading, and management of runtime-extensible plugins"
+  ],
+  "technology_stack": [
+    "Spring Modulith",
+    "Service Weaver",
+    "Light-hybrid-4j",
+    "Ruby on Rails Engines",
+    "Java, Kotlin, Ruby, Python, JavaScript/TypeScript, C#/.NET",
+    "Gradle (subprojects), Maven (multi-module), Bundler",
+    "ArchUnit, Spring Modulith (boundary enforcement)",
+    "Spring ApplicationEvents, Guava EventBus, Kafka (optional)",
+    "PostgreSQL, MySQL, Oracle (shared schema per module)"
+  ],
+  "anti_patterns": [
+    "Shared database access: Modules directly modifying another module's data instead of going through APIs",
+    "Leaky abstractions: Exposing internal implementation details through public API",
+    "Premature extraction: Extracting services before clear operational need (leading to distributed monolith)",
+    "Insufficient module isolation: Too-tight coupling that defeats the purpose of modularity",
+    "Cross-module joins: Database queries spanning multiple module data stores",
+    "Big ball of mud: Modular structure that degrades into entangled monolith over time",
+    "Chatty modules: Modules that are too interdependent, indicating incorrect boundaries"
+  ],
+  "migration_from": [
+    "monolithic (traditional big ball of mud)",
+    "layered-monolith (technical layering without domain boundaries)",
+    "big-ball-of-mud architecture"
+  ],
+  "migration_to": [
+    "microservices (via strangler fig pattern or branch by abstraction)",
+    "microkernel (plugin-based architecture via plugin extraction)",
+    "event-driven architecture (via event broker introduction)"
+  ],
+  "design_principles": [
+    "Domain Module Isolation: Each module encapsulates its own domain logic, entities, and services. Independent module directories with clear ownership ensure that changes to one domain don't ripple through others.",
+    "Explicit Module Dependencies: Dependencies between modules are explicit and controlled through the shared kernel pattern and module API contracts. No hidden dependencies allowed.",
+    "Data Ownership: Each module owns its data; no direct cross-module database access. Module-scoped repositories and module databases enforce this boundary.",
+    "Public API Contracts: Modules expose stable facades; implementation details are hidden. The facade pattern and module API interfaces ensure clean separation.",
+    "Single Deployable Unit: All modules deployed together as one artifact. Monolithic build with a single deployment pipeline ensures atomic updates.",
+    "Event-Driven Communication: Modules communicate through domain events rather than direct dependencies, enabling loose coupling and independent evolution.",
+    "Enforced Boundaries: Use tooling (ArchUnit, Spring Modulith) to enforce module boundaries. Automated checks prevent boundary erosion."
+  ],
+  "best_practices": []
+}

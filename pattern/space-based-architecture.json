@@ -1,0 +1,120 @@
+{
+  "name": "space-based",
+  "category": "data",
+  "context": "High-concurrency distributed systems requiring extreme throughput and low-latency data access through in-memory data grids and distributed processing",
+  "benefits": [
+    "Linear scalability through horizontal partition replication",
+    "Sub-millisecond latency with in-memory data access",
+    "Elastic capacity to handle traffic spikes dynamically",
+    "No single point of failure through partition redundancy",
+    "High throughput via parallel processing across nodes",
+    "Graceful degradation under peak load conditions"
+  ],
+  "tradeoffs": [
+    "Operational complexity requires specialized expertise",
+    "Eventual consistency between grid and cold storage",
+    "Higher infrastructure cost for in-memory storage",
+    "Complex debugging and monitoring of distributed state",
+    "Data consistency challenges across partitions",
+    "Network costs impact cross-partition operations"
+  ],
+  "quality_attributes": {
+    "scalability": 9,
+    "performance": 9,
+    "reliability": 8,
+    "maintainability": 4,
+    "security": 5,
+    "simplicity": 3
+  },
+  "suitable_domains": [
+    "e-commerce-flash-sales",
+    "ticket-booking-systems",
+    "real-time-gaming",
+    "financial-trading-platforms",
+    "high-traffic-portals",
+    "session-management-systems",
+    "streaming-analytics-preparation",
+    "betting-and-wagering-systems"
+  ],
+  "unsuitable_domains": [
+    "simple-crud-applications",
+    "systems-requiring-strong-acid-transactions",
+    "write-heavy-low-read-workloads",
+    "applications-needing-complex-cross-shard-joins",
+    "low-concurrency-systems",
+    "teams-lacking-operational-expertise"
+  ],
+  "use_cases": [
+    "Handle 10,000+ concurrent requests per second",
+    "Traffic spikes requiring elastic node scaling",
+    "Low-latency requirements under 10ms",
+    "Event-driven processing pipelines",
+    "Session management at massive scale",
+    "Real-time data synchronization across nodes",
+    "Burst traffic handling for promotions"
+  ],
+  "avoid_when": [
+    "Strong consistency is a hard requirement",
+    "Complex relational queries dominate the workload",
+    "Small teams with limited distributed systems experience",
+    "Budget constraints prevent in-memory infrastructure",
+    "Simple request-response patterns with no concurrency",
+    "Data exceeds available memory across cluster"
+  ],
+  "component_types": [
+    "Processing Unit: Stateless computation unit containing business logic; scales dynamically based on load",
+    "In-Memory Data Grid (Space): Distributed cache partitioned across nodes; provides in-memory data access with replication",
+    "Virtual Shared Memory: Logical view of partitioned data providing unified address space across cluster",
+    "Messaging Grid: Asynchronous communication layer for inter-component coordination",
+    "Deployment Manager: Monitors response times and scales processing units up/down based on demand",
+    "Data Pump: Asynchronously synchronizes data between the grid and persistent storage",
+    "Space-Based Router: Load balancer that routes requests to appropriate processing units"
+  ],
+  "technology_stack": [
+    "GigaSpaces XAP",
+    "Hazelcast IMDG",
+    "Apache Ignite",
+    "Redis Cluster",
+    "Apache Kafka",
+    "Oracle Coherence",
+    "Terracotta"
+  ],
+  "anti_patterns": [
+    "Poor partitioning key selection causing data skew",
+    "Ignoring network latency in cross-partition operations",
+    "Assuming strong consistency across distributed cache",
+    "Synchronous database writes blocking the hot path",
+    "Cross-partition operations on the critical path",
+    "Insufficient testing under realistic load conditions",
+    "Neglecting observability and monitoring setup"
+  ],
+  "migration_from": [
+    "monolith",
+    "layered-architecture",
+    "traditional-caching-layers"
+  ],
+  "migration_to": [
+    "event-driven",
+    "cqrs",
+    "microservices"
+  ],
+  "design_principles": [
+    "Data Locality: Co-locate processing logic with data partitions to minimize network hops",
+    "Partitioning for Access Patterns: Select partition keys that maximize data locality and minimize cross-partition operations",
+    "Eventual Consistency: Accept that the grid and cold storage may be temporarily inconsistent; design for reconciliation",
+    "Stateless Processing Units: Keep business state in the grid so units can scale and relocate freely",
+    "Asynchronous Write-Behind: Persist changes asynchronously via Data Pump; never block the hot path for database writes",
+    "One Writer Per Partition: Avoid concurrent writes to same partition; use saga-like patterns for cross-partition work",
+    "Replication for Resilience: Maintain backup partitions for automatic failover; test failover regularly",
+    "Back-Pressure and Admission Control: Use bounded queues and rate limits to prevent meltdowns during traffic spikes"
+  ],
+  "best_practices": [
+    "Partition Key Selection: Choose keys that follow access patterns to maximize data locality and minimize cross-shard operations",
+    "Replica Strategy: Balance RPO/RTO requirements with cost; test failover and rebalancing regularly against SLOs",
+    "Memory Sizing: Carefully size partitions to fit in RAM; monitor memory usage and archive historical data",
+    "Observability: Monitor partition distribution, replica health, tail latencies, and grid hit ratios; alert on skew and backlog",
+    "Chaos Engineering: Run regular chaos drills for node loss scenarios to validate resilience",
+    "Cold Start Handling: Pre-warm the grid by loading hot data from persistent storage before going live",
+    "Write Ordering: For critical data, consider synchronous replication to backups to prevent data loss on primary failure"
+  ]
+}

@@ -1,0 +1,117 @@
+{
+  "category": "messaging",
+  "name": "event-driven",
+  "context": "Asynchronous communication between decoupled services where producers emit events when state changes occur, and consumers react to those events independently",
+  "benefits": [
+    "Scalability: Services scale independently based on event load",
+    "Agility: Add new consumers without modifying producers",
+    "Resilience: Event buffer accommodates surges; consumers can fail and recover",
+    "Loose Coupling: Services only know about the event router",
+    "Auditability: Complete event log for debugging and compliance",
+    "Real-time processing: Consumers can respond to events immediately as they occur",
+    "Independent deployment: Producers and consumers are deployed independently"
+  ],
+  "tradeoffs": [
+    "Eventual Consistency: Consumers may have stale data temporarily",
+    "Debugging Complexity: Distributed tracing required to follow event flows",
+    "Schema Evolution: Breaking changes require versioning strategies",
+    "Idempotency: Consumers must handle duplicate events gracefully",
+    "Operational complexity: Requires monitoring consumer lag, DLQs, and event processing",
+    "Initial learning curve: EDA requires strong domain modeling skills"
+  ],
+  "quality_attributes": {
+    "scalability": 9,
+    "maintainability": 7,
+    "reliability": 8,
+    "security": 6,
+    "performance": 8,
+    "simplicity": 4
+  },
+  "suitable_domains": [
+    "real-time-processing",
+    "microservices-ecosystem",
+    "iot-sensor-data",
+    "audit-trail-requirements",
+    "multiple-services-same-data",
+    "cloud-native-applications",
+    "e-commerce-platforms",
+    "financial-systems"
+  ],
+  "unsuitable_domains": [
+    "simple-request-response",
+    "strong-immediate-consistency",
+    "low-complexity-single-service",
+    "fixed-predictable-volumes",
+    "minimal-external-integrations"
+  ],
+  "use_cases": [
+    "Real-time processing (fraud detection, notifications)",
+    "Multiple services reacting to same data (order placed triggers shipping, inventory, analytics)",
+    "Building microservices ecosystem with independent scaling",
+    "IoT or sensor data ingestion (high-volume, asynchronous streams)",
+    "Audit trail and compliance requirements (event replay)",
+    "Cross-service business workflows (choreography vs orchestration)"
+  ],
+  "avoid_when": [
+    "Simple CRUD operations with synchronous response expectations",
+    "Strong consistency requirements where immediate confirmation is needed",
+    "Low-complexity, single-service architectures",
+    "Small teams lacking distributed systems experience",
+    "Projects with fixed, predictable data volumes"
+  ],
+  "component_types": [
+    "Event Producer: Emits events when state changes occur",
+    "Event Channel: Message broker that routes events from producers to consumers",
+    "Event Consumer: Subscribes to and processes events asynchronously",
+    "Event Schema Registry: Centralized storage for event schema definitions",
+    "Dead Letter Queue: Captures failed events for later inspection and retry",
+    "Correlation ID: Enables distributed tracing across event flows"
+  ],
+  "technology_stack": [
+    "Apache Kafka",
+    "Amazon SNS/SQS",
+    "Amazon EventBridge",
+    "Google Pub/Sub",
+    "RabbitMQ",
+    "Azure Event Hubs",
+    "Azure Service Bus"
+  ],
+  "anti_patterns": [
+    "Distributed monolith",
+    "Event storms",
+    "Anemic events",
+    "Tight coupling through events",
+    "Using events for queries",
+    "Nano-services"
+  ],
+  "migration_from": [
+    "monolithic-architecture",
+    "layered-monolith",
+    "point-to-point-integrations"
+  ],
+  "migration_to": [
+    "event-sourcing",
+    "CQRS",
+    "service-mesh"
+  ],
+  "design_principles": [
+    "Decoupling: Producers and consumers are independent; event router acts as intermediary",
+    "Async Communication: Services communicate via events, not requests; message brokers handle event delivery",
+    "Event Propagation: State changes propagate to all interested consumers via pub/sub or fan-out patterns",
+    "Temporal Decoupling: Producers and consumers don't need to be online simultaneously; message retention in broker",
+    "Schema as Contract: Treat event schemas as long-term contracts; version carefully with additive evolution",
+    "Idempotency: Consumers must handle duplicate events gracefully using event IDs and upserts"
+  ],
+  "best_practices": [
+    "Schema Design: Design events as products not side effects; use richer events over many tiny ones; version via additive evolution only",
+    "Event Envelope: Wrap every event with standard envelope containing eventId, correlationId, timestamp, and schemaVersion",
+    "Idempotent Consumers: Store processed eventId values to skip duplicates; use upserts or conditional writes for database operations",
+    "Dead Letter Queues: Implement DLQs for every consumer with alerting; never let a poison message block the pipeline",
+    "Retry with Backoff: Configure retry mechanisms with exponential backoff (typically 3-5 attempts)",
+    "Distributed Tracing: Implement correlation IDs end-to-end; use OpenTelemetry for granular insights across event flows",
+    "Consumer Lag Monitoring: Monitor lag as primary health signal (lag > 10,000 events for 5 minutes triggers alerts)",
+    "Event SLOs: Set SLOs for maximum acceptable lag (e.g., 5 seconds at 99th percentile)",
+    "Event Granularity: Represent business-relevant transitions; don't force consumers to listen to five events to understand one action",
+    "Choreography vs Orchestration: Use choreography for simple independent reactions; orchestration for business-critical workflows with compensation steps"
+  ]
+}

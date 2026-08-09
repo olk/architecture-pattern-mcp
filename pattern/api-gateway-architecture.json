@@ -1,0 +1,123 @@
+{
+  "name": "api-gateway",
+  "category": "api_gateway",
+  "context": "Distributed systems requiring a single entry point for client requests to backend microservices, handling cross-cutting concerns like authentication, rate limiting, and routing.",
+  "benefits": [
+    "Single entry point for clients, simplifying client code and endpoint management",
+    "Centralized cross-cutting concerns (auth, rate limiting, logging, TLS termination)",
+    "Service discovery abstraction: clients don't need to know internal service locations",
+    "Protocol translation: clients use simpler protocols, gateway bridges to internal services",
+    "Reduced client code: gateway handles aggregation and transformation",
+    "Unified security policy: consistent authentication/authorization across all services",
+    "Centralized observability with unified access logs and metrics"
+  ],
+  "tradeoffs": [
+    "Single point of failure if not deployed with high availability",
+    "Additional latency (5-30ms per request depending on plugins and implementation)",
+    "Gateway becomes critical infrastructure requiring dedicated monitoring and on-call",
+    "Can become a performance bottleneck under heavy load without proper scaling",
+    "Introduces operational complexity: another system to deploy, configure, and maintain",
+    "Risk of becoming a mega-service if overloaded with business logic"
+  ],
+  "quality_attributes": {
+    "scalability": 8,
+    "maintainability": 6,
+    "reliability": 7,
+    "security": 8,
+    "performance": 7,
+    "simplicity": 5
+  },
+  "suitable_domains": [
+    "microservices-architectures-with-multiple-backend-services",
+    "multi-client-systems",
+    "public-apis-requiring-rate-limiting-and-authentication",
+    "cloud-native-applications-on-kubernetes",
+    "enterprise-systems-needing-centralized-governance"
+  ],
+  "unsuitable_domains": [
+    "monolith-or-fewer-than-3-services",
+    "single-client,-single-service",
+    "low-latency-requirements-that-cannot-tolerate-additional-hop",
+    "small-teams-without-dedicated-infrastructure-ops",
+    "internal-services-where-direct-communication-suffices"
+  ],
+  "use_cases": [
+    "Multiple clients consuming the same backend services",
+    "Mobile and web clients with different data needs (use BFF pattern)",
+    "Public APIs requiring rate limiting, authentication, and quota management",
+    "Need unified monitoring and centralized access logging",
+    "Migrating from monolith to microservices using strangler fig pattern",
+    "Protocol translation between client-facing APIs and internal services"
+  ],
+  "avoid_when": [
+    "Single client with direct service access (adds unnecessary complexity)",
+    "Sub-millisecond latency requirements",
+    "Small teams without capacity to operate critical infrastructure",
+    "Strong consistency requirements where every millisecond counts",
+    "Services are tightly coupled and must be deployed together anyway"
+  ],
+  "component_types": [
+    "API Gateway: Single entry point handling routing, authentication, rate limiting (Kong, Envoy, AWS API Gateway, Apigee, NGINX)",
+    "Service Registry/Discovery: Maintains service endpoint locations and health status (Consul, Eureka)",
+    "Backend for Frontend (BFF): Per-client-type gateway for client-specific data needs and aggregation",
+    "Load Balancer: Distributes traffic across multiple gateway instances for high availability",
+    "Cache Store: Stores rate limiting counters, JWKS keys, and response caches (Redis)",
+    "Observability Stack: Collects metrics, logs, and traces (OpenTelemetry collector, Prometheus)",
+    "Request Router: Maps incoming requests to appropriate backend services based on path, headers, method",
+    "Authentication Handler: Validates JWT tokens, API keys, OAuth tokens centrally",
+    "Rate Limiter: Enforces per-client or per-endpoint rate limits using token bucket or sliding window",
+    "Response Aggregator: Combines data from multiple services into unified response"
+  ],
+  "technology_stack": [
+    "Kong (Lua/OpenResty, declarative config, rich plugin ecosystem)",
+    "Envoy (C++ proxy, xDS dynamic configuration, native OTel)",
+    "AWS API Gateway (fully managed, integrates with AWS Lambda)",
+    "NGINX (high performance, lightweight)",
+    "Apigee (enterprise features, analytics)",
+    "Consul (service discovery, health checks)",
+    "Redis (rate limiting counters, JWKS caching, response caching)"
+  ],
+  "anti_patterns": [
+    "Smart Gateway: putting business logic (if/else on request body content) in the gateway",
+    "Distributed Monolith: gateway that requires coordinated deployment with all services",
+    "Gateway Per Team: separate gateways per team causing inconsistent auth/rate limiting",
+    "Over-aggregation: gateway that fans out to too many services creating tight coupling",
+    "No Circuit Breaker: slow services blocking gateway threads",
+    "Missing Observability: not tracking gateway latency (p50/p99), error rate separately",
+    "Monolithic Gateway Config: one giant gateway handling everything instead of BFF split"
+  ],
+  "migration_from": [
+    "direct client-to-service communication",
+    "per-service authentication libraries",
+    "scattered logging without centralized access logs",
+    "monolith with embedded routing logic"
+  ],
+  "migration_to": [
+    "service mesh (Istio, Linkerd) for east-west traffic management",
+    "BFF pattern for complex client-specific aggregation",
+    "GraphQL federation for API composition",
+    "Serverless functions behind gateway for specific use cases"
+  ],
+  "design_principles": [
+    "Single Responsibility: Gateway handles cross-cutting concerns only; business logic belongs in services",
+    "Keep It Thin: Authentication, rate limiting, routing, observability — no business logic",
+    "Validate JWTs Once: Pass verified identity downstream via headers; services trust gateway authentication",
+    "Design for Failure: Implement circuit breakers, timeouts, and fallbacks; deploy in active-active clusters",
+    "High Availability: Deploy multiple gateway instances with health checks and auto-scaling",
+    "Observability First: Instrument with OpenTelemetry from day one; track gateway latency separately from backend",
+    "Stateless Configuration: Store gateway config in version control; use declarative configuration",
+    "Security by Default: Enable authentication, rate limiting, and TLS from day one"
+  ],
+  "best_practices": [
+    "Keep the gateway thin: Handle only cross-cutting concerns. Business logic belongs in services, not the gateway",
+    "Design for failure: Implement circuit breakers, timeouts, and fallbacks. Deploy in active-active clusters",
+    "Secure by default: Enable authentication, rate limiting, and TLS from day one",
+    "Cache strategically: Cache responses at the gateway level for read-heavy, public data",
+    "Monitor gateway latency separately: Track p50/p99 latency added by gateway independently from backend services",
+    "Use OpenTelemetry: OpenTelemetry compliance critical for observability and distributed tracing",
+    "Start simple: Basic routing and authentication first, add features as needs grow",
+    "Validate JWTs once: Pass identity downstream via headers; services trust gateway",
+    "Deploy in clusters: Multiple gateway instances prevent single point of failure",
+    "Implement dynamic throttling: Adjust rate limits based on traffic volume and user trust"
+  ]
+}

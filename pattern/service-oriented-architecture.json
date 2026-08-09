@@ -1,0 +1,128 @@
+{
+  "category": "coordination",
+  "name": "service-oriented-architecture",
+  "context": "Enterprise integration architecture using services as interoperable building blocks connected via a central Enterprise Service Bus (ESB), enabling heterogeneous systems to communicate through standardized contracts and enterprise integration patterns.",
+  "benefits": [
+    "Enterprise-wide interoperability through standardized service contracts",
+    "Legacy system integration by wrapping existing systems as services",
+    "Centralized governance and standards compliance",
+    "Business capability reuse across multiple applications",
+    "Business alignment through service-to-capability mapping",
+    "Vendor independence via open standards (SOAP, WSDL, UDDI)"
+  ],
+  "tradeoffs": [
+    "ESB becomes single point of failure and potential bottleneck",
+    "XML processing overhead impacts performance",
+    "Centralized bus limits independent deployment",
+    "Vendor lock-in with ESB products (IBM, Oracle, TIBCO)",
+    "Over-engineering for simple integration scenarios",
+    "Distributed transaction complexity across services"
+  ],
+  "quality_attributes": {
+    "scalability": 6,
+    "maintainability": 6,
+    "reliability": 7,
+    "security": 7,
+    "performance": 5,
+    "simplicity": 4
+  },
+  "suitable_domains": [
+    "enterprise-integration",
+    "legacy-modernization",
+    "cross-platform-integration",
+    "regulated-industries",
+    "banking-and-finance",
+    "healthcare-integration",
+    "government-systems"
+  ],
+  "unsuitable_domains": [
+    "greenfield-microservices",
+    "small-team-projects",
+    "low-latency-requirements",
+    "simple-crud-applications",
+    "real-time-systems",
+    "high-throughput-streaming"
+  ],
+  "use_cases": [
+    "Integrating multiple enterprise systems (ERP, CRM, SCM)",
+    "Modernizing legacy systems without replacement",
+    "Cross-platform integration (.NET, Java, COBOL)",
+    "Centralized API management and governance",
+    "Business process orchestration across departments",
+    "Regulatory compliance requiring audit trails"
+  ],
+  "avoid_when": [
+    "Greenfield microservices architecture is feasible",
+    "Team autonomy is prioritized over governance",
+    "Simple request-response integration is needed",
+    "Low latency is critical requirement",
+    "Independent service deployment is essential",
+    "Organization lacks central governance capability"
+  ],
+  "component_types": [
+    "Enterprise Service Bus (ESB): Central hub for service communication and routing",
+    "Service Registry: Repository for service metadata enabling discovery",
+    "Service Repository: Store for service artifacts, contracts, and documentation",
+    "Business Process Engine (BPM): Orchestrates services into business processes",
+    "Message Router: Routes messages based on content or routing rules",
+    "Protocol Mediator: Translates between different protocols",
+    "Policy Manager: Enforces governance and security policies",
+    "SLA Manager: Monitors and enforces service level agreements",
+    "Audit Logger: Tracks service interactions for compliance",
+    "Data Transformer: Transforms data formats between services"
+  ],
+  "technology_stack": [
+    "Apache Camel",
+    "MuleSoft Anypoint",
+    "IBM Integration Bus",
+    "Oracle Service Bus",
+    "TIBCO BusinessWorks",
+    "WSO2 Enterprise Integrator",
+    "Microsoft BizTalk Server",
+    "SAP Process Integration"
+  ],
+  "anti_patterns": [
+    "Distributed monolith (SOA without proper decoupling)",
+    "God service (monolithic service doing too much)",
+    "Point-to-point integration masquerading as SOA",
+    "ESB as data store (storing state in the bus)",
+    "Service chat (too fine-grained service interactions)",
+    "Shared database across services",
+    "Ignoring version management"
+  ],
+  "migration_from": [
+    "point-to-point-integration",
+    "monolithic-architecture",
+    "file-based-integration",
+    "shared-database-pattern"
+  ],
+  "migration_to": [
+    "microservices",
+    "event-driven-architecture",
+    "api-gateway",
+    "strangler-fig-pattern",
+    "micro-integration-platforms"
+  ],
+  "design_principles": [
+    "Standardized Service Contract",
+    "Loose Coupling",
+    "Service Abstraction",
+    "Service Composability",
+    "Service Reusability",
+    "Service Discoverability",
+    "Service Autonomy",
+    "Statelessness"
+  ],
+  "best_practices": [
+    "Establish Governance Early: Create architectural review board and service governance before building services",
+    "Start Incrementally: Begin with pilot project, prove value, then expand enterprise-wide",
+    "Design for Reuse: Target services at enterprise-wide capabilities, not department-specific needs",
+    "Use Canonical Protocols: Standardize on common protocols (SOAP/REST) across all services",
+    "Implement Service Registry: Maintain centralized registry for service discovery and documentation",
+    "Monitor ESB Health: Central bus monitoring is critical: ESB health determines system reliability",
+    "Plan for Versioning: Design services to support multiple versions coexisting",
+    "Wrap Legacy Systems: Integrate existing systems as services rather than replacing them",
+    "Document Service Contracts: Provide clear ICD (Interface Control Document) for each service",
+    "Enforce Security Boundaries: Implement authentication and authorization at service level"
+  ]
+}

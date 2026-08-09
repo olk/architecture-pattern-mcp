@@ -1,0 +1,149 @@
+{
+  "category": "structural",
+  "name": "microservices",
+  "context": "Large-scale distributed systems requiring independent deployability and scaling. Structures an application as a collection of small, independently deployable services that communicate via lightweight mechanisms (RESTful APIs, message queues, or event-driven channels). Each service owns its data and can be developed, tested, and deployed independently.",
+  "benefits": [
+    "Independent scaling: Scale services based on their specific load patterns without scaling entire applications",
+    "Technology diversity: Each service can use different tech stacks, languages, and databases",
+    "Fault isolation: Failure in one service doesn't cascade to other services",
+    "Team autonomy: Teams own services end-to-end from development to deployment",
+    "Deployment independence: Deploy services without coordinating with other teams",
+    "Focused maintainability: Teams can focus on isolated updates without impacting entire system",
+    "Polyglot persistence: Select optimal database technology per service's specific needs"
+  ],
+  "tradeoffs": [
+    "Distributed system complexity: Network calls introduce latency, partial failures, and retry logic requirements",
+    "Data consistency challenges: Eventual consistency replaces ACID transactions; saga orchestration needed",
+    "Operational overhead: More services to monitor, deploy, manage, and secure",
+    "Testing complexity: Integration and end-to-end testing across service boundaries",
+    "Debugging difficulty: Distributed tracing required to track requests across services",
+    "Increased infrastructure cost: More compute, storage, and networking resources",
+    "Network latency: Inter-service communication adds response time overhead",
+    "Team coordination complexity: API contracts must be carefully managed"
+  ],
+  "quality_attributes": {
+    "scalability": 9,
+    "maintainability": 7,
+    "reliability": 7,
+    "security": 6,
+    "performance": 7,
+    "simplicity": 4
+  },
+  "suitable_domains": [
+    "enterprise-applications",
+    "cloud-native-applications",
+    "e-commerce-platforms",
+    "ci-cd-environments",
+    "multi-team-organizations",
+    "platform-ecosystems",
+    "polyglot-persistence-needs"
+  ],
+  "unsuitable_domains": [
+    "simple-crud-applications",
+    "small-teams",
+    "strong-consistency-requirements",
+    "low-latency-local-operations",
+    "limited-operational-maturity",
+    "minimal-infrastructure-overhead"
+  ],
+  "use_cases": [
+    "Multiple teams (10+) working independently on different business domains",
+    "Independent service scaling based on heterogeneous load patterns",
+    "Various technology stacks required across different services",
+    "Frequent deployment of individual services with CI/CD pipelines",
+    "Building platforms or ecosystems requiring extensibility",
+    "Organizations with mature DevOps practices and observability culture"
+  ],
+  "avoid_when": [
+    "Small teams with simple requirements and limited expertise",
+    "Strong consistency (ACID) requirements where transactions span services",
+    "Low-latency use cases requiring sub-millisecond response times",
+    "Simple domain with straightforward workflows and predictable load",
+    "Projects with limited infrastructure and operational capabilities",
+    "Tight deadlines where microservices complexity would slow delivery"
+  ],
+  "component_types": [
+    "API Gateway: Entry point handling auth, routing, rate limiting, and request aggregation",
+    "Service Registry: Database of available service instances with health checks",
+    "Service Discovery: Dynamic location of service instances (DNS-based or agent-based)",
+    "Configuration Server: Centralized externalized configuration management",
+    "Service Mesh: Service-to-service communication with mTLS, observability, and traffic management",
+    "Message Broker: Asynchronous communication (Kafka, RabbitMQ, NATS)",
+    "Centralized Logging: Log aggregation from all services (ELK, Loki, CloudWatch)",
+    "Distributed Tracing: Request tracking across service boundaries (Jaeger, Zipkin, X-Ray)",
+    "Metrics Collection: Performance monitoring (Prometheus, Datadog)"
+  ],
+  "technology_stack": [
+    "Kubernetes",
+    "Docker Swarm",
+    "Istio",
+    "Linkerd",
+    "Consul Connect",
+    "Kong",
+    "Envoy",
+    "AWS API Gateway",
+    "NGINX",
+    "Consul",
+    "Eureka",
+    "Kubernetes DNS",
+    "Apache Kafka",
+    "RabbitMQ",
+    "NATS",
+    "PostgreSQL",
+    "MongoDB",
+    "Cassandra",
+    "Redis",
+    "Prometheus",
+    "Grafana",
+    "Jaeger",
+    "OpenTelemetry",
+    "GitHub Actions",
+    "GitLab CI",
+    "Jenkins",
+    "ArgoCD"
+  ],
+  "anti_patterns": [
+    "Distributed monolith: Services separated technically but logically intertwined with synchronous dependencies",
+    "Shared database: Multiple services directly accessing same database, defeating independence",
+    "Chatty services: Excessive synchronous calls between services causing latency",
+    "God services: Services that do too much, violating single responsibility principle",
+    "Fallback fallacy: Ignoring circuit breaker patterns leading to cascade failures",
+    "Shared libraries with domain logic: Creating coupling through common code sharing",
+    "Timeout ignorance: Missing timeouts causing thread pool exhaustion",
+    "Observability neglect: Distributed tracing without correlation IDs"
+  ],
+  "migration_from": [
+    "monolithic-architecture",
+    "layered-monolith",
+    "modular-monolith",
+    "legacy-esb-systems"
+  ],
+  "migration_to": [
+    "service-mesh-architecture",
+    "event-driven-architecture",
+    "serverless-functions",
+    "edge-computing"
+  ],
+  "design_principles": [
+    "Single Responsibility: Each service does one thing well, aligned with bounded contexts or business capabilities",
+    "Independent Deployment: Services can be deployed without coordinating with other teams",
+    "Decentralized Data: Each service owns its database, enabling polyglot persistence",
+    "Smart Endpoints: Services contain business logic; pipes only transport data",
+    "Infrastructure Automation: Automated testing and deployment through CI/CD pipelines",
+    "Observability: Comprehensive logging, metrics, and distributed tracing across service boundaries",
+    "Resilience: Design for failure with circuit breakers, retries, and bulkheads",
+    "API Contracts: Stable interfaces between services enabling independent evolution"
+  ],
+  "best_practices": [
+    "Service Decomposition: Design services around business capabilities using domain-driven design",
+    "Database per Service: Never share databases between services; maintain strict schema isolation",
+    "Asynchronous Communication: Prefer async messaging to reduce coupling and improve resilience",
+    "Circuit Breakers: Implement circuit breaker pattern to prevent cascade failures",
+    "Distributed Tracing: Add correlation IDs to track requests across service boundaries",
+    "Configuration Management: Externalize all configuration; never hardcode environment-specific values",
+    "Health Checks: Implement liveness and readiness probes for each service",
+    "Graceful Degradation: Design services to degrade gracefully when dependencies fail",
+    "Service Mesh: Use service mesh for standardized mTLS, traffic management, and observability",
+    "API Versioning: Version APIs from the start to enable independent service evolution"
+  ]
+}

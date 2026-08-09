@@ -1,0 +1,114 @@
+{
+  "category": "dataflow",
+  "name": "pipe-and-filter",
+  "context": "Sequential data transformation workflows where complex processing tasks are decomposed into independent, reusable filters connected by pipes",
+  "benefits": [
+    "Modular single-responsibility design",
+    "High reusability through compositional filter recombination",
+    "Independent horizontal scaling of individual filters",
+    "Easy unit testing with isolated filter validation",
+    "Parallel processing capability across filter stages",
+    "Flexible pipeline reconfiguration at runtime",
+    "Simplified debugging through filter isolation"
+  ],
+  "tradeoffs": [
+    "Data serialization overhead between filters",
+    "Distributed error handling complexity",
+    "Memory buffer requirements between pipeline stages",
+    "Bottleneck risk from slowest filter stage",
+    "Monolithic testing requirement for end-to-end pipeline"
+  ],
+  "quality_attributes": {
+    "scalability": 8,
+    "maintainability": 9,
+    "reliability": 7,
+    "security": 6,
+    "performance": 7,
+    "simplicity": 8
+  },
+  "suitable_domains": [
+    "data-processing",
+    "etl",
+    "stream-processing",
+    "log-analysis",
+    "media-processing",
+    "serverless",
+    "compiler-toolchains",
+    "event-driven-workflows"
+  ],
+  "unsuitable_domains": [
+    "highly-interactive-ui",
+    "request-response-apis",
+    "state-dependent-processing",
+    "strong-transaction",
+    "random-data-access"
+  ],
+  "use_cases": [
+    "ETL pipelines transforming data through multiple stages",
+    "Log processing with filtering, parsing, and aggregation",
+    "Stream processing with enrichment and routing",
+    "Media processing pipelines (image resize, format conversion)",
+    "Compiler toolchains (lexing, parsing, optimization, code generation)",
+    "Serverless function chaining with event-driven triggers",
+    "Data validation and sanitization workflows"
+  ],
+  "avoid_when": [
+    "Processing steps require shared state or tight coupling",
+    "Strong transactional consistency is required across stages",
+    "Context/state overhead makes individual filters inefficient",
+    "Interactive user interfaces with bidirectional communication",
+    "Random access to data is required at multiple points"
+  ],
+  "component_types": [
+    "Pipe: Conduit passing data between filters (queue, channel, stream)",
+    "Filter: Processing unit with single responsibility",
+    "DataSource: Input origin (file, stream, API, event)",
+    "DataSink: Output destination (file, database, API)",
+    "Pipeline: Composed sequence of filters",
+    "MessageBroker: Optional intermediate buffer for distributed部署"
+  ],
+  "technology_stack": [
+    "Unix pipes",
+    "Akka Streams",
+    "Apache Kafka",
+    "AWS Lambda",
+    "Azure EventBridge Pipes",
+    "RabbitMQ",
+    "Apache Flink",
+    "Google Cloud Dataflow"
+  ],
+  "anti_patterns": [
+    "Monolithic filter (single filter doing all processing)",
+    "Stateful filters with shared mutable state",
+    "Filters with multiple responsibilities",
+    "Direct coupling between filters without pipes",
+    "Over-granular filters causing excessive serialization overhead"
+  ],
+  "migration_from": [
+    "monolithic-data-processing",
+    "tightly-coupled-sequential-processing",
+    "custom-pipeline-implementations"
+  ],
+  "migration_to": [
+    "event-driven-architecture",
+    "microservices-orchestration",
+    "serverless-workflows",
+    "state-machine-workflows"
+  ],
+  "design_principles": [
+    "Single Responsibility: Each filter performs one well-defined transformation",
+    "Statelessness: Filters should be stateless to enable parallel execution and reuse",
+    "Well-defined Interfaces: Standardized input/output schemas for filter compatibility",
+    "Idempotency: Filters should produce same output for same input (enables retry)",
+    "Encapsulation: Filters operate independently through well-defined pipe interfaces",
+    "Minimal Pipe Logic: Pipes only transport data; no routing or transformation logic"
+  ],
+  "best_practices": [
+    "Filter Granularity: Balance between small focused filters (flexibility) and large efficient filters (overhead)",
+    "Buffer Sizing: Large buffers reduce synchronization overhead but consume memory",
+    "Error Handling: Implement retry mechanisms and compensation transactions",
+    "State Management: If state is required, manage it externally or ensure isolation",
+    "Backpressure: Use flow control to handle varying processing speeds",
+    "Monitoring: Add metrics at each filter stage for pipeline observability"
+  ]
+}

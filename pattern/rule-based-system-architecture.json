@@ -1,0 +1,113 @@
+{
+  "name": "rule-based-system",
+  "context": "Systems requiring explicit, auditable decision logic where expert knowledge is codifiable and explainability is mandatory",
+  "category": "ai_cognitive",
+  "benefits": [
+    "Complete explainability with traceable rule firing history",
+    "Deterministic behavior ensures consistent outcomes",
+    "Regulatory auditability through explicit decision paths",
+    "No training data required: knowledge from domain experts",
+    "Knowledge separation from inference engine",
+    "Declarative IF-THEN rules intuitive for domain experts"
+  ],
+  "tradeoffs": [
+    "Knowledge acquisition bottleneck: domain expert elicitation is time-consuming",
+    "Scalability limits with large rule sets (10,000+ rules show non-linear conflict growth)",
+    "Brittleness with complex domains: rule interactions become unpredictable",
+    "Maintenance complexity at scale requires dedicated tooling",
+    "Rule authoring requires specialized knowledge engineering skills"
+  ],
+  "quality_attributes": {
+    "scalability": 5.0,
+    "maintainability": 6.0,
+    "reliability": 8.0,
+    "security": 7.0,
+    "performance": 6.0,
+    "simplicity": 7.0
+  },
+  "suitable_domains": [
+    "healthcare",
+    "legal-regulatory",
+    "financial",
+    "manufacturing",
+    "expert-systems",
+    "compliance",
+    "technical-support"
+  ],
+  "unsuitable_domains": [
+    "high-dimensional-pattern-recognition",
+    "rapidly-evolving-domains",
+    "low-data-implicit-patterns",
+    "probabilistic-reasoning",
+    "extreme-low-latency"
+  ],
+  "use_cases": [
+    "Regulatory compliance checking (SOX, HIPAA, GDPR)",
+    "Clinical decision support and treatment validation",
+    "Pricing, eligibility, and underwriting rules",
+    "Technical troubleshooting and diagnostic guidance",
+    "Workflow orchestration based on business conditions",
+    "Configuration management and constraint validation",
+    "Fraud detection thresholds and risk parameters"
+  ],
+  "avoid_when": [
+    "Training data is abundant and patterns are statistical",
+    "Domain experts cannot reach consensus on solution approach",
+    "Problem domain changes frequently",
+    "Patterns too complex for explicit rule authoring",
+    "Probabilistic reasoning or uncertainty handling required",
+    "Low-latency real-time scoring at extreme scale"
+  ],
+  "component_types": [
+    "RuleBase: Collection of IF-THEN production rules representing domain knowledge; organized into modules, packages, or functional clusters; scales to 5,000+ rules in clinical deployments",
+    "WorkingMemory: Dynamic store of current facts, asserted data, intermediate conclusions; populated at runtime; volatile between sessions",
+    "InferenceEngine: Executes match-resolve-act cycle: (1) Match conditions against facts, (2) Select rule via conflict resolution, (3) Execute and update working memory",
+    "UserInterface: Receives input signals, presents conclusions/actions to user",
+    "ExplanationModule: Translates rule firing history into natural language; generates audit trails",
+    "KnowledgeEngineeringTool: IDE for authoring, testing, and debugging rules",
+    "Agenda: Manages execution order of conflicting rules using selected resolution strategy",
+    "PatternMatcher: Compares rule antecedents against working memory contents (often via RETE algorithm)"
+  ],
+  "technology_stack": [
+    "Drools",
+    "CLIPS",
+    "Jess",
+    "IBM ODM",
+    "Camunda Rules",
+    "Kogito",
+    "OMG DMN",
+    "IEEE 1855-2016",
+    "SWRL",
+    "RuleML"
+  ],
+  "anti_patterns": [
+    "monolithic-rule-soup",
+    "strongly-coupled-rules",
+    "knowledge-acquisition-bypass",
+    "rule-proliferation",
+    "missing-audit-trail"
+  ],
+  "migration_from": [
+    "procedural-decision-code",
+    "hard-coded-business-logic",
+    "spreadsheet-based-rules",
+    "legacy-expert-systems"
+  ],
+  "migration_to": [
+    "hybrid-rule-ml-systems",
+    "decision-model-notation-dmn",
+    "cloud-native-rule-services",
+    "event-driven-rules"
+  ],
+  "design_principles": [
+    "Knowledge Separation: Separate domain knowledge (rules) from inference engine logic",
+    "Declarative Rules: Express business rules in IF-THEN format without encoding control flow",
+    "Explicit Conflict Resolution: Define clear salience/specificity strategies before authoring rules",
+    "Modular Organization: Partition rules by functional area; avoid flat rule pools exceeding 1,000 rules",
+    "Audit Trail Mandatory: Log every rule firing with timestamp, context, and version for compliance",
+    "Version Control Rules: Treat rule files as code; require peer review for all changes",
+    "Domain Expert Involvement: Knowledge engineering must involve domain experts, not just developers",
+    "Rule Authoring Standards: Establish naming conventions, documentation requirements, and style guides",
+    "Conflict Detection: Use tooling to detect subsumption, redundancy, and contradictions before deployment"
+  ]
+}

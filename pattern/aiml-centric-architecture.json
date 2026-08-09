@@ -1,0 +1,153 @@
+{
+  "category": "ai_cognitive",
+  "name": "aiml-centric",
+  "context": "Systems where ML is a first-class citizen requiring deep integration of ML pipelines including feature stores, model registries, training infrastructure, and serving layers. This pattern is for organizations building AI/ML products where data science teams need production-grade MLOps infrastructure.",
+  "benefits": [
+    "First-class support for ML workflows with native feature engineering, training, and serving pipelines",
+    "Centralized feature repository enables consistent features across multiple models, reducing duplicate engineering effort from 15% to 64%",
+    "Versioning, lineage tracking, and approval workflows provide auditability for regulated environments",
+    "Continuous training and deployment (CT/CD) reduces model deployment time from 3-6 weeks to 2-5 days",
+    "Monitor model drift, performance degradation, and data quality proactively"
+  ],
+  "tradeoffs": [
+    "Platform complexity with many interconnected components (feature store, model registry, training pipelines, serving infrastructure) require significant DevOps investment",
+    "Steep learning curve with numerous tools and frameworks to master",
+    "Compliance requirements, bias detection, and explainability add process overhead",
+    "Training infrastructure with GPUs is expensive; cost optimization requires careful planning",
+    "Requires both ML expertise and DevOps capabilities, making talent acquisition challenging"
+  ],
+  "quality_attributes": {
+    "scalability": 8,
+    "maintainability": 6,
+    "reliability": 7,
+    "security": 6,
+    "performance": 7,
+    "simplicity": 4
+  },
+  "suitable_domains": [
+    "ml-engineering",
+    "data-science-platforms",
+    "ai-products",
+    "recommendation-systems",
+    "fraud-detection",
+    "autonomous-systems"
+  ],
+  "unsuitable_domains": [
+    "simple-crud-applications",
+    "low-ml-requirements",
+    "small-teams",
+    "startup-pocs"
+  ],
+  "use_cases": [
+    "Multiple ML models in production when an organization runs 5+ ML models requiring shared feature engineering and model lifecycle management",
+    "Need for model lineage and governance in regulated industries (finance, healthcare) requiring audit trails from training data to predictions",
+    "Continuous model retraining for models that degrade over time and require automated retraining pipelines (daily/weekly)",
+    "Data science teams needing self-serve infrastructure for experimentation and deployment",
+    "Real-time inference requirements with sub-100ms latency for fraud detection, recommendations, or pricing"
+  ],
+  "avoid_when": [
+    "Simple rules-based logic sufficient: business logic can be implemented with if-then rules without ML",
+    "Single, rarely-changed model: one model that rarely needs updates; manual deployment is acceptable",
+    "No regulatory requirements: no compliance mandates for model documentation, audit trails, or bias detection",
+    "No data science capability: organization lacks data scientists to leverage ML infrastructure",
+    "Stable models with infrequent retraining: models that don't degrade over time; batch scoring monthly or quarterly is sufficient"
+  ],
+  "component_types": [
+    "Feature Store: Centralized feature repository for training and serving with offline (batch) and online (real-time) stores. Solves training-serving skew by providing consistent feature computation.",
+    "Model Registry: Versioned model artifacts with metadata, lineage tracking, and lifecycle stage management. Acts as single source of truth for all production models.",
+    "Training Pipeline: Automated ML workflow orchestrating data ingestion → feature extraction → training → evaluation → registration with CI/CD integration.",
+    "Model Serving: Infrastructure for real-time and batch inference with monitoring, auto-scaling, and rollback capabilities.",
+    "ML Platform: Self-serve infrastructure providing data scientists with experiment tracking, compute resources, and deployment tools.",
+    "Experiment Tracking: System for logging training runs, parameters, metrics, and artifacts for reproducibility and comparison.",
+    "Model Monitoring: Observability layer tracking model performance, data drift, concept drift, and prediction quality.",
+    "Feature Engineering: Transform raw data into numerical features that models consume, with point-in-time correctness for training.",
+    "Data Ingestion: Collect and validate data from various sources, ensuring data quality before feature extraction.",
+    "Inference Gateway: API layer handling routing, load balancing, and model ensemble for inference requests."
+  ],
+  "technology_stack": [
+    "Apache Airflow",
+    "Kubeflow Pipelines",
+    "Prefect",
+    "Metaflow",
+    "Dagster",
+    "Feast",
+    "Tecton",
+    "Databricks Feature Store",
+    "Hopsworks",
+    "AWS SageMaker Feature Store",
+    "MLflow",
+    "Weights & Biases",
+    "Neptune",
+    "Azure ML Model Registry",
+    "SageMaker Model Registry",
+    "TensorFlow",
+    "PyTorch",
+    "JAX",
+    "scikit-learn",
+    "XGBoost",
+    "LightGBM",
+    "TorchServe",
+    "Triton Inference Server",
+    "TensorFlow Serving",
+    "Seldon",
+    "KServe",
+    "BentoML",
+    "Kubernetes",
+    "Docker",
+    "NVIDIA GPUs",
+    "TPUs",
+    "Ray",
+    "Apache Spark",
+    "Dask",
+    "Pandas",
+    "Polars",
+    "dbt",
+    "Evidently",
+    "Prometheus",
+    "Grafana",
+    "Arize",
+    "Fiddler",
+    "WhyLabs",
+    "Apache Kafka",
+    "Redis Streams",
+    "RabbitMQ",
+    "Amazon SQS"
+  ],
+  "anti_patterns": [
+    "Monolith ML: single monolithic model codebase where all components are tightly coupled; changes to one model affect others",
+    "Not-so-microservices: treating ML services like regular microservices without addressing data/model complexity; leads to distributed monolith",
+    "Shared Feature Store Bottleneck: centralized feature store becomes a scaling bottleneck and single point of failure",
+    "Training-Serving Skew: inconsistent feature computation between training and inference environments; model accuracy drops in production",
+    "Manual Model Deployment: no CI/CD for models; manual deployment leads to inconsistencies and slow iteration",
+    "Shadow Puppets: running shadow mode indefinitely without transitioning to full deployment",
+    "Feature Engineering Debt: duplicating feature logic across training and serving codebases"
+  ],
+  "migration_from": [
+    "monolith",
+    "layered-monolith"
+  ],
+  "migration_to": [
+    "compound-ai-systems",
+    "event-driven-architecture",
+    "serverless-ml",
+    "microservices-orchestration"
+  ],
+  "design_principles": [
+    "ML as First-Class Citizen: Design infrastructure where ML components are not afterthoughts but core architectural elements with proper support for the ML lifecycle",
+    "Feature Consistency: Use a feature store to ensure identical feature computation for both training and serving, eliminating training-serving skew",
+    "Model Governance: Implement version control, lineage tracking, and approval workflows for all models to meet regulatory compliance requirements",
+    "Automation First: Automate the entire ML pipeline from data ingestion through training, evaluation, and deployment to enable continuous model improvement",
+    "Observability: Monitor model performance, data drift, and concept drift proactively to catch issues before they impact business outcomes",
+    "Separation of Concerns: Keep data engineering, data science, and ML engineering concerns distinct with well-defined handoff points",
+    "Reproducibility: Version all ML artifacts including data, code, features, and models to enable exact reproduction of any model"
+  ],
+  "best_practices": [
+    "Feature Store Implementation: Deploy a feature store early to prevent training-serving skew; default to batch features, upgrade to streaming only when latency-sensitive use cases require it",
+    "Model Registry Governance: Define mandatory metadata schema for every registered model; enforce approval workflows for production promotion",
+    "Pipeline Automation: Build CI/CD pipelines for models that run data validation, training, evaluation, and deployment automatically",
+    "Experiment Tracking: Log all training runs with parameters, metrics, and artifacts; enable comparison and reproduction of experiments",
+    "Monitoring Strategy: Implement drift detection for data, features, and predictions; set up alerts for degradation thresholds",
+    "Cost Optimization: Use auto-scaling for inference endpoints; schedule GPU training during off-peak hours; implement model distillation for cheaper serving",
+    "Team Structure: Separate platform teams (building infrastructure) from product teams (consuming infrastructure); enable self-service capabilities"
+  ]
+}

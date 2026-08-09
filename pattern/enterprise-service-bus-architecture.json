@@ -1,0 +1,130 @@
+{
+  "category": "messaging",
+  "name": "enterprise-service-bus",
+  "context": "Large enterprises requiring integration of heterogeneous systems (ERP, CRM, legacy applications) with multiple protocols, data formats, and communication patterns. The ESB acts as a centralized middleware backbone enabling interoperability between applications that cannot communicate directly.",
+  "benefits": [
+    "Protocol bridging: Connect systems using different protocols (HTTP, JMS, SOAP, REST, FTP)",
+    "Loose coupling: Producers and consumers are decoupled through the bus",
+    "Centralized routing: Change routing rules without modifying producer systems",
+    "Data transformation: Automatic format conversion (XML ↔ JSON, CSV ↔ XML)",
+    "Audit trail: All messages logged for compliance and debugging",
+    "Message buffering: Resilience during temporary downtime of downstream systems",
+    "Service reuse: Shared services available to multiple consumers"
+  ],
+  "tradeoffs": [
+    "Single point of failure: Central bus must be highly available or entire enterprise is affected",
+    "Performance bottleneck: High-volume traffic must pass through centralized infrastructure",
+    "Configuration complexity: ESB can become complex to configure, maintain, and troubleshoot",
+    "Vendor lock-in: Some ESBs have proprietary formats limiting technology flexibility",
+    "Latency overhead: Additional processing layers add end-to-end delay",
+    "Coordination bottleneck: Changes require cross-team coordination and testing cycles",
+    "Scalability limits: Hub-and-spoke architectures difficult to scale horizontally"
+  ],
+  "quality_attributes": {
+    "scalability": 6,
+    "maintainability": 5,
+    "reliability": 7,
+    "security": 7,
+    "performance": 5,
+    "simplicity": 4
+  },
+  "suitable_domains": [
+    "enterprise-application-integration",
+    "heterogeneous-systems",
+    "legacy-modernization",
+    "regulated-industries",
+    "b2b-integration",
+    "multi-protocol-environments"
+  ],
+  "unsuitable_domains": [
+    "greenfield-microservices",
+    "cloud-native-native",
+    "simple-point-to-point",
+    "low-latency-requirements",
+    "small-teams",
+    "high-throughput-streaming"
+  ],
+  "use_cases": [
+    "Integrating three or more heterogeneous applications with different protocols",
+    "Need for protocol translation (SOAP ↔ REST, XML ↔ JSON) between systems",
+    "Regulatory requirement for message audit logging and compliance",
+    "Legacy system integration where direct connectivity is impractical",
+    "Enterprise-wide service reuse and standardization",
+    "Multi-step business processes requiring orchestration",
+    "Organizations with dedicated integration teams and change management processes"
+  ],
+  "avoid_when": [
+    "Simple point-to-point communication between two applications",
+    "All services use homogeneous protocols (no translation needed)",
+    "Greenfield microservices architecture with domain-aligned teams",
+    "High-throughput, low-latency requirements (use event-driven architecture instead)",
+    "Small teams with limited ESB expertise",
+    "Need for independent team deployment cycles (ESB creates coupling)",
+    "Cloud-native architectures requiring elastic scalability"
+  ],
+  "component_types": [
+    "Message Listener/Adapter: Connects to external systems (JMS, file, email, database) and converts to messages",
+    "Content-Based Router: Examines message content and routes to appropriate destination",
+    "Message Filter: Filters messages based on criteria before routing",
+    "Data Transformer: Converts message formats (XML ↔ JSON, XSLT transformations)",
+    "Message Validator: Validates message structure and content against schema",
+    "Message Repository: Stores messages/events for audit, replay, correlation",
+    "Mediation Pipeline: Chains multiple mediators for complex processing",
+    "Service Registry: Maintains service metadata and endpoint information",
+    "Dead Letter Queue Handler: Captures and processes failed messages",
+    "Protocol Mediator: Bridges between different communication protocols",
+    "Message Enricher: Adds data from external sources to messages"
+  ],
+  "technology_stack": [
+    "Apache Camel",
+    "WSO2 ESB",
+    "MuleSoft",
+    "Spring Integration",
+    "IBM Integration Bus",
+    "Software AG CentraSite",
+    "Apache Kafka (for event-driven alternatives)"
+  ],
+  "anti_patterns": [
+    "Distributed monolith: ESB containing too much business logic",
+    "ESB as database: Storing state in the bus rather than services",
+    "God service: Single service handling too many integration concerns",
+    "Point-to-point escalation: Adding direct connections alongside ESB",
+    "Versioning conflicts: Multiple API versions managed through ESB without governance",
+    "Over-centralization: Routing all traffic through bus without necessity"
+  ],
+  "migration_from": [
+    "point-to-point-integrations",
+    "custom-integration-modules",
+    "file-based-integration"
+  ],
+  "migration_to": [
+    "api-gateway",
+    "event-driven-architecture",
+    "microservices",
+    "ipaas"
+  ],
+  "design_principles": [
+    "Loose Coupling",
+    "Standard Protocols",
+    "Centralized Routing",
+    "Mediation Over Direct Integration",
+    "Audit and Observability",
+    "Intelligent Routing",
+    "Error Resilience",
+    "Service Abstraction",
+    "Security and Governance",
+    "Proportional Governance"
+  ],
+  "best_practices": [
+    "Define Clear Objectives: Establish specific collaboration goals to guide design and implementation",
+    "Embrace Loose Coupling: Design services to interact without tight binding for flexibility and maintainability",
+    "Utilize Standard Protocols: Adopt widely accepted communication protocols (HTTP, REST, SOAP) for compatibility",
+    "Implement Monitoring: Use real-time monitoring tools for tracking performance and proactively identifying issues",
+    "Plan for Scalability: Design architecture to accommodate growth without extensive reconfiguration",
+    "Apply Security and Governance: Use encryption, authentication, authorization, and auditing to secure data and messages",
+    "Limit Bus Complexity: Avoid embedding excessive business logic in the bus; keep it for integration concerns only",
+    "Use Content-Based Routing: Route messages based on content rather than static endpoints for flexibility",
+    "Implement Dead Letter Handling: Capture and analyze failed messages for continuous improvement",
+    "Establish Change Management: Coordinate changes through governance to prevent configuration drift"
+  ]
+}

@@ -1,0 +1,461 @@
+# Copyright (c) 2026 Oliver Kowalke
+# SPDX-License-Identifier: MIT
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+
+"""
+# FR-14: The system SHALL provide a load_config function that accepts an optional config_path parameter and loads configuration from JSON file
+# FR-271: By default, the system SHALL look for config.json at ~/.config/architecture-pattern-mcp/config.json
+# FR-272: The system SHALL support a CONFIG_PATH environment variable
+# IC-7: load_config function SHALL accept optional config_path parameter
+# IC-43: By default, the system SHALL look for config.json at ~/.config/architecture-pattern-mcp/config.json
+# IC-44: The system SHALL support a CONFIG_PATH environment variable
+
+Configuration loading from JSON file with environment variable expansion.
+
+# FR-8: The server SHALL use a JSON configuration file (config.json) for all settings.
+# Environment variables are embedded in config.json using {env:VAR:-default} syntax.
+# IC-6: Configuration SHALL use JSON format with {env:...} env-var expansion
+
+# FR-15: The system SHALL verify the configuration file exists before attempting to read it
+# and raise FileNotFoundError if the file does not exist
+# IC-9: FileNotFoundError SHALL be raised if configuration file does not exist
+# E-10: ERR_010 - Configuration file not found (HTTP 404, severity: critical)
+"""
+
+import json
+import logging
+import os
+from typing import Any, ClassVar, Literal
+
+from dotenv import load_dotenv
+from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
+
+from src.config_expansion import expand_env_in_obj
+
+# Error codes for logging
+ERROR_CONFIG_NOT_FOUND = "ERR_010"
+ERROR_INVALID_CONFIG = "INVALID_CONFIG"
+
+logger = logging.getLogger(__name__)
+
+
+class GeneratorInnerConfig(BaseModel):
+    """Generator per-provider configuration."""
+
+    model: str
+    base_url: str = ""
+    api_key: str | None = None
+    temperature: float = 0.7
+    top_p: float = 1.0
+    top_k: int = 20
+    max_tokens: int | None = Field(
+        default=None,
+        description="Maximum tokens to generate; set to match schema size for decode optimization",
+    )
+    stream: bool = Field(
+        default=False,
+        description="Enable streaming responses for improved time-to-first-byte",
+    )
+
+
+class GeneratorConfig(BaseModel):
+    """Generator provider configuration."""
+
+    provider: str
+    config: GeneratorInnerConfig
+
+
+class EmbedderInnerConfig(BaseModel):
+    """Embedder per-provider configuration."""
+
+    model: str
+    base_url: str = ""
+    api_key: str | None = None
+    embed_batch_size: int = 16
+    query_instruction: str = ""
+    text_instruction: str = ""
+    embedding_dim: int = 1024
+    max_embedder_tokens: int = 3000
+
+
+class EmbedderConfig(BaseModel):
+    """Embedder provider configuration."""
+
+    provider: str
+    config: EmbedderInnerConfig
+
+
+FusionMode = Literal["simple", "reciprocal_rerank", "relative_score", "dist_based_score"]
+
+SCORE_AWARE_MODES: frozenset[str] = frozenset({"relative_score", "dist_based_score"})
+RANK_ONLY_MODES: frozenset[str] = frozenset({"simple", "reciprocal_rerank"})
+
+
+PATTERN_CONTEXT_LIMITS: dict[str, int] = {
+    "benefits": 3,
+    "tradeoffs": 3,
+    "best_practices": 3,
+    "component_types": 5,
+    "technology_stack": 5,
+    "anti_patterns": 3,
+    "suitable_domains": 5,
+}
+
+
+class RetrievalConfig(BaseModel):
+    """Retrieval tuning configuration for hybrid BM25 + dense fusion.
+
+    Stage-1 (recall) caps: bm25_top_k / dense_top_k accept 0,
+    which means "full corpus" (lossless recall). Any value >=1 caps each leg to
+    that many candidates. Selection of the final pattern set happens AFTER
+    requirements-aware scoring in the analyze phase (see top_k_patterns and
+    style_score_threshold).
+
+    .. note::
+        Three fields (analysis_blend_weight, fusion_blend_weight,
+        weight_smoothing_alpha) had their defaults changed in PR-A. Operators
+        who need pre-PR behaviour can pin::
+
+            analysis_blend_weight=1.0
+            fusion_blend_weight=0.0
+            weight_smoothing_alpha=1.0
+    """
+
+    bm25_top_k: int = Field(0, ge=0, le=1000)
+    dense_top_k: int = Field(0, ge=0, le=1000)
+    top_k_patterns: int = Field(5, ge=1, le=100)
+    mode: FusionMode = "reciprocal_rerank"
+    retriever_weights: list[float] | None = None
+    min_fusion_score: float = Field(
+        0.0, ge=0.0, le=1.0,
+        description=(
+            "RRF scores encode rank consensus, not calibrated relevance — "
+            "0.0 disables this gate (recommended). Relevance gating happens "
+            "downstream via style_score_threshold (0-100 scale)."
+        )
+    )
+    enable_reranking: bool = False
+    rerank_top_n: int = Field(10, ge=1, le=100)
+    min_quality_score: float = Field(
+        50.0, ge=0.0, le=100.0,
+        description=(
+            "Early-stop threshold for the design loop on the 0-100 quality "
+            "scale. Below this, the loop runs to max_tries. Above this, "
+            "stops after the first attempt that meets it. 100.0 disables "
+            "the early stop."
+        ),
+    )
+    max_tries: int = Field(2, ge=1, le=10)
+    use_lean_wire_schema: bool = Field(
+        default=False,
+        description=(
+            "If True, generate() uses a lean response schema (ArchitectureDesignResponseWire) "
+            "that omits patterns and top-level contract lists. Saves ~15KB schema + 1-3K output "
+            "tokens per call. Default False for backward compatibility with existing tests."
+        ),
+    )
+    style_score_threshold: float = Field(
+        50.0, ge=0.0, le=100.0,
+        description="Minimum deterministic analysis_score (0-100) required for "
+                    "the top-scoring pattern's name to be used as "
+                    "recommended_style; below this, falls back to "
+                    "layered-monolith.",
+    )
+    analysis_blend_weight: float = Field(
+        default=0.7, ge=0.0, le=1.0,
+        description=(
+            "Weight on analysis_score in the blended selection score (0.0-1.0). "
+            "Default 0.7. BREAKING default change from prior implicit value 1.0. "
+            "Set to 1.0 (with fusion_blend_weight=0.0) to restore pre-change behaviour."
+        ),
+    )
+    fusion_blend_weight: float = Field(
+        default=0.3, ge=0.0, le=1.0,
+        description=(
+            "Weight on min-max-normalized fusion_score in the blended selection "
+            "score (0.0-1.0). Default 0.3. BREAKING default change from prior "
+            "implicit value 0.0. Set to 0.0 to restore pre-change behaviour."
+        ),
+    )
+    weight_smoothing_alpha: float = Field(
+        default=0.7, ge=0.0, le=1.0,
+        description=(
+            "Convex smoothing for RequirementWeights: w' = alpha*w + (1-alpha)*(1/n). "
+            "Default 0.7. BREAKING default change from prior implicit value 1.0 "
+            "(no smoothing). Set to 1.0 to restore raw LLM weights."
+        ),
+    )
+    verbose_timing: bool = Field(
+        default=False,
+        description=(
+            "When True, _timed_phase logs at INFO instead of DEBUG, enabling "
+            "phase-duration observability without changing the global logging level. "
+            "Off by default to preserve hot-path performance."
+        ),
+    )
+    pattern_context_limits: dict[str, int] = Field(default_factory=lambda: PATTERN_CONTEXT_LIMITS.copy())
+
+    @field_validator("retriever_weights", mode="before")
+    @classmethod
+    def _parse_weights(cls, v: Any) -> Any:
+        """Parse a JSON string like '[0.6, 0.4]' into a list[float]."""
+        if v is None:
+            return None
+        if isinstance(v, list):
+            return [float(x) for x in v]
+        if isinstance(v, str):
+            stripped = v.strip()
+            if stripped.startswith("["):
+                try:
+                    parsed = json.loads(stripped)
+                    if isinstance(parsed, list):
+                        return [float(x) for x in parsed]
+                    raise ValueError(f"retriever_weights JSON root must be a list, got {type(parsed).__name__}")
+                except json.JSONDecodeError as e:
+                    raise ValueError(f"Invalid JSON in retriever_weights: {e}") from e
+            raise ValueError(
+                "retriever_weights must be a JSON list string (e.g. '[0.5,0.5]') "
+                "or a Python list of floats"
+            )
+        return v
+
+    @model_validator(mode="after")
+    def _check_weights(self) -> "RetrievalConfig":
+        if self.retriever_weights is not None:
+            if len(self.retriever_weights) != 2:
+                raise ValueError("retriever_weights must have length 2 (dense, bm25)")
+            if not all(0.0 <= w <= 1.0 for w in self.retriever_weights):
+                raise ValueError("retriever_weights entries must be in [0.0, 1.0]")
+            if abs(sum(self.retriever_weights) - 1.0) > 1e-3:
+                raise ValueError("retriever_weights must sum to 1.0")
+        if self.mode in SCORE_AWARE_MODES and self.retriever_weights is None:
+            raise ValueError(
+                f"retriever_weights are required when mode='{self.mode}'"
+            )
+        if self.mode in RANK_ONLY_MODES and self.retriever_weights is not None:
+            logger.debug(
+                "retriever_weights are ignored when mode='%s'", self.mode
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _check_score_blend_weights(self) -> "RetrievalConfig":
+        s = self.analysis_blend_weight + self.fusion_blend_weight
+        if abs(s - 1.0) > 1e-3:
+            raise ValueError(
+                f"analysis_blend_weight + fusion_blend_weight must sum to 1.0, got {s}"
+            )
+        return self
+
+
+class ValidationConfig(BaseModel):
+    """
+    Validation settings for self-healing retry loop.
+
+    max_retries: Maximum number of self-healing retry attempts on validation failure.
+                  Each retry sends a corrected prompt with validation error details.
+    retry_on_fail: If False, disable self-healing retries (raise on first validation failure).
+    """
+
+    max_retries: int = Field(3, ge=0, le=10)
+    retry_on_fail: bool = True
+
+
+class ServerConfig(BaseModel):
+    """
+    # E-13: INVALID_CONFIG - Config structure invalid (HTTP 400, severity: warn)
+
+    Pydantic model for validating configuration structure.
+
+    # FR-8: JSON configuration file for all settings
+    # IC-6: Configuration SHALL use JSON format with {env:...} env-var expansion
+    """
+
+    generator: GeneratorConfig
+
+    embedder: EmbedderConfig
+
+    # Retrieval tuning: hybrid BM25 + dense fusion parameters.
+    retrieval: RetrievalConfig | None = None
+
+    # Pattern directory: PatternLoader reads *-architecture.json files from here.
+    # Default: ~/.config/architecture-pattern-mcp/pattern
+    pattern_directory: str = "~/.config/architecture-pattern-mcp/pattern"
+
+    # CPARA-16: Logging level (DEBUG|INFO|WARNING|ERROR|CRITICAL)
+    logging_level: str = "INFO"
+
+    # CPARA-17: Logging format (json|text)
+    logging_format: str = "json"
+
+    # Validation: self-healing retry loop settings for LLM structured generation
+    validation: ValidationConfig = Field(default_factory=lambda: ValidationConfig())
+
+    # Transport mode: "stdio" for local, "streamable-http" for HTTP
+    transport: str = "streamable-http"
+
+    # Server bind host for SSE transport
+    host: str = "0.0.0.0"
+
+    # Server bind port for SSE transport
+    port: int = 8050
+
+    model_config = {"extra": "forbid"}
+
+
+class ConfigManager:
+    """
+    Configuration Manager for loading JSON config with env-var expansion.
+
+    # FR-14: load_config function accepts optional config_path parameter
+
+    # IC-7: load_config function SHALL accept optional config_path parameter
+    """
+
+    # FR-271/IC-43: Default config path is ~/.config/architecture-pattern-mcp/config.json
+    DEFAULT_CONFIG_PATH: str = "~/.config/architecture-pattern-mcp/config.json"
+
+    # Class variable for caching loaded configuration
+    _config: ClassVar[dict[str, Any] | None] = None
+
+    # Track which path was used for caching
+    _config_path: ClassVar[str | None] = None
+
+    @classmethod
+    def load_config(cls, config_path: str | None = None) -> dict[str, Any]:
+        """
+        Load configuration from JSON file with {env:VAR:-default} expansion.
+
+        # FR-14: The system SHALL provide a load_config function that accepts
+        an optional config_path parameter and loads configuration from JSON file
+        # FR-271: By default, the system SHALL look for config.json at ~/.config/architecture-pattern-mcp/config.json
+        # FR-272: The system SHALL support a CONFIG_PATH environment variable
+
+        # IC-7: load_config function SHALL accept optional config_path parameter
+        # IC-43: By default, the system SHALL look for config.json at ~/.config/architecture-pattern-mcp/config.json
+        # IC-44: The system SHALL support a CONFIG_PATH environment variable
+
+        Configuration path resolution order:
+        1. CONFIG_PATH environment variable (highest priority)
+        2. config_path parameter (if provided)
+        3. DEFAULT_CONFIG_PATH (~/.config/architecture-pattern-mcp/config.json)
+
+        Environment variable expansion:
+        - {env:VAR}           → value of VAR from environ, or "" if unset
+        - {env:VAR:-default}  → value of VAR, or "default" if unset
+
+        # FR-15: The system SHALL verify the configuration file exists before attempting to read it
+        # and raise FileNotFoundError if the file does not exist
+        # IC-9: FileNotFoundError SHALL be raised if configuration file does not exist
+        # E-10: ERR_010 - Configuration file not found (HTTP 404, severity: critical)
+
+        Args:
+            config_path: Optional path to configuration file. If not provided,
+                        uses CONFIG_PATH env var or default path.
+
+        Returns:
+            dict: Parsed, expanded, and validated configuration dictionary.
+
+        Raises:
+            FileNotFoundError: If configuration file does not exist at path.
+            ValidationError: If configuration structure is invalid.
+        """
+        if cls._config is not None:
+            return cls._config
+
+        load_dotenv()
+
+        if os.environ.get("CONFIG_PATH"):
+            resolved_path = os.environ["CONFIG_PATH"]
+            logger.debug(f"Using CONFIG_PATH env var: {resolved_path}")
+        elif config_path:
+            resolved_path = config_path
+            logger.debug(f"Using config_path parameter: {resolved_path}")
+        else:
+            resolved_path = cls.DEFAULT_CONFIG_PATH
+            logger.debug(f"Using default config path: {resolved_path}")
+
+        expanded_path = os.path.expanduser(resolved_path)
+        abs_path = os.path.abspath(expanded_path)
+
+        if not os.path.exists(expanded_path):
+            logger.error(
+                "Configuration file not found",
+                extra={
+                    "config_path": abs_path,
+                    "error_code": ERROR_CONFIG_NOT_FOUND
+                }
+            )
+            raise FileNotFoundError(
+                f"Configuration file not found at path: {abs_path}"
+            )
+
+        try:
+            with open(expanded_path, encoding="utf-8") as f:
+                raw_config = json.load(f)
+        except json.JSONDecodeError as e:
+            logger.error(
+                "Invalid JSON in configuration file",
+                extra={
+                    "config_path": abs_path,
+                    "error_code": ERROR_INVALID_CONFIG,
+                    "json_error": str(e)
+                }
+            )
+            raise ValueError(f"Invalid JSON configuration: {e}")
+
+        expanded_config = expand_env_in_obj(raw_config)
+
+        try:
+            validated_config = ServerConfig.model_validate(expanded_config)
+        except ValidationError as e:
+            logger.error(
+                "Configuration structure invalid",
+                extra={
+                    "config_path": abs_path,
+                    "error_code": ERROR_INVALID_CONFIG,
+                    "validation_error": str(e)
+                }
+            )
+            raise
+
+        cls._config = validated_config.model_dump()
+        cls._config_path = abs_path
+
+        logger.info(
+            "Configuration loaded successfully",
+            extra={"config_path": cls._config_path}
+        )
+
+        return cls._config
+
+    @classmethod
+    def clear_cache(cls) -> None:
+        """
+        Clear the cached configuration.
+
+        Useful for testing or when configuration file changes.
+
+        Returns:
+            None
+        """
+        cls._config = None
+        cls._config_path = None
+        logger.debug("Configuration cache cleared")

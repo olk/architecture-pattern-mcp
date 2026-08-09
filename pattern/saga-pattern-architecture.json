@@ -1,0 +1,111 @@
+{
+  "name": "saga",
+  "category": "coordination",
+  "context": "Distributed systems requiring coordinated multi-service transactions where ACID properties cannot span service boundaries. Each service owns its data store, and distributed locks or two-phase commit create unacceptable contention, coordinator bottlenecks, or availability risks.",
+  "benefits": [
+    "No distributed locks or blocking",
+    "Works across heterogeneous data stores",
+    "Scales horizontally",
+    "Provides explicit failure recovery paths",
+    "Enables independent service deployability",
+    "Offers full audit trail of transaction execution and compensation"
+  ],
+  "tradeoffs": [
+    "Eventual consistency only (not strong ACID)",
+    "Complex compensation logic that must be carefully designed",
+    "Requires idempotent operations",
+    "Increased latency per step due to network round-trips",
+    "Saga state must be persisted durably",
+    "Observability infrastructure required for debugging"
+  ],
+  "quality_attributes": {
+    "scalability": 9,
+    "maintainability": 6,
+    "reliability": 7,
+    "security": 6,
+    "performance": 5,
+    "simplicity": 4
+  },
+  "suitable_domains": [
+    "e-commerce-order-processing",
+    "payment-processing",
+    "travel-reservations",
+    "financial-services",
+    "inventory-management",
+    "loyalty-programs",
+    "multi-service-business-workflows"
+  ],
+  "unsuitable_domains": [
+    "single-service-applications",
+    "short-duration-transactions-where-2pc-is-feasible",
+    "systems-requiring-strong-immediate-consistency",
+    "early-stage-products-with-unclear-service-boundaries",
+    "small-teams-lacking-operational-infrastructure"
+  ],
+  "use_cases": [
+    "Order placement spanning inventory, payment, shipping, and notification services",
+    "Travel booking combining flights, hotels, and car rentals",
+    "Account provisioning across identity, billing, and notification systems",
+    "Loan application processing with credit check, risk assessment, and approval workflows"
+  ],
+  "avoid_when": [
+    "Service boundaries are unclear and change frequently",
+    "Small teams (5 or fewer) where operational burden outweighs benefits",
+    "Real-time strong consistency is business-critical (e.g., bank transfers)",
+    "No operational capability for message brokers, DLQ handling, and distributed tracing",
+    "Sagas would need to span more than 7-10 steps"
+  ],
+  "component_types": [
+    "Saga Orchestrator: Central coordinator defining step sequence, handling execution order and compensation; maintains state machine and durable log",
+    "Saga Step: Single local transaction with associated forward action and compensating action; must be idempotent",
+    "Compensating Action Handler: Inverse operation to undo a completed step (e.g., refund payment, release inventory); must be idempotent and retryable until success",
+    "Saga State Store: Tracks progress through saga steps, current step, completion status, and compensating actions pending",
+    "Event Log: Records saga events for auditing, recovery, and debugging; must be durable",
+    "Participant Service: Executes local transaction, reports success/failure via events or responses",
+    "Outbox Pattern Relay: Ensures local state change and event publication are atomic, preventing split-brain between DB commit and event emission",
+    "DLQ Handler: Handles saga steps or compensations that fail repeatedly; triggers alerts and manual intervention"
+  ],
+  "technology_stack": [
+    "Temporal",
+    "AWS Step Functions",
+    "Axon Framework",
+    "Camunda",
+    "Netflix Conductor",
+    "Apache Kafka",
+    "Eventuate Tram",
+    "MicroProfile LRA",
+    "Redis (saga state)",
+    "PostgreSQL (saga log)"
+  ],
+  "anti_patterns": [
+    "Distributed monolith (shared database disguised as microservices)",
+    "Skipping idempotency in saga steps",
+    "Missing transactional outbox leading to lost events",
+    "Infinite saga retries without dead-letter handling",
+    "Nested sagas without clear boundaries",
+    "Choreography for complex flows (4+ steps with conditionals)"
+  ],
+  "migration_from": [
+    "two-phase-commit",
+    "shared-database-monolith",
+    "distributed-transaction"
+  ],
+  "migration_to": [
+    "event-driven-architecture",
+    "workflow-engine",
+    "service-mesh"
+  ],
+  "design_principles": [
+    "Design Compensations Before Happy Paths",
+    "Make Every Operation Idempotent",
+    "Use Transactional Outbox",
+    "Persist Saga State Durably",
+    "Implement Timeouts at Every Level",
+    "Monitor Saga Completion Time Distributions",
+    "Design for Short Sagas",
+    "Handle Compensation Failures Explicitly",
+    "Use Semantic Locks",
+    "Choose Orchestration for Complex Flows"
+  ],
+  "best_practices": []
+}

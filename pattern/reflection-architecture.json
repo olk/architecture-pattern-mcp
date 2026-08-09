@@ -1,0 +1,124 @@
+{
+  "name": "reflection-architecture",
+  "context": "The Reflection pattern enables runtime adaptation by maintaining a causally-connected self-representation. It separates a base-level (application logic) from a meta-level (reflective entities) with a causal connection between them, allowing the system to inspect and modify its own structure and behavior at runtime.",
+  "category": "ai_cognitive",
+  "benefits": [
+    "Zero-downtime adaptation: Change behavior without restart",
+    "Self-healing: System can detect and fix issues at runtime",
+    "Dynamic configuration: Modify behavior based on runtime conditions",
+    "Extensibility: Add new capabilities without redeployment",
+    "Runtime introspection: Inspect system state and structure dynamically",
+    "Policy separation: Business rules separated from implementation"
+  ],
+  "tradeoffs": [
+    "Performance overhead: Reflection adds runtime overhead for introspection and modification",
+    "Complexity: Meta-level architecture significantly increases system complexity",
+    "Security risks: Exposed internals increase attack surface if not properly secured",
+    "Debugging difficulty: Harder to trace and debug reflective operations",
+    "Learning curve: Requires deep understanding of reflective concepts",
+    "Tooling limitations: Some IDEs and tools have limited support for reflective code"
+  ],
+  "quality_attributes": {
+    "scalability": 6,
+    "maintainability": 7,
+    "reliability": 8,
+    "security": 4,
+    "performance": 3,
+    "simplicity": 3
+  },
+  "suitable_domains": [
+    "autonomic-systems",
+    "self-healing-systems",
+    "highly-configurable-platforms",
+    "middleware",
+    "long-running-systems",
+    "application-servers",
+    "ai-agent-orchestration",
+    "rule-based-systems",
+    "expert-systems"
+  ],
+  "unsuitable_domains": [
+    "simple-applications",
+    "static-requirements",
+    "performance-critical-real-time",
+    "security-sensitive-without-care",
+    "teams-unfamiliar-with-reflection",
+    "strict-static-analysis"
+  ],
+  "use_cases": [
+    "Systems that cannot tolerate downtime and require zero-downtime updates",
+    "Runtime adaptation required based on environmental conditions",
+    "Highly configurable business logic that changes frequently",
+    "Long-running platforms (space rovers, autonomous robots, NASA missions)",
+    "Self-monitoring and self-healing traffic monitoring cameras",
+    "Middleware platforms requiring dynamic reconfiguration"
+  ],
+  "avoid_when": [
+    "Simple CRUD applications with stable requirements",
+    "Performance-critical hot paths where every cycle counts",
+    "Security-sensitive code without careful security boundaries",
+    "Teams lacking experience with reflective programming",
+    "Systems requiring strong static typing guarantees",
+    "Regulatory environments requiring predictable behavior"
+  ],
+  "component_types": [
+    "Meta-Object Protocol (MOP) Interface: Standard interface for all reflective operations",
+    "Architectural Meta-Entities: Maintain runtime representation of software architecture",
+    "Behavioral Meta-Entities: Reflect on method calls, execution flow, state machines",
+    "Self-Representation Repository: Stores the causally-connected self-model",
+    "Reflection Controller: Manages level shifts and meta-level computations",
+    "Monitoring Agent: Observes base-level and triggers reflective actions"
+  ],
+  "technology_stack": [
+    "Python",
+    "Java",
+    "Ruby",
+    "Smalltalk",
+    "Common Lisp (CLOS)",
+    "AspectJ",
+    "Spring AOP",
+    "Java Dynamic Proxies",
+    "Python __getattr__",
+    "Open ORB",
+    "Adaptive Middleware Frameworks"
+  ],
+  "anti_patterns": [
+    "Excessive reflection: Using MOP for operations better handled statically",
+    "Tight coupling: Meta and base levels too interdependent",
+    "Uncontrolled introspection: Exposing sensitive internals without access controls",
+    "Reflection without encapsulation: Breaking the mirror design principles",
+    "Distributed monolith via reflection: Using reflection to create inappropriate dependencies",
+    "Single-layer reflection: Only reflecting on one level when multiple levels needed"
+  ],
+  "migration_from": [
+    "static-configuration-systems",
+    "monolithic-non-reflective-architectures",
+    "rule-engines-without-runtime-adaptation",
+    "traditional-middleware"
+  ],
+  "migration_to": [
+    "fully-autonomous-self-adaptive-systems",
+    "policy-driven-architectures",
+    "autonomic-computing-platforms",
+    "ai-driven-orchestration-systems"
+  ],
+  "design_principles": [
+    "Encapsulation: Meta-level facilities must encapsulate their implementation details from base-level components",
+    "Stratification: Meta-level must be cleanly separated from base-level functionality: no leakage of concerns",
+    "Ontological Correspondence: Meta-level ontology should correspond to the language it manipulates: the reflection model should mirror actual system structure",
+    "Causal Connection: Changes to meta-level data structures must immediately reflect on the actual system and vice versa",
+    "Minimal Entry Points: Limit reflective access to well-defined interfaces to reduce attack surface",
+    "Cache Metadata: Cache reflectively obtained metadata to reduce repeated introspection overhead"
+  ],
+  "best_practices": [
+    "Limit Reflection Usage: Use reflection only when alternatives (interfaces, Strategy pattern) are not possible",
+    "Cache Metadata Lookups: Avoid repeated reflective calls; cache metadata through static fields or caches",
+    "Use Interfaces: Code against interfaces to avoid breakage due to implementation changes",
+    "Enable Selectively: Only enable access via `setAccessible()` for specific members, not blanket permissions",
+    "Validate Permissions: Check runtime permissions before allowing reflective access",
+    "Protect Entry Points: Guard public APIs enabling reflection to prevent misuse",
+    "Keep Reflection Narrow: Use reflection only where runtime uncertainty is unavoidable, keep core domain logic typed",
+    "Descriptor Caching: Parse once at startup, build cached descriptors, run fast code paths from descriptors",
+    "Handle Errors Properly: Always handle exceptions such as `NoSuchMethodException`, `IllegalAccessException`, `InvocationTargetException`"
+  ]
+}

@@ -1,0 +1,137 @@
+{
+  "category": "messaging",
+  "name": "reactive-architecture",
+  "context": "Distributed systems requiring responsiveness, resilience, and elasticity under varying workloads. Reactive architecture builds systems where components communicate asynchronously via message-passing, enabling loose coupling, isolation, and location transparency.",
+  "benefits": [
+    "Consistent response times under load through event-driven processing",
+    "Failures isolated maintaining system availability",
+    "Automatic scaling to handle traffic spikes",
+    "Low coupling between components through async messaging",
+    "Back pressure prevents consumer overwhelm",
+    "Location transparency enables transparent replication",
+    "Failure containment and recovery through supervision hierarchies",
+    "Resource efficiency through non-blocking I/O"
+  ],
+  "tradeoffs": [
+    "Increased architectural complexity",
+    "Async programming harder to debug and reason about",
+    "Significant learning curve for team",
+    "Time-based behavior harder to test",
+    "Distributed systems introduce network latency",
+    "Eventual consistency challenges",
+    "Observability requirements increase"
+  ],
+  "quality_attributes": {
+    "scalability": 9,
+    "maintainability": 6,
+    "reliability": 9,
+    "security": 7,
+    "performance": 8,
+    "simplicity": 4
+  },
+  "suitable_domains": [
+    "high-concurrency",
+    "real-time-processing",
+    "streaming",
+    "cloud-native",
+    "event-driven-microservices",
+    "iot",
+    "financial-trading",
+    "large-scale-distributed-systems"
+  ],
+  "unsuitable_domains": [
+    "simple-crud",
+    "low-traffic",
+    "batch-processing",
+    "strong-consistency-required",
+    "low-latency-local-calls",
+    "monolith-without-scaling-needs"
+  ],
+  "use_cases": [
+    "High concurrency requirements (10k+ concurrent users)",
+    "Real-time data streaming and processing",
+    "Systems requiring elastic scaling",
+    "Microservices communication",
+    "IoT data ingestion pipelines",
+    "Financial trading systems",
+    "Chat and messaging platforms",
+    "Live dashboards and monitoring"
+  ],
+  "avoid_when": [
+    "Simple request-response workflows",
+    "Low complexity single-user applications",
+    "Batch processing where latency is not critical",
+    "Predictable steady load without scaling needs",
+    "Monolithic tightly coupled architectures",
+    "Teams without async programming experience"
+  ],
+  "component_types": [
+    "EventBus: Central channel for publishing and subscribing to events",
+    "MessageBroker: Intermediary that routes messages between producers and consumers",
+    "StreamProcessor: Processes data streams with back pressure support",
+    "CircuitBreaker: Prevents cascade failures by failing fast when a service is unhealthy",
+    "BackPressureManager: Controls producer rate to prevent consumer overwhelm",
+    "ServiceRegistry: Tracks location and health of service instances",
+    "Publisher: Emits data items to subscribers",
+    "Subscriber: Receives and processes data items",
+    "SupervisionHierarchy: Manages failure recovery through parent-child actor relationships"
+  ],
+  "technology_stack": [
+    "Akka",
+    "Project Reactor",
+    "RxJava",
+    "Spring WebFlux",
+    "Vert.x",
+    "Kafka",
+    "RabbitMQ",
+    "Redis Streams",
+    "Netflix Hystrix",
+    "Resilience4j",
+    "NATS",
+    "Apache Flink"
+  ],
+  "anti_patterns": [
+    "Distributed monolith (reactive facade over blocking core)",
+    "Shared database (violates isolation principle)",
+    "Synchronous everywhere (defeats async benefits)",
+    "Ignoring back pressure (leads to memory overflow)",
+    "Reactive everywhere (incremental adoption is better)",
+    "Mixing blocking and non-blocking code",
+    "Ignoring failure handling in design"
+  ],
+  "migration_from": [
+    "monolithic-architecture",
+    "layered-architecture",
+    "blocking-mvc",
+    "synchronous-rest"
+  ],
+  "migration_to": [
+    "event-sourcing",
+    "cqrs",
+    "service-mesh",
+    "edge-computing",
+    "actor-model-architecture"
+  ],
+  "design_principles": [
+    "Message-Driven Communication: Components communicate via asynchronous messages, creating temporal and spatial decoupling",
+    "Location Transparency: Components can be replicated and moved without changing code, enabling elastic scaling",
+    "Failure Isolation: Each component fails independently; failures are contained and managed through supervision hierarchies",
+    "Non-Blocking I/O: Resource utilization optimized through asynchronous, non-blocking operations",
+    "Back Pressure: Consumers control the rate of production to prevent overwhelm",
+    "Elasticity: System automatically scales up and down based on workload",
+    "Responsiveness: System responds in a timely manner under all conditions",
+    "Supervision Hierarchies: Parent components manage child component failures through defined strategies"
+  ],
+  "best_practices": [
+    "Incremental Adoption: Start with non-critical features; don't rewrite entire system at once",
+    "Anti-Corruption Layer: Bridge legacy blocking code with reactive world using adapters",
+    "Back Pressure Handling: Always implement back pressure to prevent memory overflow",
+    "Circuit Breaker Configuration: Set appropriate failure thresholds and timeout values",
+    "Failure Handling: Design for failure from the start; implement retries, fallbacks, and compensation",
+    "Observability: Add comprehensive metrics, tracing, and logging at each component",
+    "Schema Evolution: Design event schemas for backward and forward compatibility",
+    "Resource Management: Use connection pooling and bounded queues to prevent resource exhaustion",
+    "Testing: Use StepVerifier and embedded brokers for comprehensive reactive testing",
+    "Avoid Blocking: Never call blocking operations (like JDBC) in reactive threads; use R2DBC instead"
+  ]
+}

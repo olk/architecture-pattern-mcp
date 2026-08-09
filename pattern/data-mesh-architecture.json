@@ -1,0 +1,139 @@
+{
+  "name": "data-mesh",
+  "category": "data",
+  "context": "Large-scale multi-domain organizations requiring decentralized data ownership where domain teams own and serve data products as first-class deliverables, with federated governance and self-serve infrastructure enabling autonomy while maintaining organizational coherence.",
+  "benefits": [
+    "Domain teams own data end-to-end, accountable for quality and availability",
+    "Scales horizontally with organization growth without central bottleneck",
+    "Domain experts produce data products with proper business context",
+    "Self-serve platform reduces cognitive load on domain teams",
+    "Federated governance enables interoperability without central control",
+    "Product mindset drives quality, documentation, and SLA discipline",
+    "Fault isolation: domain failures don't cascade across organization",
+    "Faster iteration on data products with autonomous teams",
+    "Better data locality reduces cross-domain dependencies"
+  ],
+  "tradeoffs": [
+    "Cultural shift required: teams must think data-first, not just consume data",
+    "Federated governance complexity: balancing autonomy with standards",
+    "Significant platform investment: self-serve infrastructure is costly to build",
+    "Learning curve: domain teams need data engineering skills",
+    "Data duplication: some overlap across domains is inevitable",
+    "Cross-domain integration challenges: schema consistency, identity linking",
+    "Organizational complexity: requires clear domain boundaries and ownership",
+    "Distributed debugging: lineage tracking across domain boundaries",
+    "Reconciliation complexity: eventual consistency requires explicit handling"
+  ],
+  "quality_attributes": {
+    "scalability": 9,
+    "maintainability": 7,
+    "reliability": 8,
+    "security": 7,
+    "performance": 7,
+    "simplicity": 4
+  },
+  "suitable_domains": [
+    "enterprise",
+    "e-commerce",
+    "fintech",
+    "healthcare",
+    "telecommunications",
+    "manufacturing",
+    "multi-divisional"
+  ],
+  "unsuitable_domains": [
+    "startup",
+    "simple-crud",
+    "single-domain",
+    "low-budget",
+    "low-maturity",
+    "tightly-coupled"
+  ],
+  "use_cases": [
+    "Organization scaled beyond what centralized data team can support",
+    "Multiple domain teams need independent data product delivery",
+    "Data quality suffers due to central team lacking domain knowledge",
+    "Need for data agility and fast iteration on data products",
+    "Distributed architecture already in place (microservices, domain teams)",
+    "Diverse data consumers: analytics, ML, operational reporting, compliance",
+    "Cross-domain data correlation required for business insights",
+    "Real-time data needs across multiple business domains",
+    "Regulatory compliance requires clear data lineage and ownership"
+  ],
+  "avoid_when": [
+    "Small organization with fewer than 50 people",
+    "Single domain or simple data requirements",
+    "Centralized data team works well and satisfies stakeholders",
+    "Organization not ready for cultural shift to data-as-product",
+    "Leadership cannot support org change and domain empowerment",
+    "Budget insufficient for self-serve platform investment",
+    "Teams lack data engineering skills without upskilling path",
+    "Strong consistency requirements within single transaction boundary"
+  ],
+  "component_types": [
+    "Data Catalog Service: Central discovery service providing metadata, ownership registration, and search capabilities for all data products",
+    "Data Quality Monitor: Automated quality checks, SLO tracking, and alerting for data product freshness and correctness",
+    "Data Lineage Tracker: Cross-domain lineage capture and visualization enabling impact analysis and debugging across boundaries",
+    "Data Policy Engine: Federated governance rule enforcement ensuring compliance with global standards while respecting domain autonomy",
+    "Data Product Registry: Product registration, versioning, and contract management for domain data offerings",
+    "Self-Serve Platform Portal: Onboarding, provisioning, and templates enabling domain teams to build and publish without platform expertise",
+    "Schema Registry: Schema evolution and compatibility checking ensuring interoperability across domain boundaries",
+    "Identity Linking Service: Cross-domain entity resolution enabling correlation of data across domains",
+    "Reconciliation Service: Data consistency validation across domains handling eventual consistency requirements",
+    "Event Streaming Platform: Real-time data product delivery infrastructure (e.g., Apache Kafka) for low-latency domain interactions"
+  ],
+  "technology_stack": [
+    "Apache Kafka: Event streaming for data product delivery",
+    "Apache Flink: Stream processing and real-time transformations",
+    "Apache Iceberg: Open table format for data product storage",
+    "AWS Glue / Azure Data Factory / Google Cloud Dataproc: Data orchestration",
+    "Apache Hive Metastore / AWS Glue Data Catalog: Metadata management",
+    "dbt: Data transformation and data product definition",
+    "Debezium: Change data capture for operational data products",
+    "Prefect / Dagster: Workflow orchestration for data products",
+    "OpenPolicy Agent: Policy-as-code for federated governance",
+    "Spark / Trino / Presto: Distributed query engines"
+  ],
+  "anti_patterns": [
+    "Centralized data warehouse rebranded as data products",
+    "Domain teams publishing raw data without quality SLA",
+    "Tech-first bottom-up approach expecting governance to emerge",
+    "Data products as integration patterns between operational systems",
+    "Each team building own platform instead of using self-serve",
+    "Weak governance leading to schema inconsistency across domains",
+    "Data swamp with different access and security mechanisms",
+    "Consumer-specific transformations leaking into source ownership",
+    "Distributed monolith: decentralized ownership with central dependencies"
+  ],
+  "migration_from": [
+    "monolithic-data-warehouse",
+    "centralized-etl-platform",
+    "data-lake-monolith",
+    "integration-spaghetti"
+  ],
+  "migration_to": [
+    "event-driven-mesh",
+    "lakehouse-federation",
+    "stream-processing-platform"
+  ],
+  "design_principles": [
+    "**Domain Ownership**: Teams own data for their domain end-to-end, accountable for quality, availability, and documentation",
+    "**Data as a Product**: Treat data like software product with quality standards, documentation, SLA commitments, and versioning",
+    "**Self-Serve Infrastructure**: Platform provides common capabilities (catalog, lineage, quality monitoring) reducing cognitive load on domain teams",
+    "**Federated Governance**: Global policies defined centrally but executed locally through automated enforcement",
+    "**Product Contracts**: Formal agreements between data producers and consumers specifying schema, quality, and SLA expectations",
+    "**Fault Isolation**: Domain failures don't cascade across organization; each domain operates independently",
+    "**Schema Evolution**: Backward-compatible changes with deprecation notices; schema registry enforces compatibility"
+  ],
+  "best_practices": [
+    "Start with pilot domain: Prove value before full organization rollout; validate approach with low-risk domain first",
+    "Invest early in self-serve platform: Platform primitives (publishing templates, schema governance, catalog integration) enable domain autonomy",
+    "Establish global standards early: Metadata models, naming conventions, schema evolution rules keep mesh coherent as it grows",
+    "Automate governance checks: Policy enforcement in CI/CD, not manual approval committees; automated compliance reduces overhead",
+    "Measure adoption and quality metrics: Track catalog coverage, data quality scores, contract test pass rates; data-driven improvement",
+    "Create \"golden path\" templates: Standardized patterns for new domains reduce onboarding friction and ensure best practices",
+    "Keep reconciliation as first-class concern: Eventual consistency requires explicit handling; reconciliation service prevents divergence",
+    "Define clear data product owner role: Accountability for quality, documentation, and accessibility anchors ownership",
+    "Use data contracts to make ownership operational: Schema definitions, quality standards, freshness SLAs codified in agreements"
+  ]
+}

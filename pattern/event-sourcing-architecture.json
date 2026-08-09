@@ -1,0 +1,125 @@
+{
+  "name": "event-sourcing",
+  "category": "data",
+  "context": "Systems requiring complete audit trails, temporal queries, and event replay capabilities. The event log serves as the source of truth rather than current state.",
+  "benefits": [
+    "Complete audit trail: Every state change is captured as an immutable event",
+    "Temporal queries: Reconstruct state at any point in time",
+    "Event replay: Rebuild projections, fix bugs by replaying corrected events",
+    "Decoupled business logic: Events are simple facts, business rules in aggregates",
+    "Easy integration: Other services subscribe to event streams",
+    "Parallel processing: Multiple consumers can process events independently",
+    "Future-proof data: Events can be reprocessed into new read models",
+    "Debugging and traceability: Complete history aids forensic analysis"
+  ],
+  "tradeoffs": [
+    "Eventual consistency: Projections are updated asynchronously",
+    "Learning curve: Different mental model than CRUD requires team training",
+    "Query complexity: Reconstructing state requires event replay or projections",
+    "Event schema evolution: Upcasting requires careful versioning strategy",
+    "Large event streams: Snapshots needed to optimize rehydration",
+    "Operational complexity: Additional moving parts (event store, projectors, checkpoints)"
+  ],
+  "quality_attributes": {
+    "scalability": 8,
+    "maintainability": 6,
+    "reliability": 7,
+    "security": 7,
+    "performance": 5,
+    "simplicity": 4
+  },
+  "suitable_domains": [
+    "finance-banking",
+    "healthcare",
+    "legal-compliance",
+    "audit-regulatory",
+    "inventory-management",
+    "order-management",
+    "collaborative-domains",
+    "ledger-bookkeeping"
+  ],
+  "unsuitable_domains": [
+    "simple-crud",
+    "low-history-requirements",
+    "team-experience-low",
+    "cost-sensitive-storage",
+    "strongly-consistent-single-entity"
+  ],
+  "use_cases": [
+    "Audit trail is a regulatory or business requirement",
+    "Temporal queries needed (state at point in time)",
+    "Complex domain with many state transitions",
+    "Event-driven architecture already in place",
+    "Financial ledgers requiring immutable records",
+    "Systems requiring time-travel debugging",
+    "Multiple read models needed from same event stream",
+    "Long-running business processes with compensating actions"
+  ],
+  "avoid_when": [
+    "Simple CRUD with no audit needs",
+    "Only current state matters",
+    "Data volume too high for event storage costs",
+    "Team unfamiliar with event sourcing concepts",
+    "Strongly consistent reads immediately after writes required",
+    "Low-latency single-record operations dominate",
+    "Storage costs prohibitive for long-term event retention"
+  ],
+  "component_types": [
+    "Event Store: Append-only database of all domain events. Provides API for appending events and retrieving event streams by aggregate ID",
+    "Aggregate: Domain object that processes commands and emits events. State is reconstructed by replaying events",
+    "Command: Intent to change state, validated by aggregate before event emission",
+    "Event (Domain Event): Immutable record of something that happened (e.g., OrderPlaced, PaymentReceived)",
+    "Snapshot Store: Periodically saves aggregate state to avoid replaying all events from origin",
+    "Projection (Read Model): Derives viewable state from events. Multiple projections can coexist from same event stream",
+    "Upcaster: Converts old event versions to new schema during replay"
+  ],
+  "technology_stack": [
+    "EventStoreDB",
+    "Apache Kafka",
+    "Axon Framework",
+    "EventSourcing.Net",
+    "Akka Persistence",
+    "Prooph",
+    "Marten (.NET)",
+    "EventStore (Java)"
+  ],
+  "anti_patterns": [
+    "Mutable events: Modifying events after creation breaks immutability",
+    "State-focused events: Events capturing result rather than intent",
+    "Synchronous projections: Blocking writes for projection updates",
+    "In-place schema migration: Rewriting historical events",
+    "Missing idempotency: Projections that fail on duplicate events",
+    "Large aggregates: Storing too many events in single stream",
+    "No snapshot strategy: Replaying entire event history repeatedly"
+  ],
+  "migration_from": [
+    "crud",
+    "state_based_persistence",
+    "active_record",
+    "journaled_database"
+  ],
+  "migration_to": [
+    "cqrs",
+    "event_streaming",
+    "saga_pattern",
+    "event_store_clustering"
+  ],
+  "design_principles": [
+    "Immutability: Events are never modified after creation; only new events can compensate for old ones",
+    "Intent over State: Events should capture business intent (what happened) not just resulting state",
+    "Aggregate Consistency: Aggregates enforce business invariants; events are the result of state transitions",
+    "Append-Only Storage: Event store never updates or deletes; enables replay and audit",
+    "Asynchronous Projections: Read models are built asynchronously to decouple read and write workloads",
+    "Schema Evolution: Event schemas evolve through upcasters, never by rewriting historical events"
+  ],
+  "best_practices": [
+    "Treat the event store as one big audit log: Never change or reorder events",
+    "Be explicit about information in events: Include full context needed at replay time",
+    "Use unique event identifiers: Associate projections with latest event processed",
+    "Default to asynchronous projections: Decouple read and write sides",
+    "Test projectors as units: Events in, query results out",
+    "Make rebuilding projections fast: Use aggressive caching, batch processing, NoSQL",
+    "Handle eventual consistency explicitly: Design UIs to handle stale data",
+    "Encrypt events at rest and in transit: Events contain sensitive business data"
+  ]
+}

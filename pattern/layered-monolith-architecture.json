@@ -1,0 +1,106 @@
+{
+  "name": "layered-monolith",
+  "category": "structural",
+  "context": "Single deployable application organized into horizontal layers with clear, directional dependencies. Favors local reasoning, simple operations, and coherent transactions over independent deployability and fine-grained scaling.",
+  "benefits": [
+    "Simplicity: Single deployment unit, straightforward operations",
+    "Local reasoning: Clear dependency direction makes code easy to understand",
+    "Coherent transactions: Strong consistency within request scope",
+    "Testability: Each layer independently testable with mocked dependencies",
+    "Onboarding speed: Familiar pattern, easy for new developers to understand",
+    "Observability: Clear layer boundaries for tracing and monitoring",
+    "Clean refactoring: Enforced layer structure limits code pollution"
+  ],
+  "tradeoffs": [
+    "Horizontal coupling: Cross-cutting changes affect multiple layers when adding features",
+    "Scaling limitations: Scales as single unit; cannot scale individual layers independently",
+    "Layer discipline required: Developers must respect layer boundaries; violations cause tight coupling",
+    "Shared persistence: Database schema coordination required across team",
+    "Limited fault isolation: Failures affect entire application"
+  ],
+  "quality_attributes": {
+    "scalability": 4,
+    "maintainability": 6,
+    "reliability": 6,
+    "security": 6,
+    "performance": 5,
+    "simplicity": 9
+  },
+  "suitable_domains": [
+    "traditional-web",
+    "crud-applications",
+    "simple-domains",
+    "small-to-medium-teams"
+  ],
+  "unsuitable_domains": [
+    "complex-domains",
+    "large-teams",
+    "high-scaling-needs",
+    "event-driven-workflows"
+  ],
+  "use_cases": [
+    "Traditional web applications with CRUD operations",
+    "Small to medium teams (5-20 engineers)",
+    "Simple domain with few cross-cutting concerns",
+    "First step from big ball of mud toward structure",
+    "Applications prioritizing operational simplicity",
+    "Teams preferring clear, familiar patterns"
+  ],
+  "avoid_when": [
+    "Complex domains where business rules change frequently",
+    "Large teams needing strong domain ownership",
+    "Systems requiring independent scaling of components",
+    "Complex event-driven workflows needed",
+    "Multiple teams with conflicting release cycles",
+    "When domain-driven design is the primary concern"
+  ],
+  "component_types": [
+    "Presentation Layer: HTTP handling, API contracts, user input validation",
+    "Application Layer: Use case orchestration, transaction management, coordination",
+    "Domain Layer: Business rules, domain logic, entity state transitions",
+    "Infrastructure Layer: Technical concerns, external integrations, persistence"
+  ],
+  "technology_stack": [
+    "Spring Boot",
+    "Django/Flask",
+    "Express.js",
+    "Rails",
+    "ASP.NET Core",
+    "Any MVC framework with ORM support"
+  ],
+  "anti_patterns": [
+    "Big ball of mud: no internal structure",
+    "Layer violation: skipping layers or calling upward",
+    "Smart UI: business logic in presentation layer",
+    "Anemic domain model: domain objects with no behavior",
+    "Database-centric design: logic in stored procedures"
+  ],
+  "migration_from": [
+    "big-ball-of-mud",
+    "monolithic-mvc"
+  ],
+  "migration_to": [
+    "modular-monolith",
+    "vertical-slice-monolith",
+    "microservices",
+    "hexagonal-architecture"
+  ],
+  "design_principles": [
+    "Strict Layer Direction: Dependencies flow downward only; higher layers never call lower layers upward. Presentation → Application → Domain → Infrastructure",
+    "Closed Layers by Default: A layer can only be accessed by the layer directly above it. No shortcuts across layers; prevents tight coupling",
+    "Layer Interface Isolation: Each layer exposes its own interface; internal details hidden. Public facade per layer, implementation details private",
+    "Transaction Boundaries: Place boundaries in Application layer; one use case = one transaction. Ensures consistency within request scope",
+    "Exception Protocol: When inversion is needed (Domain notifying Application), use events/interfaces owned by caller. Document exceptions with ADR, cover with tests",
+    "Single Responsibility per Layer: Each layer has one primary concern: Presentation handles HTTP, Application orchestrates use cases, Domain contains business logic, Infrastructure manages external concerns"
+  ],
+  "best_practices": [
+    "**Enforce Layer Discipline**: Use architecture tests (fitness functions) to verify layer boundaries are respected and no upward calls occur",
+    "**Keep Layers Coherent**: Each layer should have a clear, single purpose and not become a catch-all for misplaced logic",
+    "**Use Dependency Inversion**: Define repository interfaces in Domain layer; implement in Infrastructure to maintain clean boundaries",
+    "**Transactional Boundaries**: Place transaction management in Application layer: one use case = one transaction",
+    "**Prefer Events for Cross-Layer Communication**: When Domain needs to notify Application, use domain events rather than direct dependencies",
+    "**Document Layer Exceptions**: When narrow exceptions are needed (e.g., read-only projections bypassing Application), record with ADR and cover with tests",
+    "**Component-Centric Organization**: Each business component contains its own slice of layers (Presentation, Application, Domain, Infrastructure) to keep changes local",
+    "**Schema Evolution**: Favor additive changes; keep migrations backward-compatible for one release to enable safe rollbacks"
+  ]
+}

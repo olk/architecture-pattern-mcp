@@ -1,0 +1,131 @@
+{
+  "category": "coordination",
+  "name": "blockchain-based",
+  "context": "Multi-party systems requiring trustless consensus, immutable audit trails, and decentralized control without a trusted intermediary",
+  "benefits": [
+    "Immutability: Records cannot be altered retroactively after consensus",
+    "Transparency: All participants can verify transactions on shared ledger",
+    "Decentralization: No single point of control or failure",
+    "Trust minimization: Eliminates need for trusted intermediary between parties",
+    "Programmability: Smart contracts automate business logic execution",
+    "Auditability: Complete, tamper-proof transaction history",
+    "Cryptographic integrity: Hash chaining ensures data integrity",
+    "Multi-party consensus: Agreement without central authority"
+  ],
+  "tradeoffs": [
+    "Scalability limitations: Limited transaction throughput (3-7k TPS vs 50k+ for traditional DBs)",
+    "Higher latency: Consensus and confirmation take significant time",
+    "Storage growth: Ledger grows indefinitely, requiring pruning strategies",
+    "Complexity: Cryptographic key management and wallet infrastructure",
+    "Energy consumption: PoW consensus is energy intensive (mitigated by PoS)",
+    "Cost overhead: Consensus mechanism has inherent computational cost",
+    "Data sensitivity: Immutable ledger conflicts with GDPR right to erasure",
+    "Irreversibility: Corrections require complex hard fork or offset transactions"
+  ],
+  "quality_attributes": {
+    "scalability": 4,
+    "maintainability": 5,
+    "reliability": 8,
+    "security": 9,
+    "performance": 3,
+    "simplicity": 3
+  },
+  "suitable_domains": [
+    "financial-services",
+    "supply-chain",
+    "healthcare",
+    "government",
+    "legal",
+    "insurance",
+    "energy",
+    "cross-organizational"
+  ],
+  "unsuitable_domains": [
+    "simple-crud",
+    "single-organization",
+    "high-frequency-trading",
+    "low-latency",
+    "frequently-correcting-data"
+  ],
+  "use_cases": [
+    "Multi-party trust requirements where parties don't trust each other",
+    "Need for immutable, tamper-proof audit trail",
+    "Cross-organization data sharing without central authority",
+    "Smart contract automation for conditional asset transfers",
+    "Tokenization of assets (ERC-20, ERC-721, ERC-1155)",
+    "Decentralized identity and credential management",
+    "Supply chain provenance and traceability",
+    "Financial settlement and reconciliation between institutions",
+    "Voting systems requiring transparency and verifiability"
+  ],
+  "avoid_when": [
+    "Single organization with no multi-party trust requirements",
+    "Data frequently needs correction or deletion",
+    "Sub-second transaction latency required",
+    "High transaction volume (>10k TPS sustained)",
+    "Simple state with no automation or trust requirements",
+    "Internal systems only with trusted parties",
+    "Strong consistency requirements within single database"
+  ],
+  "component_types": [
+    "Distributed Ledger: Shared record of transactions replicated across all nodes",
+    "Consensus Layer: Protocol for agreeing on ledger state (PoW, PoS, PBFT)",
+    "Smart Contract Engine: Runtime for executing self-executing code on blockchain",
+    "Peer-to-Peer Network: Nodes communicate directly without central server",
+    "Cryptographic Layer: SHA-256/Keccak hashing ensures data integrity and block linkage",
+    "Merkle Tree Verifier: Efficient verification of transaction data within blocks",
+    "Wallet/Key Management: Cryptographic key storage and transaction signing",
+    "Node Client: Software client that participates in the blockchain network"
+  ],
+  "technology_stack": [
+    "Ethereum",
+    "Hyperledger Fabric",
+    "R3 Corda",
+    "Solana",
+    "Algorand",
+    "Solidity",
+    "Vyper",
+    "Go (for node implementations)",
+    "Web3.js",
+    "ethers.js"
+  ],
+  "anti_patterns": [
+    "Blockchain for blockchain's sake: using when centralized solution suffices",
+    "On-chain storage of large datasets: use off-chain with on-chain hashes",
+    "Putting PII on immutable ledger: violates GDPR and data privacy",
+    "Single-organization blockchain: centralized control defeats purpose",
+    "Ignoring gas/transaction fees in design: costs accumulate rapidly",
+    "Overly complex smart contracts: audit difficulty and reentrancy risks"
+  ],
+  "migration_from": [
+    "centralized-database",
+    "shared-ledger",
+    "paper-based-audit"
+  ],
+  "migration_to": [
+    "event-driven",
+    "service-mesh",
+    "hybrid-blockchain"
+  ],
+  "design_principles": [
+    "Cryptographic Integrity: All transactions must be digitally signed and hash-chained to ensure data integrity",
+    "Decentralization First: Avoid single points of control; distribute trust across multiple participants",
+    "Immutability by Design: Once consensus is reached, records cannot be altered; design for append-only patterns",
+    "Trustless Verification: No participant must trust another; all claims are verifiable through consensus",
+    "Minimal On-Chain Data: Store only essential data on-chain; use off-chain storage for large datasets",
+    "Formal Verification: Smart contracts should undergo formal verification before deployment",
+    "Defense in Depth: Implement multiple security layers; assume any component can be compromised",
+    "Privacy by Default: Design assuming data will be visible to all participants; use encryption where needed"
+  ],
+  "best_practices": [
+    "Start Small: Pilot with document verification or supply chain tracking before full deployment",
+    "Off-Chain Sensitive Data: Personal data cannot live on immutable ledgers per GDPR; use off-chain storage with on-chain hashes",
+    "Hybrid Architectures: Keep operational data in legacy systems, anchor proofs on-chain for verifiability",
+    "Abstract Blockchain Specifics: Create isolation layers for future platform migration",
+    "Design for Interoperability: Consider Hyperledger Cacti, Chainlink CCIP for cross-chain communication",
+    "Implement Robust Key Management: Use hardware security modules (HSMs) for production key storage",
+    "Plan for Governance: Establish clear decision-making processes before network launch",
+    "Monitor Gas/Transaction Costs: Design for cost predictability; batch operations when possible",
+    "Use Modular Architecture: Separate concerns to allow technology upgrades without full redesign"
+  ]
+}

@@ -1,0 +1,123 @@
+{
+  "category": "structural",
+  "name": "model-view-controller",
+  "context": "Web applications with server-side rendering requiring clear separation of UI, business logic, and data access layers",
+  "benefits": [
+    "Clear separation of concerns between Model, View, and Controller",
+    "Parallel development acceleration: frontend and backend teams work simultaneously",
+    "High testability: Model and Controller can be tested in isolation without UI dependencies",
+    "Code reusability: Model and Controller usable with different Views",
+    "Modularity: components can be developed, tested, and maintained independently",
+    "Simplified debugging: architectural clarity points directly to bug source",
+    "Flexibility: easy to add new views or modify existing ones without touching business logic"
+  ],
+  "tradeoffs": [
+    "Controller complexity: can become bloated with too much business logic (Fat Controller)",
+    "View-Model coupling: views may become dependent on Model structure",
+    "Navigation logic burden: Controller must manage application flow",
+    "Classic MVC had tight View-Model coupling in early frameworks",
+    "Moderate scalability: monolithic deployment limits independent scaling of components",
+    "Potential over-complication for simple CRUD applications",
+    "Distributed complexity when scaling beyond single deployment"
+  ],
+  "quality_attributes": {
+    "scalability": 6,
+    "maintainability": 7,
+    "reliability": 7,
+    "security": 6,
+    "performance": 7,
+    "simplicity": 7
+  },
+  "suitable_domains": [
+    "web-applications",
+    "server-side-rendering",
+    "crud-applications",
+    "enterprise-web",
+    "e-commerce",
+    "content-management-systems",
+    "restful-apis"
+  ],
+  "unsuitable_domains": [
+    "real-time-collaborative",
+    "highly-interactive-ui",
+    "mobile-applications",
+    "complex-domain-driven",
+    "microservices-scale"
+  ],
+  "use_cases": [
+    "Web applications with server-side rendering (Django, Rails, Laravel, Spring MVC)",
+    "Simple CRUD applications with straightforward data operations",
+    "Teams familiar with web frameworks needing rapid development",
+    "Applications requiring clear separation for maintainability",
+    "Projects where UI and backend teams work in parallel",
+    "RESTful API backends with traditional request-response pattern"
+  ],
+  "avoid_when": [
+    "Highly interactive UI with complex client-side state management",
+    "Real-time collaborative applications requiring WebSocket or bidirectional updates",
+    "Mobile or desktop applications (consider MVVM or MVP instead)",
+    "Applications requiring independent scaling of individual components",
+    "Systems with complex domain logic requiring layered architecture",
+    "High-throughput scenarios requiring event-driven or reactive patterns"
+  ],
+  "component_types": [
+    "Model: Data and business logic layer",
+    "View: Presentation and UI rendering",
+    "Controller: Input handling and coordination",
+    "Router: URL to Controller mapping",
+    "View Template Engine: View rendering machinery"
+  ],
+  "technology_stack": [
+    "Django (Python)",
+    "Rails (Ruby)",
+    "Laravel (PHP)",
+    "Spring MVC (Java)",
+    "ASP.NET Core MVC (C#)",
+    "Express.js (Node.js)",
+    "Flask (Python)"
+  ],
+  "anti_patterns": [
+    "Fat Controller: business logic accumulated in controller instead of Model",
+    "Brain Controller: controller contains excessive flow control logic",
+    "Promiscuous Controller: controller depends on too many services or handles too many routes",
+    "Brain Repository: repository contains excessive business logic beyond data access",
+    "Meddling Service: service layer improperly intercepts controller-model communication",
+    "Leaky Model: Model exposes internal data structures violating separation",
+    "Fat Repository: repository handles multiple entities losing cohesion"
+  ],
+  "migration_from": [
+    "monolithic-architecture",
+    "page-centric-architecture",
+    "three-tier-without-separation",
+    "struts-framework",
+    "aspnet-web-forms"
+  ],
+  "migration_to": [
+    "mvvm",
+    "microservices",
+    "event-driven",
+    "clean-architecture",
+    "layered-architecture"
+  ],
+  "design_principles": [
+    "Separation of Concerns: Model handles business logic, View handles presentation, Controller handles coordination",
+    "Single Responsibility: Each component has a distinct, focused purpose",
+    "Passive Model: Model should have no knowledge of View/Controller; Controller updates Model",
+    "One-Way Data Flow: User input flows through Controller to Model, then to View for rendering",
+    "View Independence: Multiple Views can display the same Model without mutual awareness",
+    "Controller Minimalism: Controllers should delegate business logic to Model or Services",
+    "Testability: Model and Controller testable in isolation without UI dependencies"
+  ],
+  "best_practices": [
+    "Keep Controllers Lean: Controller should handle request routing, not business logic",
+    "Single Entity Per Repository: Maintain cohesion by isolating data access per entity",
+    "Limit Controller Dependencies: Aim for ≤3 service dependencies per controller",
+    "Use Passive Model: Let Controller update Model rather than Model notifying View",
+    "Apply RESTful Routing: Map URLs cleanly to Controller actions",
+    "Validate Early: Implement server-side validation in Controller before Model updates",
+    "Test Model Independently: Write unit tests for business logic without UI dependencies",
+    "Use ViewModel Pattern: Create view-specific models to decouple business Model from View",
+    "Encapsulate Domain Logic: Keep business rules in Model, not scattered across Controller",
+    "Implement Proper Error Handling: Centralize error handling in Controller or middleware"
+  ]
+}

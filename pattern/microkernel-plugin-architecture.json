@@ -1,0 +1,119 @@
+{
+  "category": "structural",
+  "name": "microkernel-plugin",
+  "context": "The Microkernel pattern (also called Plugin Architecture) structures an application as a minimal core with extensible plugins. The core handles essential operations while plugins extend functionality without modifying core code. This pattern excels when different customers or users need different feature combinations, enabling customization without redeployment.",
+  "benefits": [
+    "Extensibility: Add new features without modifying core",
+    "Customization: Different customers enable different plugins",
+    "Isolation: Plugin failures don't crash the core system",
+    "Flexibility: Swap implementations (PayPal \u2194 Stripe) easily",
+    "Independent deployment: Plugins can be developed/deployed separately",
+    "Fault tolerance: Core remains stable even if plugins malfunction",
+    "Testability: Plugins can be tested in isolation with mocked core",
+    "Agility: Module boundaries and APIs are stable, enabling quick response to change"
+  ],
+  "tradeoffs": [
+    "Complex development: Requires thoughtful design and contract governance",
+    "Low scalability: Product-based implementations are generally smaller, single deployment",
+    "Core stability requirement: Core must remain minimal; frequent changes defeat the purpose",
+    "Plugin interdependencies: Creates coupling that breaks isolation benefits",
+    "Contract versioning overhead: APIs must be stable or backwards compatible",
+    "Governance complexity: Must manage plugin lifecycle, compatibility, and discovery"
+  ],
+  "quality_attributes": {
+    "scalability": 5,
+    "maintainability": 8,
+    "reliability": 7,
+    "security": 6,
+    "performance": 6,
+    "simplicity": 5
+  },
+  "suitable_domains": [
+    "product-platforms",
+    "ide-browsers",
+    "multi-tenant-saas",
+    "rule-engines",
+    "workflow-systems",
+    "erp-crm",
+    "extensible-applications"
+  ],
+  "unsuitable_domains": [
+    "simple-crud",
+    "high-scaling-distributed",
+    "volatile-core-frequent-changes",
+    "heavy-plugin-interdependencies",
+    "low-latency-real-time"
+  ],
+  "use_cases": [
+    "Building a customizable product with optional features",
+    "Need to add new features without modifying core code",
+    "Multiple customers with different feature needs",
+    "IDE, browser, or tool requiring extensions",
+    "Rules engine, workflow system, or processing pipeline",
+    "Multi-tenant SaaS with customer-specific modules",
+    "E-commerce platform with swappable payment processors"
+  ],
+  "avoid_when": [
+    "Small, simple applications where extension points cost not justified",
+    "Core functionality changes frequently",
+    "Plugins have complex interdependencies",
+    "Independent scaling of components needed",
+    "Strict real-time/low-latency requirements",
+    "Need true network isolation and fault boundaries"
+  ],
+  "component_types": [
+    "Core System (Microkernel): Minimal, stable kernel providing essential operations: plugin registry, lifecycle management, core contracts/APIs",
+    "Plugin Registry: Tracks installed plugins, their capabilities, and how to load them",
+    "Lifecycle Manager: Handles plugin initialization, startup order, shutdown, and potential hot-swapping",
+    "Event Bus: Optional message-passing mechanism for plugin-to-plugin or plugin-to-core communication",
+    "Extension Points (Contracts): Well-defined contracts/interfaces that plugins implement",
+    "Plugins (Extensions): Independent modules that implement specific features"
+  ],
+  "technology_stack": [
+    "OSGi (Java enterprise plugin framework)",
+    "Eclipse Plugin Framework",
+    "Microsoft MEF (.NET)",
+    "Java SPI (Service Provider Interface)",
+    "AssemblyLoadContext (.NET dynamic loading)",
+    "Kubernetes (for plugin extraction as services)",
+    "Kafka/Message Bus (event-driven communication)"
+  ],
+  "anti_patterns": [
+    "Distributed monolith (plugins requiring distributed deployment but tight coupling)",
+    "Shared database between plugins (creates data-level coupling)",
+    "Plugin interdependencies (Plugin A depends on Plugin B)",
+    "Core accumulating responsibilities (violates minimal core principle)",
+    "Unversioned contracts (breaking changes without deprecation path)",
+    "Cross-plugin direct calls (increases coupling beyond core)"
+  ],
+  "migration_from": [
+    "monolithic",
+    "layered-monolith",
+    "modular-monolith"
+  ],
+  "migration_to": [
+    "microservices (when plugins need independent scaling)",
+    "event-driven (when plugin communication via events)",
+    "modular-monolith (if plugin interdependencies emerge)"
+  ],
+  "design_principles": [
+    "Keep the core minimal: Core should be < 500 LOC ideally; any logic that could be plugin-specific should be in a plugin",
+    "Plugins must be independent: No cross-plugin dependencies; communicate via core events/APIs",
+    "Use event-driven communication: Via core event bus rather than direct plugin calls",
+    "Versioned contracts: APIs must be stable or backwards compatible; check compatibility before registration",
+    "Add fitness functions: Forbid cross-plugin imports, pin allowed dependencies, fail build on violations",
+    "Explicit plugin metadata: Declare version, dependencies, compatibility in manifest"
+  ],
+  "best_practices": [
+    "Start with stable core identification: Invest time upfront to find truly stable, rarely-changing aspects of your system",
+    "Design extension points carefully: Well-defined contracts are critical; they must be stable and well-documented",
+    "Implement plugin isolation: Each plugin should be independently testable with mocked core dependencies",
+    "Use explicit configuration: YAML/JSON configuration for plugin discovery with validation and detailed error logging",
+    "Add lifecycle hooks: Implement init() and shutdown() methods; consider hot-swapping support",
+    "Enforce namespace isolation: Prefix plugin names by category to avoid naming conflicts",
+    "Plan governance from day one: Discovery/activation should validate signatures, permissions, compatibility with kill-switches",
+    "Standardize observability: Logs, metrics, and traces should include plugin identifiers and versions",
+    "Consider security sandboxing: Put authorization at the core; sandbox plugin I/O and secrets; audit plugin loading",
+    "Cache capability lookups: Measure p95/p99 on core-plugin calls; design retries and kill-switches per plugin"
+  ]
+}

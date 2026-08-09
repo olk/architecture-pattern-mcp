@@ -1,0 +1,130 @@
+{
+  "category": "cloud",
+  "name": "multi-cloud",
+  "context": "Distributed workloads across multiple independent cloud providers (AWS, Azure, GCP) to avoid vendor lock-in, improve resilience, and optimize costs through strategic workload placement",
+  "benefits": [
+    "Vendor lock-in avoidance through provider independence",
+    "Best-of-breed service selection from each provider",
+    "Resilience against provider outages with automatic failover",
+    "Negotiating power through provider competition",
+    "Regulatory compliance via data residency control",
+    "Elastic capacity bursting across providers during demand spikes",
+    "Geographic distribution with regional service proximity",
+    "M&A flexibility to absorb companies on different clouds"
+  ],
+  "tradeoffs": [
+    "Operational complexity with multiple platforms to manage",
+    "Higher costs (20-40% more than single-cloud)",
+    "Networking complexity requiring careful IP planning",
+    "Data consistency challenges across distributed systems",
+    "Skill requirements for multiple cloud platforms",
+    "Expanded security surface area",
+    "Training overhead for cross-platform proficiency",
+    "Incident response complexity across providers"
+  ],
+  "quality_attributes": {
+    "scalability": 8,
+    "maintainability": 5,
+    "reliability": 8,
+    "security": 6,
+    "performance": 6,
+    "simplicity": 3
+  },
+  "suitable_domains": [
+    "enterprise",
+    "regulated-industries",
+    "global-distribution",
+    "disaster-recovery",
+    "mergers-acquisitions",
+    "multi-tenant-saas"
+  ],
+  "unsuitable_domains": [
+    "simple-crud-applications",
+    "small-teams",
+    "early-stage-startups",
+    "low-latency-requirements",
+    "data-intensive-workloads"
+  ],
+  "use_cases": [
+    "Enterprise procurement requiring competitive sourcing across providers",
+    "Regulatory data residency requirements for specific jurisdictions",
+    "Mission-critical availability exceeding single-provider SLA",
+    "Strategic vendor lock-in avoidance",
+    "Mixed business unit cloud preferences",
+    "Mergers and acquisitions requiring infrastructure integration",
+    "AI/ML capabilities available only on specific providers",
+    "Geographic distribution beyond single provider footprint"
+  ],
+  "avoid_when": [
+    "Simple projects where single cloud is sufficient",
+    "Data can be hosted in any region without constraints",
+    "Strong dependency on single vendor specialized services",
+    "Small teams with limited cloud expertise",
+    "Budget constraints for 20-40% operational overhead",
+    "Strict low-latency requirements",
+    "Lack of maturity for complex distributed operations"
+  ],
+  "component_types": [
+    "CloudAgnosticAbstraction: Interface that hides provider-specific implementations",
+    "ApiGateway: Entry point routing to services regardless of cloud provider",
+    "SecretManager: Unified secrets management across providers (AWS Secrets Manager, Azure Key Vault, GCP Secret Manager)",
+    "WorkloadScheduler: Intelligent placement and migration of workloads based on capacity, cost, and performance",
+    "DataReplicationEngine: Cross-cloud data synchronization with configurable consistency models",
+    "GlobalTrafficManager: DNS-based routing with health checks and failover (Cloudflare, Route 53)",
+    "UnifiedMonitoring: Centralized observability aggregating metrics, logs, and traces across clouds",
+    "IdentityProvider: Centralized authentication federated across cloud boundaries (Okta, Azure AD)",
+    "PolicyEnforcementEngine: Cross-cloud policy-as-code (Open Policy Agent, Terraform)"
+  ],
+  "technology_stack": [
+    "Terraform",
+    "Pulumi",
+    "Crossplane",
+    "Kubernetes",
+    "Istio",
+    "Cilium",
+    "Cloudflare",
+    "CockroachDB",
+    "YugabyteDB",
+    "ApacheKafka",
+    "OpenTelemetry",
+    "Grafana",
+    "Prometheus",
+    "HashiCorpVault",
+    "OpenPolicyAgent"
+  ],
+  "anti_patterns": [
+    "Distributed monolith with tight coupling across clouds",
+    "Shared database accessed from multiple clouds",
+    "False portability with cloud-agnostic abstractions for basic services",
+    "Equal 50/50 workload distribution maximizing complexity",
+    "Shadow IT multi-cloud without governance",
+    "Cloud-agnostic for everything bypassing beneficial services",
+    "Neglecting data gravity with distant compute and data",
+    "Split-brain scenarios with both providers accepting writes"
+  ],
+  "migration_from": [
+    "single-cloud",
+    "monolithic",
+    "on-premises",
+    "hybrid-cloud"
+  ],
+  "migration_to": [
+    "hybrid-multi-cloud",
+    "unified-platform",
+    "event-driven",
+    "service-mesh"
+  ],
+  "design_principles": [],
+  "best_practices": [
+    "Establish Cloud Center of Excellence (CCoE) for cross-cloud expertise and workload placement decisions",
+    "Enforce mandatory consistent tagging (application, environment, owner, cost-center, data-classification) across all clouds",
+    "Use Policy-as-Code with Open Policy Agent, Terraform, and provider-specific policies to control resources and prevent shadow IT",
+    "Implement Private Connectivity via Megaport, Equinix Fabric, or Cloudflare Magic for cross-cloud networking",
+    "Deploy Cloud-Agnostic Databases like CockroachDB, YugabyteDB, or TiDB for distributed SQL across clouds",
+    "Centralize Unified Observability with OpenTelemetry and Grafana/Prometheus backends across all providers",
+    "Implement Zero-Trust Security with least-privilege access and zero-trust network access (Cloudflare Access, Tailscale, Teleport)",
+    "Use Intelligent Traffic Routing with Cloudflare, Route 53, or Cloud Load Balancing with health checks and automated failover",
+    "Deploy Cost Intelligence tools like CloudHealth, Apptio, or CloudZero for multi-cloud cost tracking and automation",
+    "Follow Phased Migration starting with non-critical workloads, validate, then migrate business-critical applications"
+  ]
+}

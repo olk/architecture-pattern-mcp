@@ -1,0 +1,129 @@
+{
+  "category": "presentation",
+  "name": "presentation-abstraction-control",
+  "context": "Interactive software systems requiring hierarchical organization of autonomous components with clear separation between user interaction, business logic, and inter-agent communication",
+  "benefits": [
+    "Complete decoupling of Presentation and Abstraction through Control mediation",
+    "Hierarchical organization for complex semantic concepts",
+    "Independent threading enabling fast UI startup before business logic initializes",
+    "Scalability through independent agent scaling",
+    "Team autonomy for parallel development",
+    "Scope isolation limiting each agent to contextually relevant data",
+    "Support for evolution and extension through well-defined interfaces",
+    "Multitasking support for parallel UI and business logic development"
+  ],
+  "tradeoffs": [
+    "Higher complexity than MVC requiring careful architectural planning",
+    "Indirection overhead from Control mediation adding latency",
+    "Hierarchy maintenance requiring careful agent relationship design",
+    "Event routing complexity as messages traverse hierarchy",
+    "Control component criticality as potential bottleneck",
+    "Development complexity from complete separation of presentation and abstraction"
+  ],
+  "quality_attributes": {
+    "scalability": 8,
+    "maintainability": 8,
+    "reliability": 7,
+    "security": 6,
+    "performance": 6,
+    "simplicity": 4
+  },
+  "suitable_domains": [
+    "complex-interactive-systems",
+    "desktop-applications",
+    "mobile-applications",
+    "real-time-interactive-systems",
+    "multi-window-applications",
+    "content-management-systems",
+    "voip-applications",
+    "game-ui-architectures",
+    "multi-user-collaborative-systems"
+  ],
+  "unsuitable_domains": [
+    "simple-single-view-applications",
+    "flat-screen-based-interfaces",
+    "small-applications",
+    "data-driven-web-applications",
+    "server-side-web-rendering",
+    "low-latency-local-calls",
+    "small-team-projects"
+  ],
+  "use_cases": [
+    "Complex multi-window UIs requiring independent component management",
+    "Hierarchical UI components representing semantic concepts",
+    "Independent team development of different UI areas",
+    "Real-time interactive systems requiring responsive UI",
+    "Desktop/mobile rich client applications",
+    "Systems requiring different presentation formats for same data",
+    "Applications where UI should start before business logic fully initializes",
+    "Multi-user collaborative environments requiring distributed state"
+  ],
+  "avoid_when": [
+    "Building simple CRUD applications with flat structure",
+    "Working with small teams on small-scale projects",
+    "Implementing standard web applications with request/response cycles",
+    "Strong consistency requirements within a single process",
+    "Low latency is critical and indirection overhead is unacceptable",
+    "Development team lacks experience with agent-based architectures"
+  ],
+  "component_types": [
+    "Top-Level-Agent: Application-level coordination, menus, global state, database access",
+    "Mid-Level-Agent: Domain area coordination, composes lower-level agents, routes inter-agent communication",
+    "Leaf-Agent: Widget-level components (buttons, text fields, sliders, lists) with P-A-C triad",
+    "Presentation-Component: Handles user input (mouse, keyboard) and output (visualization, audio)",
+    "Abstraction-Component: Represents agent-specific data, business rules, state management",
+    "Control-Component: Connects P and A, manages inter-agent communication, message routing"
+  ],
+  "technology_stack": [
+    "Qt",
+    "GTK",
+    "Swing",
+    "JavaFX",
+    "WPF",
+    "SwiftUI",
+    "Flutter",
+    "Qt-Signals-Slots",
+    "RxJava",
+    "RxJS",
+    "Redux"
+  ],
+  "anti_patterns": [
+    "Distributed monolith (using PAC hierarchy without proper agent boundaries)",
+    "Tight coupling between agents (directly accessing other agents' abstractions)",
+    "God agents (agents handling too many responsibilities)",
+    "Empty hierarchy (using PAC structure without leveraging agent autonomy)",
+    "Control bottleneck (centralizing too much logic in top-level control)",
+    "Leaking abstractions (allowing Presentation to directly access Abstraction data)"
+  ],
+  "migration_from": [
+    "model-view-controller",
+    "layered-architecture",
+    "monolithic-ui",
+    "client-server-architecture"
+  ],
+  "migration_to": [
+    "hierarchical-mvc",
+    "pac-amodeus",
+    "pac-star",
+    "microservices",
+    "actor-model"
+  ],
+  "design_principles": [
+    "Complete Decoupling: Presentation and Abstraction never communicate directly; all communication is mediated by Control",
+    "Hierarchical Organization: Agents form a tree-like hierarchy reflecting transitive dependencies between agents",
+    "Scope Isolation: Each agent only accesses data that is contextually meaningful within its scope",
+    "Autonomous Responsibility: Each agent is responsible for a specific aspect of the application's functionality",
+    "Mediated Communication: Inter-agent communication passes through Control components in the hierarchy",
+    "Independent Initialization: Presentation can initialize before Abstraction, enabling fast UI startup",
+    "Encapsulated Facets: Each agent's three facets (P, A, C) are tightly coupled internally but loosely coupled externally"
+  ],
+  "best_practices": [
+    "Agent Granularity: Balance between small focused agents (flexibility) and larger efficient agents (overhead)",
+    "Hierarchy Depth: Limit hierarchy depth to manage complexity; deep hierarchies increase message routing overhead",
+    "Control Simplicity: Keep Control components focused on routing; delegate business logic to Abstraction",
+    "Message Design: Use typed messages with clear contracts for inter-agent communication",
+    "State Management: If state is required, manage it in Abstraction components; keep Presentation stateless",
+    "Error Handling: Implement error propagation through hierarchy with appropriate fallback handling",
+    "Monitoring: Add metrics at each agent level for system observability"
+  ]
+}

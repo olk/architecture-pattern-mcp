@@ -1,0 +1,126 @@
+{
+  "category": "structural",
+  "name": "hexagonal",
+  "alternative_names": [
+    "ports-and-adapters",
+    "ports and adapters",
+    "hexagonal",
+    "onion architecture"
+  ],
+  "context": "Hexagonal Architecture isolates domain logic from external dependencies by structuring applications around inward-pointing dependencies. The core business logic sits at the center, completely independent of databases, web frameworks, or external APIs. External concerns connect through well-defined ports (interfaces) and adapters (implementations).",
+  "benefits": [
+    "Isolated testability: Business logic can be unit-tested in isolation using mock adapters without requiring databases, HTTP servers, or external services",
+    "Framework independence: Core domain logic contains no framework annotations or infrastructure dependencies",
+    "Swappable adapters: Database, messaging, or external API implementations can be changed without touching domain code",
+    "Clean domain model: Business rules written in domain language rather than technical jargon",
+    "Maintainability: Changes in one area do not cascade into unrelated areas due to clear boundaries",
+    "Technology flexibility: Deployment choices remain open; can start as monolith and migrate to microservices when needed",
+    "Test-driven development support: Enables TDD workflow by allowing domain-first development",
+    "Reduced regression risk: Framework upgrades stay contained in adapters rather than metastasizing through codebase"
+  ],
+  "tradeoffs": [
+    "Initial complexity: More interfaces and indirection compared to simpler architectures",
+    "Over-engineering risk: May be excessive overhead for simple CRUD applications",
+    "Mapping overhead: Data transformation code required between layers (domain objects to/from DTOs)",
+    "Learning curve: Requires understanding of ports/adapters pattern and dependency inversion principle",
+    "File count increase: More files than layered architecture due to ports, adapters, and conversion code",
+    "Ceremony overhead: Small teams may spend more time on architecture than delivering features"
+  ],
+  "quality_attributes": {
+    "scalability": 7,
+    "maintainability": 9,
+    "reliability": 8,
+    "security": 7,
+    "performance": 7,
+    "simplicity": 5
+  },
+  "suitable_domains": [
+    "domain-driven-design",
+    "complex-business-logic",
+    "long-lived-applications",
+    "multi-external-integrations",
+    "enterprise-software",
+    "e-commerce",
+    "financial-systems",
+    "regulatory-compliance"
+  ],
+  "unsuitable_domains": [
+    "simple-crud",
+    "low-complexity-projects",
+    "rapid-prototyping",
+    "short-lived-projects",
+    "single-persistence-layer"
+  ],
+  "use_cases": [
+    "Domain-driven design projects where ubiquitous language must be reflected in code",
+    "Complex business rules that need to be isolated from infrastructure for testing",
+    "Applications expected to outlive their initial technology choices",
+    "Projects requiring multiple input providers (REST, GraphQL, CLI, message queues)",
+    "Systems needing independent deployability of bounded contexts",
+    "Applications with significant test coverage requirements",
+    "Projects transitioning from monolith to microservices"
+  ],
+  "avoid_when": [
+    "Simple CRUD operations with straightforward data access patterns",
+    "Small teams with simple requirements and tight deadlines",
+    "Proof-of-concept or MVP projects where speed is prioritized over maintainability",
+    "Applications where the entire value proposition is infrastructure glue (API gateways, data pipelines)",
+    "Strong consistency requirements without tolerance for eventual consistency"
+  ],
+  "component_types": [
+    "Domain (Core): Pure business logic, entities, value objects, domain services, domain events",
+    "Application Services: Use cases/command handlers that orchestrate domain objects",
+    "Inbound Ports (Driving): Interfaces for incoming operations that drive the application",
+    "Outbound Ports (Driven): Interfaces for external dependencies that the application drives",
+    "Driving (Primary) Adapters: Entry points that call inbound ports",
+    "Driven (Secondary) Adapters: Implementations that fulfill outbound port contracts",
+    "Anti-Corruption Layer: Translation layer during migration from legacy systems"
+  ],
+  "technology_stack": [
+    "Languages: Python, Java, TypeScript, Go, C#",
+    "Web Frameworks: FastAPI, Spring Boot, Express.js, NestJS, ASP.NET Core",
+    "Databases: PostgreSQL, MongoDB, DynamoDB, any database with adapter",
+    "Message Brokers: Kafka, RabbitMQ, SQS with adapter pattern",
+    "Testing: pytest, JUnit, pytest-asyncio, TestContainers for integration tests",
+    "DI Containers: Spring DI, Python injector, Dagger (optional but recommended)"
+  ],
+  "anti_patterns": [
+    "Anemic Domain Model: Migrating structure but leaving business logic scattered in use cases",
+    "Leaking Adapters: Allowing framework coupling or infrastructure imports to bleed into domain layer",
+    "Port Explosion: Creating one port per method leading to interface proliferation",
+    "Fake Hexagonal: Looking like hexagonal architecture but preserving old coupling problems",
+    "Over-abstracting: Creating interfaces for everything, not just things that actually change",
+    "God Objects: Large domain services that violate single responsibility principle",
+    "Package-by-Layer: Organizing by architectural layer instead of feature/bounded context"
+  ],
+  "migration_from": [
+    "layered-architecture",
+    "monolithic-architecture",
+    "framework-coupled-architecture",
+    "big-ball-of-mud"
+  ],
+  "migration_to": [
+    "microservices",
+    "event-driven-architecture",
+    "cqrs",
+    "service-mesh"
+  ],
+  "design_principles": [
+    "Dependency Rule: All dependencies point from outside to inside. The domain core depends on nothing external. Adapters depend on ports, never the reverse.",
+    "Ports Define Needs: Interfaces use domain language exclusively. If an interface mentions 'JPA' or 'HTTP', it's not a port\u2014it's an infrastructure leak. A method called findActiveUsersByRegion() is a good port; executeSQLQuery(String sql) is not.",
+    "One Port Per Seam: Define one port per bounded context seam, not one per handler. Keep ports narrow (2-4 methods). This follows the Interface Segregation Principle.",
+    "Adapters Implement Ports: Adapters live in the infrastructure layer and contain all framework coupling. The domain never imports from the adapters layer.",
+    "Composition Root: Wire all dependencies together in a single place (typically main() or a configuration class). This explicit wiring makes dependencies visible and testable.",
+    "Domain Language: Business rules should be expressed in ubiquitous language. The domain model should be readable by domain experts without technical jargon.",
+    "No Framework Annotations in Domain: Keep framework annotations (@Entity, @RestController, etc.) in adapters. The domain core should compile without any framework dependencies."
+  ],
+  "best_practices": [
+    "Start Domain-First: Design the domain model before thinking about adapters. Let the domain drive the port interfaces.",
+    "Keep Ports Narrow: Ports should have 2-4 methods maximum. Large ports indicate too much responsibility and violate single responsibility.",
+    "Map Aggressively: Domain \u2194 DTO \u2194 Entity mappings feel like boilerplate but enable separate evolution. Use MapStruct or similar tools to reduce ceremony.",
+    "Test Domain in Milliseconds: Use fake adapters for unit tests. If tests require a database or Spring context, the dependency rule is violated.",
+    "Multiple Adapters Per Port: Support REST, GraphQL, CLI, and message consumers through separate driving adapters calling the same inbound port.",
+    "Incrementally Migrate: Use the Strangler Fig pattern. Migrate one bounded context at a time while maintaining production stability.",
+    "Validate Port Design: If a port mirrors a specific database's API, it hasn't abstracted anything. Ports should describe what the domain needs in domain terms."
+  ]
+}

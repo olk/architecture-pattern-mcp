@@ -1,0 +1,117 @@
+{
+  "name": "broker",
+  "category": "messaging",
+  "context": "Distributed systems requiring location transparency and decoupling of clients from servers through an intermediate mediator component. The broker provides name resolution, request routing, and protocol translation to enable communication between heterogeneous components across network boundaries.",
+  "benefits": [
+    "Loose coupling: producers and consumers don't need direct network knowledge",
+    "Location transparency: services reference each other by name, not IP/port",
+    "Language interoperability: IDL bridges C++, Java, Python, and other languages",
+    "Scalability: consumers can scale independently via queue partitioning",
+    "Resilience: message buffering, retries, and durable queues provide fault tolerance",
+    "Extensibility: add new consumers without modifying producers",
+    "Dynamic service location: servers can change IP/port without client updates"
+  ],
+  "tradeoffs": [
+    "Marshalling/demarshalling overhead impacts performance",
+    "Broker becomes single point of failure if not replicated",
+    "Complex debugging and tracing due to indirection",
+    "Additional latency from broker mediation",
+    "Operational complexity of managing broker infrastructure",
+    "Network dependency for all communications",
+    "Potential bottleneck if broker is not properly scaled"
+  ],
+  "quality_attributes": {
+    "scalability": 8,
+    "maintainability": 6,
+    "reliability": 7,
+    "security": 5,
+    "performance": 5,
+    "simplicity": 4
+  },
+  "suitable_domains": [
+    "enterprise-integration",
+    "heterogeneous-systems",
+    "microservices-communication",
+    "legacy-system-integration",
+    "cross-language-platforms",
+    "distributed-transactions",
+    "event-driven-workflows"
+  ],
+  "unsuitable_domains": [
+    "simple-local-communication",
+    "ultra-low-latency-requirements",
+    "small-teams-simple-requirements",
+    "direct-network-access-sufficient"
+  ],
+  "use_cases": [
+    "Heterogeneous systems across languages and platforms needing interoperability",
+    "Dynamic service locations where servers change IP/port frequently",
+    "Enterprise integration with many services requiring decoupling",
+    "Decoupled asynchronous communication between services",
+    "Service discovery and name resolution in distributed systems",
+    "Request/reply patterns with correlation IDs",
+    "Task queues and background job processing",
+    "Event-driven microservices with pub/sub messaging"
+  ],
+  "avoid_when": [
+    "Simple local communication only without network boundaries",
+    "Ultra-low latency requirements (<1ms) where broker overhead is unacceptable",
+    "Direct network access is simple and adequate for the use case",
+    "Synchronous request-response is critical and latency must be minimal",
+    "Small system with minimal complexity that doesn't justify broker overhead",
+    "Strong consistency requirements within single process boundary"
+  ],
+  "component_types": [
+    "Broker (ORB Core): Central mediator managing name-resolution, request routing, and protocol translation. Provides location transparency so clients reference servers by name, not address",
+    "Naming Service: Maintains associations between object names and their current locations (like DNS or Windows Registry)",
+    "Message Router: Routes requests from clients to appropriate servers based on naming information",
+    "Client Proxy (Stub): Implements server interface locally, handles marshalling/serialization of requests, delegates to broker",
+    "Server Proxy (Skeleton): Receives demarshalled requests, dispatches to actual server implementation",
+    "Parameter Marshalling: Translates data structures between local language format and common format (IDL)",
+    "Bridge: Optional component connecting brokers across networks or with different protocols",
+    "Producer: Emits messages (commands, events, requests) to the broker",
+    "Consumer: Subscribes to messages from the broker and processes them",
+    "Dead Letter Queue (DLQ): Captures failed messages for later analysis and retry"
+  ],
+  "technology_stack": [
+    "CORBA (with IIOP, IDL)",
+    "RabbitMQ (AMQP, exchanges, queues)",
+    "Apache Kafka (topic-partition, consumer groups)",
+    "ActiveMQ (JMS implementation)",
+    "NATS (JetStream)",
+    "Redis (pub/sub, streams)",
+    "AWS SQS/SNS",
+    "Azure Service Bus",
+    "Google Cloud Pub/Sub"
+  ],
+  "anti_patterns": [
+    "Distributed monolith: using broker but with tight coupling",
+    "Synchronous RPC via broker: defeating async benefits",
+    "Broker as single point of failure: no replication/clustering",
+    "Point-to-point spaghetti: too many direct broker connections",
+    "Unbalanced broker load: hotspot from uneven partitioning",
+    "Message explosion: excessive message types without schema governance",
+    "Fire-and-forget without acknowledgment: message loss",
+    "Big broker monolith: overloading single broker instance"
+  ],
+  "migration_from": [
+    "point-to-point-communication",
+    "direct-service-invocation",
+    "tight-coupling-with-hardcoded-addresses"
+  ],
+  "migration_to": [
+    "event-driven-architecture",
+    "service-mesh",
+    "api-gateway-with-service-discovery"
+  ],
+  "design_principles": [
+    "Location Transparency: Clients reference services by name, not IP address or port",
+    "Loose Coupling: Producers and consumers operate independently without direct knowledge",
+    "Protocol Abstraction: Broker handles protocol translation between heterogeneous systems",
+    "Message Durability: Messages persist until successfully processed to ensure reliability",
+    "Idempotency: Consumers must handle duplicate messages safely (at-least-once delivery)",
+    "Schema Governance: Use Avro/Protobuf schemas for message contract evolution",
+    "Observability: Correlation IDs and distributed tracing enable debugging across broker hops",
+    "Failure Isolation: Circuit breakers prevent cascading failures from slow consumers"
+  ]
+}
