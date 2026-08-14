@@ -1,0 +1,26 @@
+[Unit]
+Description=Architecture Pattern MCP server (Docker Compose stack)
+Documentation=https://github.com/architecture-pattern/architecture-pattern-mcp
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+User=graemer
+WorkingDirectory=/etc/architecture-pattern-mcp
+EnvironmentFile=/etc/architecture-pattern-mcp/.env
+
+ExecStartPre=/usr/bin/docker image inspect architecture-pattern-mcp:latest
+ExecStartPre=/usr/bin/docker image inspect architecture-pattern-tei:local
+ExecStartPre=/usr/bin/docker compose config --quiet
+
+ExecStart=/usr/bin/docker compose up -d --remove-orphans
+ExecReload=/usr/bin/docker compose up -d --remove-orphans
+ExecStop=/usr/bin/docker compose down
+TimeoutStartSec=0
+TimeoutStopSec=180
+
+[Install]
+WantedBy=multi-user.target

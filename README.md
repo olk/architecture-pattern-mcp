@@ -27,6 +27,7 @@ An MCP (Model Context Protocol) server that provides architecture design experti
 - [Extending with Custom Patterns](#extending-with-custom-patterns)
 - [Troubleshooting](#troubleshooting)
 - [Building & Development](#building--development)
+- [systemd Service (Linux)](#systemd-service-linux)
 - [License](#license)
 
 ---
@@ -158,7 +159,7 @@ The server returns a full architecture design: components (Kafka source, JSON pa
 Ask your agent to list all available patterns:
 
 ```
-Call list_architecture_patterns() with no filters to see all 36 patterns.
+Call list_architecture_patterns() with no filters to see all patterns.
 ```
 
 Or get details on a specific pattern:
@@ -370,7 +371,7 @@ Full JSON Schema with all enums: `docs/pattern-schema.json`
 The server waits for the TEI embedder to become healthy:
 
 ```bash
-docker compose -f docker/docker-compose.yml logs tei
+docker compose -f docker/docker-compose.yml logs architecture-pattern-tei
 ```
 
 ### LLM provider errors (502 / 401)
@@ -414,6 +415,105 @@ make docker-up && make docker-verify   # Start and verify
 make docker-logs-follow          # Watch logs
 make docker-down                 # Stop
 ```
+
+---
+
+## systemd Service (Linux)
+
+The server can run as a systemd service on any systemd-based Linux host. It
+starts the Docker Compose stack automatically at boot.
+
+### File layout
+
+The `systemd/` directory contains three files:
+
+| File | Purpose |
+|---|---|
+| `systemd/architecture-pattern-mcp.service` | The systemd unit |
+| `systemd/docker-compose.yml` | Production compose variant (no `build:`, absolute paths) |
+| `systemd/README.md` | Full runbook with install, verify, and troubleshooting |
+
+The production compose file is a deployment variant of `docker/docker-compose.yml`:
+it has no `build:` sections (images must be pre-built), uses absolute paths, and
+lives under `/etc/architecture-pattern-mcp/` on the host. The systemd-managed
+project uses the distinct name `apmcp-systemd` so it can coexist with the dev
+compose if needed.
+
+### Prerequisites
+
+- systemd-based Linux host with Docker (`docker compose version`).
+- `<user>` is in the `docker` group.
+- Both images pre-built locally (`make docker-build-all` from the repo).
+
+### Install
+
+```bash
+# 1. Build images (once)
+make docker-build-all
+
+# 2. Deploy /etc/architecture-pattern-mcp/
+sudo install -d /etc/architecture-pattern-mcp/config
+sudo install -m 644 systemd/docker-compose.yml /etc/architecture-pattern-mcp/
+sudo install -m 644 ~/.config/architecture-pattern-mcp/config.json /etc/architecture-pattern-mcp/config/
+
+# 3. Create the .env file (root:docker 640) and edit it.
+#     640 root:docker — not 600 root:root — so the systemd service
+#     running as User=graemer (a member of the `docker` group) can read this
+#     file when docker compose auto-loads it.  The `docker` group is
+#     effectively privileged; this is the standard trade-off for non-root
+#     systemd services that manage Docker containers.
+sudo install -o root -g docker -m 640 /dev/null /etc/architecture-pattern-mcp/.env
+sudo $EDITOR /etc/architecture-pattern-mcp/.env
+# Contents:
+#   MINIMAXAI_API_KEY=sk-...
+#   COMPOSE_PROJECT_NAME=apmcp-systemd
+#   MCP_HOST_PORT=8050          # change to avoid port conflicts with other MCP servers
+
+# 4. Install and enable the service.
+sudo install -m 644 systemd/architecture-pattern-mcp.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now architecture-pattern-mcp.service
+```
+
+### Verify
+
+`systemctl status` shows `active (exited)` within seconds, but the containers
+take **up to ~2 minutes** to become healthy (TEI embedder `start_period: 120s`).
+The unit does not wait for healthchecks.
+
+```bash
+systemctl status architecture-pattern-mcp
+journalctl -u architecture-pattern-mcp -n 50
+docker compose -p apmcp-systemd -f /etc/architecture-pattern-mcp/docker-compose.yml ps
+curl -fsS http://localhost:${MCP_HOST_PORT:-8050}/health
+```
+
+### Day-to-day
+
+```bash
+sudo systemctl start|stop|restart|reload architecture-pattern-mcp
+journalctl -u architecture-pattern-mcp -n 200 -f
+docker compose -p apmcp-systemd -f /etc/architecture-pattern-mcp/docker-compose.yml logs -f
+```
+
+### Updating the stack
+
+```bash
+make docker-build-all                     # rebuild both images
+sudo systemctl reload architecture-pattern-mcp   # recreate containers
+```
+
+### Uninstall
+
+```bash
+sudo systemctl disable --now architecture-pattern-mcp.service
+sudo rm /etc/systemd/system/architecture-pattern-mcp.service
+sudo systemctl daemon-reload
+sudo rm -rf /etc/architecture-pattern-mcp
+```
+
+For full troubleshooting, networking details, and the coexistence guide, see
+`systemd/README.md`.
 
 ---
 

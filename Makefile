@@ -12,10 +12,10 @@
 # Docker files: docker/Dockerfile, docker/docker-compose.yml
 # =============================================================================
 
-.PHONY: help install lint lint-fix typecheck integration-tests client docker-build docker-up docker-down docker-logs docker-logs-follow docker-verify docker-rm
+.PHONY: help install lint lint-fix typecheck integration-tests client docker-build docker-build-all docker-up docker-down docker-logs docker-logs-follow docker-verify docker-rm
 
 DOCKER_IMAGE := architecture-pattern-mcp
-DOCKER_TAG := 1.0.0
+DOCKER_TAG := 1.0.1
 
 help:
 	@echo "Available targets:"
@@ -26,7 +26,8 @@ help:
 	@echo "  docker-test        - Run unit tests in Docker container (MAKE-6)"
 	@echo "  integration-tests  - Run integration tests (tests/integration/)"
 	@echo "  client             - Run the pipes-and-filters MCP client demo"
-	@echo "  docker-build       - Build Docker image (MAKE-5)"
+	@echo "  docker-build       - Build MCP server Docker image (MAKE-5)"
+	@echo "  docker-build-all   - Build all Docker images (MCP server + TEI embedder)"
 	@echo "  docker-up          - Start services with docker compose (MAKE-9)"
 	@echo "  docker-down        - Stop services with docker compose (MAKE-10)"
 	@echo "  docker-logs        - Show docker compose logs (MAKE-11)"
@@ -56,8 +57,12 @@ client: ## Run the pipes-and-filters MCP client demo
 	@ARCHITECTURE_CLIENT_URL=http://localhost:8050/mcp uv run python examples/architecture_client.py
 
 ##@ Docker
-docker-build: ## MAKE-3b: Build Docker test image with dev dependencies
+docker-build: ## MAKE-3b: Build MCP server Docker image with dev dependencies
 	docker build --target production -f docker/Dockerfile -t $(DOCKER_IMAGE):$(DOCKER_TAG) .
+	docker build --target production -f docker/Dockerfile -t $(DOCKER_IMAGE):latest .
+
+docker-build-all: docker-build ## Build all Docker images (MCP server + TEI embedder)
+	docker build -f docker/Dockerfile.tei -t architecture-pattern-tei:local .
 
 docker-up: ## MAKE-9: Start services with docker compose
 	docker compose -f docker/docker-compose.yml up -d --build

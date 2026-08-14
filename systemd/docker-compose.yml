@@ -1,16 +1,19 @@
-# FR-273: The system SHALL support containerized deployment via Docker
-# ADR-5: Containerized Deployment with Docker and Helm
-# TECH-7: Docker containerized deployment for reproducible builds
+# Production Compose for systemd deployment.
+#
+# This file is a deployment variant of docker/docker-compose.yml:
+#   - No `build:` sections (images must be pre-built from the dev compose
+#     via `make docker-build-all` before enabling the service).
+#   - Absolute paths everywhere (no ${HOME}, no relative `build.context`).
+#   - The systemd unit injects COMPOSE_PROJECT_NAME=apmcp-systemd so this
+#     stack is distinct from the dev compose (different project label, no
+#     container_name collisions).
+#
+# Installed at: /etc/architecture-pattern-mcp/docker-compose.yml
 
 services:
   architecture-pattern-mcp:
-    # Service name per task specification
     image: architecture-pattern-mcp:latest
     container_name: architecture-pattern-mcp
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile
-    # CPARA-1: CONFIG_PATH for configuration JSON file
     environment:
       - CONFIG_PATH=/app/config/config.json
       - GENERATOR_PROVIDER=minimax
@@ -23,7 +26,7 @@ services:
 
       - EMBEDDER_PROVIDER=tei
       - EMBEDDER_MODEL=data/qwen3-embedding-0.6b
-      - EMBEDDER_BASE_URL=http://127.0.0.1:8080/v1
+      - EMBEDDER_BASE_URL=http://architecture-pattern-tei:8080/v1
       - EMBEDDER_TIMEOUT=60
       - EMBEDDER_BATCH_SIZE=8
       - EMBEDDER_EMBEDDING_DIM=1024
@@ -44,12 +47,11 @@ services:
     depends_on:
       architecture-pattern-tei:
         condition: service_healthy
-    network_mode: host
+    ports:
+      - "${MCP_HOST_PORT:-8050}:8050"
     volumes:
-      - ${HOME}/.config/architecture-pattern-mcp:/app/config
-    # Restart policy on-failure per PRD.deployment_specifications
+      - /etc/architecture-pattern-mcp/config:/app/config
     restart: on-failure
-    # Healthcheck with test python -m src.server --health
     healthcheck:
       test: ["CMD", "python", "-m", "src.main", "--health"]
       interval: 30s
@@ -57,29 +59,14 @@ services:
       retries: 3
       start_period: 40s
 
-  # TEI Embedding Server — Qwen3-Embedding-0.6B weights baked in at build time
   architecture-pattern-tei:
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile.tei
-    # Local-only tag. The previous tag pointed at a private registry
-    # image (`geheimschutz/tei-qwen3-embedding:0.6b-cpu-1.9`) that
-    # `docker compose up --build` would try to re-resolve on every
-    # invocation. Using a local-only name (no registry path) means the
-    # build always produces the tag and Compose never falls back to a
-    # pull. If you ever want to publish the built image, change this to
-    # a fully-qualified name.
     image: architecture-pattern-tei:local
     container_name: architecture-pattern-tei
     restart: unless-stopped
-    network_mode: host
+    # No ports published — internal only (reached by MCP via Docker DNS)
     environment:
       - HF_HUB_OFFLINE=1
       - HUGGINGFACE_HUB_CACHE=/data
-      # Redundant with the CMD in docker/Dockerfile.tei but kept here as
-      # documentation of the value and as a single source of truth. Both
-      # flags must be >= the client's embed_batch_size (see config.json
-      # embedder.config.tei_max_client_batch_size).
       - MAX_CLIENT_BATCH_SIZE=32
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8080/health || exit 1"]
