@@ -67,7 +67,7 @@ class TestSoftwareArchitectAgentInit:
         """
         config = ServerConfig(
             generator={"provider": "openai", "config": {"model": "gpt-4", "temperature": 0.7}},
-            embedder={"provider": "tei", "config": {"model": "Qwen/Qwen3-Embedding-0.6B", "base_url": "http://localhost:8080"}}
+            embedder={"provider": "tei", "config": {"base_url": "http://localhost:8080"}}
         )
 
         agent = SoftwareArchitectAgent(config)
@@ -83,7 +83,7 @@ class TestSoftwareArchitectAgentInit:
         # Scenario: Verify model string is correctly formatted
         """
         config = ServerConfig(
-            generator={"provider": "anthropic", "config": {"model": "claude-3-opus", "temperature": 0.5}}, embedder={"provider": "tei", "config": {"model": "Qwen/Qwen3-Embedding-0.6B", "base_url": "http://localhost:8080"}}
+            generator={"provider": "anthropic", "config": {"model": "claude-3-opus", "temperature": 0.5}}, embedder={"provider": "tei", "config": {"base_url": "http://localhost:8080"}}
         )
 
         agent = SoftwareArchitectAgent(config)
@@ -107,7 +107,7 @@ class TestSoftwareArchitectAgentInit:
                     "base_url": "https://api.openai.com/v1",
                 }
             },
-            embedder={"provider": "tei", "config": {"model": "Qwen/Qwen3-Embedding-0.6B", "base_url": "http://localhost:8080"}}
+            embedder={"provider": "tei", "config": {"base_url": "http://localhost:8080"}}
         )
 
         agent = SoftwareArchitectAgent(config)
@@ -134,7 +134,7 @@ class TestGenerateStructured:
         """
         config = ServerConfig(
             generator={"provider": "openai", "config": {"model": "gpt-4", "temperature": 0.7}},
-            embedder={"provider": "tei", "config": {"model": "Qwen/Qwen3-Embedding-0.6B", "base_url": "http://localhost:8080"}}
+            embedder={"provider": "tei", "config": {"base_url": "http://localhost:8080"}}
         )
         agent = SoftwareArchitectAgent(config)
 
@@ -171,7 +171,7 @@ class TestGenerateStructured:
         """
         config = ServerConfig(
             generator={"provider": "openai", "config": {"model": "gpt-4", "temperature": 0.7}},
-            embedder={"provider": "tei", "config": {"model": "Qwen/Qwen3-Embedding-0.6B", "base_url": "http://localhost:8080"}}
+            embedder={"provider": "tei", "config": {"base_url": "http://localhost:8080"}}
         )
         agent = SoftwareArchitectAgent(config)
 
@@ -223,7 +223,7 @@ class TestErrorMapping:
         """
         config = ServerConfig(
             generator={"provider": "openai", "config": {"model": "gpt-4", "temperature": 0.7}},
-            embedder={"provider": "tei", "config": {"model": "Qwen/Qwen3-Embedding-0.6B", "base_url": "http://localhost:8080"}}
+            embedder={"provider": "tei", "config": {"base_url": "http://localhost:8080"}}
         )
         agent = SoftwareArchitectAgent(config)
 
@@ -259,7 +259,7 @@ class TestErrorMapping:
         """
         config = ServerConfig(
             generator={"provider": "openai", "config": {"model": "gpt-4", "temperature": 0.7}},
-            embedder={"provider": "tei", "config": {"model": "Qwen/Qwen3-Embedding-0.6B", "base_url": "http://localhost:8080"}}
+            embedder={"provider": "tei", "config": {"base_url": "http://localhost:8080"}}
         )
         agent = SoftwareArchitectAgent(config)
 

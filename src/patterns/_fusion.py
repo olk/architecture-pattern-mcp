@@ -36,8 +36,6 @@ which conflates fusion_rank (ordering) with retriever_idx (weight lookup).
 Supported modes:
   simple             - rank-union de-duplication (dense + BM25 ranks)
   reciprocal_rerank  - Reciprocal Rank Fusion (RRF), k=60
-  relative_score     - MinMax normalization + weighted sum per retriever
-  dist_based_score  - mean/std normalization + weighted sum per retriever
 """
 
 from __future__ import annotations
@@ -49,28 +47,24 @@ from llama_index.core.schema import NodeWithScore
 if TYPE_CHECKING:
     from llama_index.core.schema import NodeWithScore as _NWS  # noqa: F401
 
-FusionMode = Literal["simple", "reciprocal_rerank", "relative_score", "dist_based_score"]
+FusionMode = Literal["simple", "reciprocal_rerank"]
 
 
 def apply_fusion(
     mode: FusionMode,
     dense_nodes: list[NodeWithScore],
     bm25_nodes: list[NodeWithScore],
-    retriever_weights: list[float] | None = None,
 ) -> list[NodeWithScore]:
     """
     Apply the specified fusion strategy to dense + BM25 result sets.
 
-    Uses RETRIEVER-SPECIFIC ranks (not cross-retriever fusion ranks) to avoid
+    Uses RETRIVER-SPECIFIC ranks (not cross-retriever fusion ranks) to avoid
     LlamaIndex's query_tuple[1] misuse where fusion_rank and retriever_idx collide.
 
     Args:
-        mode:              Fusion strategy ("simple", "reciprocal_rerank",
-                           "relative_score", "dist_based_score").
-        dense_nodes:        Results from the dense / embedding retriever.
-        bm25_nodes:         Results from the BM25 lexical retriever.
-        retriever_weights:  Optional [dense_weight, bm25_weight]. Required for
-                           score-aware modes (relative_score, dist_based_score).
+        mode:         Fusion strategy ("simple", "reciprocal_rerank").
+        dense_nodes:  Results from the dense / embedding retriever.
+        bm25_nodes:   Results from the BM25 lexical retriever.
 
     Returns:
         Fused list of NEW NodeWithScore objects sorted by fusion score descending.
@@ -80,11 +74,6 @@ def apply_fusion(
         return _fuse_simple(dense_nodes, bm25_nodes)
     if mode == "reciprocal_rerank":
         return _fuse_rrf(dense_nodes, bm25_nodes)
-    if mode in ("relative_score", "dist_based_score"):
-        # Issue #22: length guard for retriever_weights.
-        weights = retriever_weights if (retriever_weights and len(retriever_weights) >= 2) else [0.5, 0.5]
-        dist_based = mode == "dist_based_score"
-        return _fuse_weighted(dense_nodes, bm25_nodes, weights, dist_based)
     raise ValueError(f"Unknown fusion mode: {mode}")
 
 
@@ -131,45 +120,6 @@ def _fuse_rrf(
         h = node.node.hash
         hash_to_node[h] = node
         fused_scores[h] = fused_scores.get(h, 0.0) + 1.0 / (rank + k - 1)
-    # Issue #24: build fresh NodeWithScore objects instead of mutating inputs.
-    new_nodes = [
-        NodeWithScore(node=hash_to_node[h].node, score=score)
-        for h, score in fused_scores.items()
-    ]
-    return sorted(new_nodes, key=lambda x: x.score or 0.0, reverse=True)
-
-
-def _fuse_weighted(
-    dense_nodes: list[NodeWithScore],
-    bm25_nodes: list[NodeWithScore],
-    weights: list[float],
-    dist_based: bool,
-) -> list[NodeWithScore]:
-    fused_scores: dict[str, float] = {}
-    hash_to_node: dict[str, NodeWithScore] = {}
-    for nodes, weight in [(list(dense_nodes), weights[0]), (list(bm25_nodes), weights[1])]:
-        if not nodes:
-            continue
-        scores = [n.score or 0.0 for n in nodes]
-        if dist_based:
-            mean = sum(scores) / len(scores)
-            variance = sum((s - mean) ** 2 for s in scores) / len(scores)
-            std = variance ** 0.5
-            min_s = mean - 3 * std
-            max_s = mean + 3 * std
-        else:
-            min_s = min(scores)
-            max_s = max(scores)
-        for node in nodes:
-            h = node.node.hash
-            hash_to_node[h] = node
-            raw = node.score or 0.0
-            if max_s == min_s:
-                normalized = 1.0 if max_s > 0 else 0.0
-            else:
-                normalized = (raw - min_s) / (max_s - min_s)
-            fused_scores[h] = fused_scores.get(h, 0.0) + normalized * weight
-    # Issue #24: build fresh NodeWithScore objects instead of mutating inputs.
     new_nodes = [
         NodeWithScore(node=hash_to_node[h].node, score=score)
         for h, score in fused_scores.items()

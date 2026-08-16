@@ -277,15 +277,16 @@ The server reads `~/.config/architecture-pattern-mcp/config.json` (override with
     "config": {
       "model": "gpt-4o-mini",
       "base_url": "https://api.openai.com/v1",
-      "api_key": "{env:GENERATOR_API_KEY}"
+      "api_key": "{env:GENERATOR_API_KEY}",
+      "temperature": 0.7,
+      "top_p": 1.0,
+      "top_k": 20
     }
   },
   "embedder": {
     "provider": "tei",
     "config": {
-      "model": "data/qwen3-embedding-0.6b",
-      "base_url": "http://127.0.0.1:8080/v1",
-      "embedding_dim": 1024
+      "base_url": "http://127.0.0.1:8080"
     }
   },
   "retrieval": {
@@ -295,7 +296,12 @@ The server reads `~/.config/architecture-pattern-mcp/config.json` (override with
     "mode": "reciprocal_rerank",
     "min_quality_score": 50.0
   },
-  "pattern_directory": "~/.config/architecture-pattern-mcp/pattern"
+  "pattern_directory": "~/.config/architecture-pattern-mcp/pattern",
+  "transport": "streamable-http",
+  "host": "0.0.0.0",
+  "port": 8050,
+  "logging_level": "INFO",
+  "logging_format": "json"
 }
 ```
 
@@ -309,7 +315,44 @@ The server reads `~/.config/architecture-pattern-mcp/config.json` (override with
 | `GENERATOR_PROVIDER` | `openai` | Provider: `openai`, `minimax`, `anthropic`, … |
 | `GENERATOR_BASE_URL` | `https://api.openai.com/v1` | API base URL |
 | `GENERATOR_MODEL` | `gpt-4o-mini` | Model name |
-| `EMBEDDER_BASE_URL` | `http://127.0.0.1:8080/v1` | TEI embedder URL |
+| `GENERATOR_TEMPERATURE` | `0.7` | Sampling temperature |
+| `GENERATOR_TOP_P` | `1.0` | Top-p sampling |
+| `GENERATOR_TOP_K` | `20` | Top-k sampling |
+| `GENERATOR_MAX_TOKENS` | *(none)* | Max tokens to generate |
+| `GENERATOR_STREAM` | `false` | Enable streaming responses |
+| `EMBEDDER_PROVIDER` | `tei` | Embedder provider |
+| `EMBEDDER_BASE_URL` | `http://127.0.0.1:8080` | TEI embedder URL |
+| `EMBEDDER_BATCH_SIZE` | `16` | Embedding batch size |
+| `EMBEDDER_QUERY_INSTRUCTION` | *(empty)* | Query instruction prefix |
+| `EMBEDDER_TEXT_INSTRUCTION` | *(empty)* | Text instruction prefix |
+| `EMBEDDER_MAX_TOKENS` | `3000` | Max embedder tokens |
+| `RETRIEVAL_BM25_TOP_K` | `0` | BM25 stage-1 recall cap (0=full corpus) |
+| `RETRIEVAL_DENSE_TOP_K` | `0` | Dense stage-1 recall cap (0=full corpus) |
+| `RETRIEVAL_TOP_K_PATTERNS` | `5` | Number of patterns to select |
+| `RETRIEVAL_MODE` | `reciprocal_rerank` | Fusion mode: `simple`, `reciprocal_rerank` |
+| `RETRIEVAL_MIN_FUSION_SCORE` | `0.0` | Minimum RRF fusion score |
+| `RETRIEVAL_ENABLE_RERANKING` | `false` | Enable reranking |
+| `RETRIEVAL_RERANK_TOP_N` | `10` | Rerank top N |
+| `RETRIEVAL_USE_LEAN_WIRE_SCHEMA` | `false` | Use lean response schema |
+| `RETRIEVAL_STYLE_SCORE_THRESHOLD` | `50.0` | Min analysis score for style recommendation |
+| `RETRIEVAL_ANALYSIS_BLEND_WEIGHT` | `0.7` | Weight on analysis score in blend |
+| `RETRIEVAL_FUSION_BLEND_WEIGHT` | `0.3` | Weight on fusion score in blend |
+| `RETRIEVAL_WEIGHT_SMOOTHING_ALPHA` | `0.7` | Weight smoothing alpha |
+| `RETRIEVAL_VERBOSE_TIMING` | `false` | Log phase timings at INFO level |
+| `RETRIEVAL_MAX_TRIES` | `3` | Max design loop attempts |
+| `RETRIEVAL_MIN_QUALITY_SCORE` | `50.0` | Early-stop quality threshold |
+| `RERANKER_ENABLED` | `false` | Enable reranker |
+| `RERANKER_BASE_URL` | *(default reranker URL)* | Reranker base URL |
+| `RERANKER_MODEL` | *(default)* | Reranker model |
+| `RERANKER_TIMEOUT` | `30.0` | Reranker timeout (seconds) |
+| `PATTERN_DIRECTORY` | `~/.config/architecture-pattern-mcp/pattern` | Pattern files directory |
+| `VALIDATION_MAX_RETRIES` | `2` | Max self-healing retry attempts |
+| `VALIDATION_RETRY_ON_FAIL` | `true` | Retry on validation failure |
+| `TRANSPORT` | `streamable-http` | Transport mode: `stdio`, `streamable-http` |
+| `HOST` | `0.0.0.0` | HTTP bind host |
+| `PORT` | `8050` | HTTP bind port |
+| `LOGGING_LEVEL` | `INFO` | Logging level |
+| `LOGGING_FORMAT` | `json` | Logging format: `json`, `text` |
 | `CONFIG_PATH` | `~/.config/architecture-pattern-mcp/config.json` | Config file path |
 
 ### CLI flags

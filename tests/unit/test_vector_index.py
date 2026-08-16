@@ -45,7 +45,6 @@ from src.config import EmbedderConfig, EmbedderInnerConfig
 
 
 def _tei_config(
-    model: str = "Qwen/Qwen3-Embedding-0.6B",
     base_url: str = "http://localhost:8080",
     query_instruction: str = "",
     text_instruction: str = "",
@@ -53,13 +52,11 @@ def _tei_config(
     return EmbedderConfig(
         provider="tei",
         config=EmbedderInnerConfig(
-            model=model,
             base_url=base_url,
             api_key=None,
             embed_batch_size=16,
             query_instruction=query_instruction,
             text_instruction=text_instruction,
-            embedding_dim=1024,
             max_embedder_tokens=3000,
         ),
     )
@@ -72,12 +69,10 @@ class TestDomainVectorIndexInit:
         """AC-201: Verify DomainVectorIndex class exists."""
         index = DomainVectorIndex(
             base_url="http://localhost:8080",
-            model="Qwen/Qwen3-Embedding-0.6B",
             api_key=None,
-            embedding_dim=1024,
             max_tokens=3000,
             embed_batch_size=16,
-            query_instruction="",
+            query_instruction="Instruct: ",
             text_instruction="",
             provider="tei",
         )
@@ -88,12 +83,10 @@ class TestDomainVectorIndexInit:
         """Verify model_name is set from the config."""
         index = DomainVectorIndex(
             base_url="http://localhost:8080",
-            model="custom-model",
             api_key=None,
-            embedding_dim=1024,
             max_tokens=3000,
             embed_batch_size=16,
-            query_instruction="",
+            query_instruction="Instruct: ",
             text_instruction="",
             provider="tei",
         )
@@ -103,12 +96,10 @@ class TestDomainVectorIndexInit:
         """Verify is_built returns False before build_index is called."""
         index = DomainVectorIndex(
             base_url="http://localhost:8080",
-            model="Qwen/Qwen3-Embedding-0.6B",
             api_key=None,
-            embedding_dim=1024,
             max_tokens=3000,
             embed_batch_size=16,
-            query_instruction="",
+            query_instruction="Instruct: ",
             text_instruction="",
             provider="tei",
         )
@@ -117,7 +108,6 @@ class TestDomainVectorIndexInit:
     def test_from_embedder_config_sets_all_fields(self):
         """Verify from_embedder_config populates model_name and embedder."""
         cfg = _tei_config(
-            model="Qwen/Qwen3-Embedding-0.6B",
             query_instruction="Instruct: Query: ",
             text_instruction="Instruct: Text: ",
         )
@@ -131,9 +121,7 @@ class TestDomainVectorIndexInit:
         with pytest.raises(ValueError, match="provider is required"):
             DomainVectorIndex(
                 base_url="http://localhost:8080",
-                model="Qwen/Qwen3-Embedding-0.6B",
                 api_key=None,
-                embedding_dim=1024,
                 max_tokens=3000,
                 embed_batch_size=16,
                 query_instruction="",
@@ -149,12 +137,10 @@ class TestDomainVectorIndexBuildIndex:
         """Verify build_index stores the domain list."""
         index = DomainVectorIndex(
             base_url="http://localhost:8080",
-            model="Qwen/Qwen3-Embedding-0.6B",
             api_key=None,
-            embedding_dim=1024,
             max_tokens=3000,
             embed_batch_size=16,
-            query_instruction="",
+            query_instruction="Instruct: ",
             text_instruction="",
             provider="tei",
         )
@@ -171,12 +157,10 @@ class TestDomainVectorIndexBuildIndex:
 
         index = DomainVectorIndex(
             base_url="http://localhost:8080",
-            model="Qwen/Qwen3-Embedding-0.6B",
             api_key=None,
-            embedding_dim=1024,
             max_tokens=3000,
             embed_batch_size=16,
-            query_instruction="",
+            query_instruction="Instruct: ",
             text_instruction="",
             provider="tei",
         )
@@ -195,12 +179,10 @@ class TestDomainVectorIndexBuildIndex:
         """Verify build_index handles empty domain list."""
         index = DomainVectorIndex(
             base_url="http://localhost:8080",
-            model="Qwen/Qwen3-Embedding-0.6B",
             api_key=None,
-            embedding_dim=1024,
             max_tokens=3000,
             embed_batch_size=16,
-            query_instruction="",
+            query_instruction="Instruct: ",
             text_instruction="",
             provider="tei",
         )
@@ -214,12 +196,10 @@ class TestDomainVectorIndexBuildIndex:
         """Verify rebuild_index resets and rebuilds with new domains."""
         index = DomainVectorIndex(
             base_url="http://localhost:8080",
-            model="Qwen/Qwen3-Embedding-0.6B",
             api_key=None,
-            embedding_dim=1024,
             max_tokens=3000,
             embed_batch_size=16,
-            query_instruction="",
+            query_instruction="Instruct: ",
             text_instruction="",
             provider="tei",
         )
@@ -245,24 +225,20 @@ class TestDomainVectorIndexSearch:
         """Verify search returns list of (domain, score) tuples."""
         index = DomainVectorIndex(
             base_url="http://localhost:8080",
-            model="Qwen/Qwen3-Embedding-0.6B",
             api_key=None,
-            embedding_dim=1024,
             max_tokens=3000,
             embed_batch_size=16,
-            query_instruction="",
+            query_instruction="Instruct: ",
             text_instruction="",
             provider="tei",
         )
         domains = ["cloud-native", "microservices", "data-mesh"]
-        embedding_dim = 1024
-
-        mock_embeddings = np.random.rand(3, embedding_dim).astype(np.float32)
+        mock_embeddings = np.random.rand(3, 1024).astype(np.float32)
 
         with patch.object(index, "_embed", return_value=mock_embeddings):
             index.build_index(domains)
 
-        with patch.object(index, "_embed", return_value=np.random.rand(1, embedding_dim).astype(np.float32)):
+        with patch.object(index, "_embed", return_value=np.random.rand(1, 1024).astype(np.float32)):
             results = index.search("distributed systems", k=2)
 
         assert isinstance(results, list)
@@ -277,12 +253,10 @@ class TestDomainVectorIndexSearch:
         """Verify search on unbuilt index returns empty list."""
         index = DomainVectorIndex(
             base_url="http://localhost:8080",
-            model="Qwen/Qwen3-Embedding-0.6B",
             api_key=None,
-            embedding_dim=1024,
             max_tokens=3000,
             embed_batch_size=16,
-            query_instruction="",
+            query_instruction="Instruct: ",
             text_instruction="",
             provider="tei",
         )
@@ -293,23 +267,20 @@ class TestDomainVectorIndexSearch:
         """Verify search respects the k parameter."""
         index = DomainVectorIndex(
             base_url="http://localhost:8080",
-            model="Qwen/Qwen3-Embedding-0.6B",
             api_key=None,
-            embedding_dim=1024,
             max_tokens=3000,
             embed_batch_size=16,
-            query_instruction="",
+            query_instruction="Instruct: ",
             text_instruction="",
             provider="tei",
         )
         domains = ["d1", "d2", "d3", "d4", "d5"]
-        embedding_dim = 1024
-        mock_embeddings = np.random.rand(5, embedding_dim).astype(np.float32)
+        mock_embeddings = np.random.rand(5, 1024).astype(np.float32)
 
         with patch.object(index, "_embed", return_value=mock_embeddings):
             index.build_index(domains)
 
-        with patch.object(index, "_embed", return_value=np.random.rand(1, embedding_dim).astype(np.float32)):
+        with patch.object(index, "_embed", return_value=np.random.rand(1, 1024).astype(np.float32)):
             results = index.search("query", k=3)
 
         assert len(results) == 3
@@ -322,12 +293,10 @@ class TestErrorHandling:
         """E-007 (ERR_007): Failed to embed via LiteLLMEmbedding - connection error."""
         index = DomainVectorIndex(
             base_url="http://localhost:8080",
-            model="Qwen/Qwen3-Embedding-0.6B",
             api_key=None,
-            embedding_dim=1024,
             max_tokens=3000,
             embed_batch_size=16,
-            query_instruction="",
+            query_instruction="Instruct: ",
             text_instruction="",
             provider="tei",
         )
@@ -348,12 +317,10 @@ class TestL2Normalization:
         """Verify _embed applies L2 normalization to returned embeddings via the embedder."""
         index = DomainVectorIndex(
             base_url="http://localhost:8080",
-            model="Qwen/Qwen3-Embedding-0.6B",
             api_key=None,
-            embedding_dim=1024,
             max_tokens=3000,
             embed_batch_size=16,
-            query_instruction="",
+            query_instruction="Instruct: ",
             text_instruction="",
             provider="tei",
         )
@@ -393,12 +360,10 @@ class TestL2Normalization:
         """Verify _embed handles zero vectors without division by zero."""
         index = DomainVectorIndex(
             base_url="http://localhost:8080",
-            model="Qwen/Qwen3-Embedding-0.6B",
             api_key=None,
-            embedding_dim=1024,
             max_tokens=3000,
             embed_batch_size=16,
-            query_instruction="",
+            query_instruction="Instruct: ",
             text_instruction="",
             provider="tei",
         )
@@ -422,12 +387,10 @@ class TestVectorStoreProperty:
         """Verify vector_store property is None before build_index."""
         index = DomainVectorIndex(
             base_url="http://localhost:8080",
-            model="Qwen/Qwen3-Embedding-0.6B",
             api_key=None,
-            embedding_dim=1024,
             max_tokens=3000,
             embed_batch_size=16,
-            query_instruction="",
+            query_instruction="Instruct: ",
             text_instruction="",
             provider="tei",
         )
@@ -439,12 +402,10 @@ class TestVectorStoreProperty:
 
         index = DomainVectorIndex(
             base_url="http://localhost:8080",
-            model="Qwen/Qwen3-Embedding-0.6B",
             api_key=None,
-            embedding_dim=1024,
             max_tokens=3000,
             embed_batch_size=16,
-            query_instruction="",
+            query_instruction="Instruct: ",
             text_instruction="",
             provider="tei",
         )

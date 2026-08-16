@@ -7,17 +7,20 @@
       "api_key": "{env:GENERATOR_API_KEY}",
       "temperature": "{env:GENERATOR_TEMPERATURE:-0.7}",
       "top_p": "{env:GENERATOR_TOP_P:-1.0}",
-      "top_k": "{env:GENERATOR_TOP_K:-20}"
+      "top_k": "{env:GENERATOR_TOP_K:-20}",
+      "max_tokens": "{env:GENERATOR_MAX_TOKENS}",
+      "stream": "{env:GENERATOR_STREAM:-false}"
     }
   },
   "embedder": {
     "provider": "{env:EMBEDDER_PROVIDER:-tei}",
     "config": {
-      "model": "{env:EMBEDDER_MODEL:-data/qwen3-embedding-0.6b}",
       "base_url": "{env:EMBEDDER_BASE_URL:-http://localhost:8080}",
       "api_key": "{env:EMBEDDER_API_KEY}",
       "embed_batch_size": "{env:EMBEDDER_BATCH_SIZE:-16}",
-      "embedding_dim": "{env:EMBEDDER_EMBEDDING_DIM:-1024}"
+      "query_instruction": "{env:EMBEDDER_QUERY_INSTRUCTION:-}",
+      "text_instruction": "{env:EMBEDDER_TEXT_INSTRUCTION:-}",
+      "max_embedder_tokens": "{env:EMBEDDER_MAX_TOKENS:-3000}"
     }
   },
   "retrieval": {
@@ -25,7 +28,6 @@
     "dense_top_k": "{env:RETRIEVAL_DENSE_TOP_K:-0}",
     "top_k_patterns": "{env:RETRIEVAL_TOP_K_PATTERNS:-5}",
     "mode": "{env:RETRIEVAL_MODE:-reciprocal_rerank}",
-    "retriever_weights": "{env:RETRIEVER_WEIGHTS:-[0.5,0.5]}",
     "min_fusion_score": "{env:RETRIEVAL_MIN_FUSION_SCORE:-0.0}",
     "enable_reranking": "{env:RETRIEVAL_ENABLE_RERANKING:-false}",
     "rerank_top_n": "{env:RETRIEVAL_RERANK_TOP_N:-10}",
@@ -39,6 +41,12 @@
     },
     "max_tries": "{env:RETRIEVAL_MAX_TRIES:-3}",
     "min_quality_score": "{env:RETRIEVAL_MIN_QUALITY_SCORE:-50.0}",
+    "use_lean_wire_schema": "{env:RETRIEVAL_USE_LEAN_WIRE_SCHEMA:-false}",
+    "style_score_threshold": "{env:RETRIEVAL_STYLE_SCORE_THRESHOLD:-50.0}",
+    "analysis_blend_weight": "{env:RETRIEVAL_ANALYSIS_BLEND_WEIGHT:-0.7}",
+    "fusion_blend_weight": "{env:RETRIEVAL_FUSION_BLEND_WEIGHT:-0.3}",
+    "weight_smoothing_alpha": "{env:RETRIEVAL_WEIGHT_SMOOTHING_ALPHA:-0.7}",
+    "verbose_timing": "{env:RETRIEVAL_VERBOSE_TIMING:-false}",
     "pattern_context_limits": {
       "benefits": "{env:RETRIEVAL_PATTERN_BENEFITS:-3}",
       "tradeoffs": "{env:RETRIEVAL_PATTERN_TRADEOFFS:-3}",
@@ -53,5 +61,10 @@
   "validation": {
     "max_retries": "{env:VALIDATION_MAX_RETRIES:-2}",
     "retry_on_fail": "{env:VALIDATION_RETRY_ON_FAIL:-true}"
-  }
+  },
+  "transport": "{env:TRANSPORT:-streamable-http}",
+  "host": "{env:HOST:-0.0.0.0}",
+  "port": "{env:PORT:-8050}",
+  "logging_level": "{env:LOGGING_LEVEL:-INFO}",
+  "logging_format": "{env:LOGGING_FORMAT:-json}"
 }

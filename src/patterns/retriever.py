@@ -108,7 +108,6 @@ class HybridPatternRetriever:
         bm25_top_k: int = 0,
         dense_top_k: int = 0,
         mode: FusionMode = "reciprocal_rerank",
-        retriever_weights: list[float] | None = None,
         min_fusion_score: float = 0.0,
         enable_reranking: bool = False,
         rerank_top_n: int = 10,
@@ -120,7 +119,6 @@ class HybridPatternRetriever:
         self._bm25_top_k = bm25_top_k
         self._dense_top_k = dense_top_k
         self._mode: FusionMode = mode
-        self._retriever_weights = retriever_weights
         self._min_fusion_score = min_fusion_score
         self._enable_reranking = enable_reranking
         self._rerank_top_n = rerank_top_n
@@ -252,7 +250,6 @@ class HybridPatternRetriever:
             self._mode,
             dense_nodes,
             bm25_nodes,
-            retriever_weights=self._retriever_weights,
         )
 
         logger.info(

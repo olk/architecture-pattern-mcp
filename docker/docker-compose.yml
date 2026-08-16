@@ -25,30 +25,36 @@ services:
       - GENERATOR_TOP_K=20
 
       - EMBEDDER_PROVIDER=tei
-      - EMBEDDER_MODEL=data/qwen3-embedding-0.6b
       - EMBEDDER_BASE_URL=http://architecture-pattern-tei:8080/v1
-      - EMBEDDER_TIMEOUT=60
       - EMBEDDER_BATCH_SIZE=8
-      - EMBEDDER_EMBEDDING_DIM=1024
       - EMBEDDER_API_KEY=not-needed
 
       - PATTERN_DIRECTORY=./pattern
 
       - RETRIEVAL_BM25_TOP_K=20
       - RETRIEVAL_DENSE_TOP_K=20
-      - RETRIEVAL_SIMILARITY_TOP_K=20
       - RETRIEVAL_TOP_K_PATTERNS=5
       - RETRIEVAL_MODE=reciprocal_rerank
-      - RETRIEVER_WEIGHTS=[0.5,0.5]
       - RETRIEVAL_MIN_FUSION_SCORE=0.015
-      - RETRIEVAL_QUALITY_WEIGHT=0.0
       - RETRIEVAL_ENABLE_RERANKING=true
       - RETRIEVAL_RERANK_TOP_N=10
+      - RETRIEVAL_USE_LEAN_WIRE_SCHEMA=false
+      - RETRIEVAL_STYLE_SCORE_THRESHOLD=50.0
+      - RETRIEVAL_ANALYSIS_BLEND_WEIGHT=0.7
+      - RETRIEVAL_FUSION_BLEND_WEIGHT=0.3
+      - RETRIEVAL_WEIGHT_SMOOTHING_ALPHA=0.7
+      - RETRIEVAL_VERBOSE_TIMING=false
 
       - RERANKER_ENABLED=true
       - RERANKER_BASE_URL=http://architecture-pattern-tei-rerank:8080
       - RERANKER_MODEL=Alibaba-NLP/gte-reranker-modernbert-base
       - RERANKER_TIMEOUT=30
+
+      - TRANSPORT=streamable-http
+      - HOST=0.0.0.0
+      - PORT=8050
+      - LOGGING_LEVEL=INFO
+      - LOGGING_FORMAT=json
 
     depends_on:
       architecture-pattern-tei-rerank:

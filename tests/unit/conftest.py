@@ -48,13 +48,11 @@ def mock_config_manager():
         "embedder": {
             "provider": "tei",
             "config": {
-                "model": "Qwen/Qwen3-Embedding-0.6B",
                 "base_url": "http://localhost:8080",
                 "api_key": None,
                 "embed_batch_size": 16,
                 "query_instruction": "Instruct: Given a software architecture pattern domain tag, retrieve the most relevant existing pattern domain from the catalogue\nQuery: ",
                 "text_instruction": "",
-                "embedding_dim": 1024,
                 "max_embedder_tokens": 3000,
             }
         },

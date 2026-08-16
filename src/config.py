@@ -85,13 +85,11 @@ class GeneratorConfig(BaseModel):
 class EmbedderInnerConfig(BaseModel):
     """Embedder per-provider configuration."""
 
-    model: str
     base_url: str = ""
     api_key: str | None = None
     embed_batch_size: int = 16
     query_instruction: str = ""
     text_instruction: str = ""
-    embedding_dim: int = 1024
     max_embedder_tokens: int = 3000
 
 
@@ -117,9 +115,8 @@ class RerankerConfig(BaseModel):
     config: RerankerInnerConfig | None = None
 
 
-FusionMode = Literal["simple", "reciprocal_rerank", "relative_score", "dist_based_score"]
+FusionMode = Literal["simple", "reciprocal_rerank"]
 
-SCORE_AWARE_MODES: frozenset[str] = frozenset({"relative_score", "dist_based_score"})
 RANK_ONLY_MODES: frozenset[str] = frozenset({"simple", "reciprocal_rerank"})
 
 
@@ -157,7 +154,6 @@ class RetrievalConfig(BaseModel):
     dense_top_k: int = Field(0, ge=0, le=1000)
     top_k_patterns: int = Field(5, ge=1, le=100)
     mode: FusionMode = "reciprocal_rerank"
-    retriever_weights: list[float] | None = None
     min_fusion_score: float = Field(
         0.0, ge=0.0, le=1.0,
         description=(
@@ -227,49 +223,6 @@ class RetrievalConfig(BaseModel):
         ),
     )
     pattern_context_limits: dict[str, int] = Field(default_factory=lambda: PATTERN_CONTEXT_LIMITS.copy())
-
-    @field_validator("retriever_weights", mode="before")
-    @classmethod
-    def _parse_weights(cls, v: Any) -> Any:
-        """Parse a JSON string like '[0.6, 0.4]' into a list[float]."""
-        if v is None:
-            return None
-        if isinstance(v, list):
-            return [float(x) for x in v]
-        if isinstance(v, str):
-            stripped = v.strip()
-            if stripped.startswith("["):
-                try:
-                    parsed = json.loads(stripped)
-                    if isinstance(parsed, list):
-                        return [float(x) for x in parsed]
-                    raise ValueError(f"retriever_weights JSON root must be a list, got {type(parsed).__name__}")
-                except json.JSONDecodeError as e:
-                    raise ValueError(f"Invalid JSON in retriever_weights: {e}") from e
-            raise ValueError(
-                "retriever_weights must be a JSON list string (e.g. '[0.5,0.5]') "
-                "or a Python list of floats"
-            )
-        return v
-
-    @model_validator(mode="after")
-    def _check_weights(self) -> "RetrievalConfig":
-        if self.retriever_weights is not None:
-            if len(self.retriever_weights) != 2:
-                raise ValueError("retriever_weights must have length 2 (dense, bm25)")
-            if not all(0.0 <= w <= 1.0 for w in self.retriever_weights):
-                raise ValueError("retriever_weights entries must be in [0.0, 1.0]")
-            if abs(sum(self.retriever_weights) - 1.0) > 1e-3:
-                raise ValueError("retriever_weights must sum to 1.0")
-        if self.mode in SCORE_AWARE_MODES and self.retriever_weights is None:
-            raise ValueError(
-                f"retriever_weights are required when mode='{self.mode}'"
-            )
-        if self.mode in RANK_ONLY_MODES and self.retriever_weights is not None:
-            logger.debug(
-                "retriever_weights are ignored when mode='%s'", self.mode
-            )
-        return self
 
     @model_validator(mode="after")
     def _check_score_blend_weights(self) -> "RetrievalConfig":

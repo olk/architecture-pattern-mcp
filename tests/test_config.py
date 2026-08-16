@@ -57,13 +57,12 @@ class TestServerConfig:
         """
         config = ServerConfig(
             generator={"provider": "anthropic", "config": {"model": "claude-3", "temperature": 0.5}},
-            embedder={"provider": "tei", "config": {"model": "Qwen/Qwen3-Embedding-0.6B", "base_url": "http://localhost:8080"}},
+            embedder={"provider": "tei", "config": {"base_url": "http://localhost:8080"}},
         )
         assert config.generator.provider == "anthropic"
         assert config.generator.config.model == "claude-3"
         assert config.generator.config.temperature == 0.5
         assert config.embedder.provider == "tei"
-        assert config.embedder.config.model == "Qwen/Qwen3-Embedding-0.6B"
 
 
 class TestLoadConfig:
@@ -89,12 +88,10 @@ class TestLoadConfig:
             "embedder": {
                 "provider": "tei",
                 "config": {
-                    "model": "Qwen/Qwen3-Embedding-0.6B",
                     "base_url": "http://localhost:8080",
                     "embed_batch_size": 16,
                     "query_instruction": "Instruct: test\nQuery: ",
                     "text_instruction": "",
-                    "embedding_dim": 1024,
                     "max_embedder_tokens": 3000,
                 }
             }
@@ -123,7 +120,6 @@ class TestLoadConfig:
         assert config["generator"]["config"]["model"] == "gpt-4"
         assert config["generator"]["config"]["temperature"] == 0.7
         assert config["embedder"]["provider"] == "tei"
-        assert config["embedder"]["config"]["model"] == "Qwen/Qwen3-Embedding-0.6B"
 
     def test_load_config_raises_filenotfound_for_missing_file(
         self, clear_config_cache: None
@@ -172,12 +168,10 @@ class TestLoadConfig:
             "embedder": {
                 "provider": "tei",
                 "config": {
-                    "model": "Qwen/Qwen3-Embedding-0.6B",
                     "base_url": "http://localhost:8080",
                     "embed_batch_size": 16,
                     "query_instruction": "Instruct: test\nQuery: ",
                     "text_instruction": "",
-                    "embedding_dim": 1024,
                     "max_embedder_tokens": 3000,
                 }
             }
@@ -210,12 +204,10 @@ class TestLoadConfig:
             "embedder": {
                 "provider": "tei",
                 "config": {
-                    "model": "Qwen/Qwen3-Embedding-0.6B",
                     "base_url": "http://localhost:8080",
                     "embed_batch_size": 16,
                     "query_instruction": "Instruct: test\nQuery: ",
                     "text_instruction": "",
-                    "embedding_dim": 1024,
                     "max_embedder_tokens": 3000,
                 }
             }
@@ -262,12 +254,10 @@ class TestLoadConfig:
             "embedder": {
                 "provider": "tei",
                 "config": {
-                    "model": "Qwen/Qwen3-Embedding-0.6B",
                     "base_url": "http://localhost:8080",
                     "embed_batch_size": 32,
                     "query_instruction": "Instruct: modified\nQuery: ",
                     "text_instruction": "",
-                    "embedding_dim": 1024,
                     "max_embedder_tokens": 3000,
                 }
             }
@@ -440,94 +430,16 @@ class TestRetrievalConfig:
     @pytest.mark.parametrize("mode", [
         "simple",
         "reciprocal_rerank",
-        "relative_score",
-        "dist_based_score",
     ])
-    def test_all_four_modes_accepted(self, mode: str) -> None:
-        """Test that all four fusion modes are accepted."""
-        if mode in {"relative_score", "dist_based_score"}:
-            config = RetrievalConfig(mode=mode, retriever_weights=[0.6, 0.4])
-        else:
-            config = RetrievalConfig(mode=mode)
+    def test_all_two_modes_accepted(self, mode: str) -> None:
+        """Test that all two fusion modes are accepted."""
+        config = RetrievalConfig(mode=mode)
         assert config.mode == mode
 
     def test_unknown_mode_rejected(self) -> None:
         """Test that an unknown mode string raises ValidationError."""
         with pytest.raises(ValidationError):
             RetrievalConfig(mode="bogus")
-
-    def test_weights_length_must_be_two(self) -> None:
-        """Test that retriever_weights must have exactly 2 elements."""
-        with pytest.raises(ValidationError):
-            RetrievalConfig(retriever_weights=[0.5])
-        with pytest.raises(ValidationError):
-            RetrievalConfig(retriever_weights=[0.2, 0.3, 0.5])
-
-    def test_weights_out_of_range(self) -> None:
-        """Test that retriever_weights entries must be in [0.0, 1.0]."""
-        with pytest.raises(ValidationError):
-            RetrievalConfig(retriever_weights=[-0.1, 1.1])
-        with pytest.raises(ValidationError):
-            RetrievalConfig(retriever_weights=[1.5, -0.5])
-
-    def test_weights_sum_must_equal_one(self) -> None:
-        """Test that retriever_weights must sum to 1.0."""
-        with pytest.raises(ValidationError):
-            RetrievalConfig(retriever_weights=[0.6, 0.3])
-
-    def test_score_aware_mode_requires_weights(self) -> None:
-        """Test that relative_score mode requires retriever_weights."""
-        with pytest.raises(ValidationError):
-            RetrievalConfig(mode="relative_score")
-        with pytest.raises(ValidationError):
-            RetrievalConfig(mode="dist_based_score")
-
-    def test_rank_only_mode_ignores_weights(self) -> None:
-        """Test that reciprocal_rerank mode accepts weights without error."""
-        config = RetrievalConfig(mode="reciprocal_rerank", retriever_weights=[0.6, 0.4])
-        assert config.mode == "reciprocal_rerank"
-        assert config.retriever_weights == [0.6, 0.4]
-
-    def test_simple_mode_default_weights_none(self) -> None:
-        """Test that default mode=reciprocal_rerank has retriever_weights=None."""
-        config = RetrievalConfig()
-        assert config.mode == "reciprocal_rerank"
-        assert config.retriever_weights is None
-
-    def test_retriever_weights_from_json_string(self) -> None:
-        """Test that a JSON string like '[0.6, 0.4]' is parsed into a list[float]."""
-        config = RetrievalConfig(retriever_weights="[0.6, 0.4]")
-        assert config.retriever_weights == [0.6, 0.4]
-
-    def test_retriever_weights_from_json_string_with_whitespace(self) -> None:
-        """Test that whitespace around JSON list is trimmed before parsing."""
-        config = RetrievalConfig(retriever_weights="  [0.7, 0.3]  ")
-        assert config.retriever_weights == [0.7, 0.3]
-
-    def test_retriever_weights_invalid_json_raises(self) -> None:
-        """Test that an invalid JSON string raises ValidationError."""
-        with pytest.raises(ValidationError):
-            RetrievalConfig(retriever_weights="not json")
-
-    def test_retriever_weights_json_non_list_raises(self) -> None:
-        """Test that a JSON object instead of a list raises ValidationError."""
-        with pytest.raises(ValidationError):
-            RetrievalConfig(retriever_weights='{"k": 1}')
-
-    def test_retriever_weights_json_list_too_long_raises(self) -> None:
-        """Test that a JSON list with != 2 elements raises ValidationError (caught by model_validator)."""
-        with pytest.raises(ValidationError):
-            RetrievalConfig(retriever_weights="[0.2, 0.3, 0.5]")
-
-    def test_retriever_weights_none_unchanged(self) -> None:
-        """Test that None is passed through unchanged."""
-        config = RetrievalConfig(retriever_weights=None)
-        assert config.retriever_weights is None
-
-    def test_retriever_weights_list_still_works(self) -> None:
-        """Test that a plain Python list (not a string) still works."""
-        config = RetrievalConfig(retriever_weights=[0.5, 0.5])
-        assert config.retriever_weights == [0.5, 0.5]
 
 
 class TestExtraForbid:
@@ -541,7 +453,7 @@ class TestExtraForbid:
         with pytest.raises(ValidationError):
             ServerConfig(
                 generator={"provider": "openai", "config": {"model": "gpt-4"}},
-                embedder={"provider": "tei", "config": {"model": "Qwen/Qwen3-Embedding-0.6B", "base_url": "http://localhost:8080"}},
+                embedder={"provider": "tei", "config": {"base_url": "http://localhost:8080"}},
                 unknown_field={"invalid": "value"},
             )
 
@@ -553,7 +465,7 @@ class TestExtraForbid:
         with pytest.raises(ValidationError):
             ServerConfig(
                 generator={"provider": "openai", "config": {"model": "gpt-4"}},
-                embedder={"provider": "tei", "config": {"model": "Qwen/Qwen3-Embedding-0.6B", "base_url": "http://localhost:8080"}},
+                embedder={"provider": "tei", "config": {"base_url": "http://localhost:8080"}},
                 retrieval={"bm25_top_k": 30, "dense_top_k": 40, "top_k_patterns": 8},
                 invalid_top_level_key=True,
             )
@@ -564,7 +476,7 @@ class TestExtraForbid:
         """
         config = ServerConfig(
             generator={"provider": "openai", "config": {"model": "gpt-4"}},
-            embedder={"provider": "tei", "config": {"model": "Qwen/Qwen3-Embedding-0.6B", "base_url": "http://localhost:8080"}},
+            embedder={"provider": "tei", "config": {"base_url": "http://localhost:8080"}},
             retrieval={"bm25_top_k": 30, "dense_top_k": 40, "top_k_patterns": 8},
         )
         assert config.retrieval is not None

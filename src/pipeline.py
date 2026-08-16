@@ -395,7 +395,6 @@ class ArchitecturePipeline(Workflow):
                 bm25_top_k=self._retrieval_config.bm25_top_k,
                 dense_top_k=self._retrieval_config.dense_top_k,
                 mode=self._retrieval_config.mode,
-                retriever_weights=self._retrieval_config.retriever_weights,
                 min_fusion_score=self._retrieval_config.min_fusion_score,
                 enable_reranking=self._retrieval_config.enable_reranking,
                 rerank_top_n=self._retrieval_config.rerank_top_n,

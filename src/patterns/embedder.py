@@ -86,7 +86,6 @@ class InstructionAwareEmbedding(LiteLLMEmbedding):
 
 def build_embedder(  # noqa: PLR0913
     provider: str,
-    model: str,
     base_url: str,
     api_key: str | None,
     query_instruction: str,
@@ -96,9 +95,9 @@ def build_embedder(  # noqa: PLR0913
     """Construct a LiteLLMEmbedding from individual config fields.
 
     Dispatches on provider: openai / tei / ollama / vllm / hosted_vllm.
-    All LiteLLMEmbedding parameters are taken directly from the fields — no defaults.
-    InstructionAwareEmbedding is constructed directly (it is a LiteLLMEmbedding subclass)
-    and forwards all params to LiteLLMEmbedding.__init__ in a single call.
+    For the tei provider the model name is fixed to the local Qwen3-0.6B
+    variant and cannot be overridden. Non-tei providers require a model name
+    to be set via the LLM provider's configuration.
 
     Returns:
         LiteLLMEmbedding (InstructionAwareEmbedding when instructions are set, otherwise plain).
@@ -112,10 +111,12 @@ def build_embedder(  # noqa: PLR0913
         raise ValueError(f"Unsupported embedder provider: {provider!r}")
 
     if normalized == "tei":
-        model = "openai//data/qwen3-embedding-0.6b"
+        model_name = "openai//data/qwen3-embedding-0.6b"
+    else:
+        model_name = ""
 
     return InstructionAwareEmbedding(
-        model_name=model,
+        model_name=model_name,
         api_base=base_url,
         api_key=api_key,
         query_instruction=query_instruction or "",

@@ -65,10 +65,8 @@ class DomainVectorIndex:
     def __init__(  # noqa: PLR0913
         self,
         base_url: str,
-        model: str,
         api_key: str | None,
-        embedding_dim: int,  # noqa: ARG002  # retained for API signature compat
-        max_tokens: int,  # noqa: ARG002  # retained for API signature compat
+        max_tokens: int,
         embed_batch_size: int,
         query_instruction: str,
         text_instruction: str,
@@ -78,9 +76,7 @@ class DomainVectorIndex:
 
         Args:
             base_url:          Embedder base URL, e.g. "http://localhost:8080".
-            model:             Model name for the embedder.
             api_key:           Optional Bearer token / API key for the embedder.
-            embedding_dim:      Expected embedding dimension (e.g. 1024 for Qwen3).
             max_tokens:        Max sequence length for the embedder.
             embed_batch_size:  Batch size for embedding calls (issue #9: now used).
             query_instruction:  Instruction prefix prepended to query text.
@@ -93,7 +89,6 @@ class DomainVectorIndex:
         self._embed_batch_size = max(1, int(embed_batch_size))
         self._embedder = build_embedder(
             provider=provider,
-            model=model,
             base_url=base_url,
             api_key=api_key,
             query_instruction=query_instruction,
@@ -111,13 +106,11 @@ class DomainVectorIndex:
         cfg = embedder_config.config
         return cls(
             provider=embedder_config.provider,
-            model=cfg.model,
             base_url=cfg.base_url,
             api_key=cfg.api_key,
             embed_batch_size=cfg.embed_batch_size,
             query_instruction=cfg.query_instruction,
             text_instruction=cfg.text_instruction,
-            embedding_dim=cfg.embedding_dim,
             max_tokens=cfg.max_embedder_tokens,
         )
 
