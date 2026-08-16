@@ -461,16 +461,17 @@ make docker-down                 # Stop
 
 ## Publishing
 
-The MCP server image is published to two registries simultaneously:
+All three images are published to two registries simultaneously:
 
-| Registry | Namespace | Image tags |
-|---|---|---|
-| Docker Hub | `olkowa/architecture-pattern-mcp` | `1.0.1`, `latest` |
-| GitHub Container Registry | `ghcr.io/olk/architecture-pattern-mcp` | `1.0.1`, `latest` |
+| Image | Docker Hub | GHCR | Tags |
+|---|---|---|---|
+| MCP server | `olkowa/architecture-pattern-mcp` | `ghcr.io/olk/architecture-pattern-mcp` | `$(DOCKER_TAG)`, `latest` |
+| TEI embedder | `olkowa/architecture-pattern-tei` | `ghcr.io/olk/architecture-pattern-tei` | `$(DOCKER_TAG)`, `latest` |
+| TEI reranker | `olkowa/architecture-pattern-tei-rerank` | `ghcr.io/olk/architecture-pattern-tei-rerank` | `$(DOCKER_TAG)`, `latest` |
 
-Both registries receive the same local image; the Makefile handles tagging and pushing for each in one invocation.
+All three images share the same `$(DOCKER_TAG)` (the version from `pyproject.toml`), so `tei:1.0.3` always ships with `mcp:1.0.3`. Blob deduplication keeps re-tagging unchanged TEI images cheap.
 
-Each `make docker-publish` also creates and pushes an annotated git tag `v<version>` (e.g., `v1.0.2`) marking the released commit; the target requires a clean worktree.
+> **Bandwidth note:** the TEI embedder image is ~5 GB (ONNX fp32 weights baked in). First push to each registry is ~5 GB upload. Subsequent pushes are incremental — only changed layers are transferred.
 
 ### Prerequisites
 
@@ -484,8 +485,10 @@ Each `make docker-publish` also creates and pushes an annotated git tag `v<versi
 # 1. Login to GHCR (interactive — paste token at the password prompt)
 docker login ghcr.io -u olk
 
-# 2. Build and push to both registries
-make docker-publish
+# 2. Build and push all three images (MCP + TEI embedder + TEI reranker)
+#    The umbrella target builds the MCP image, tags it, pushes it, creates the git tag,
+#    then builds and pushes each TEI image in sequence.
+make docker-publish-all
 
 # 3. Logout from GHCR immediately after publishing
 #    (removes the ghcr.io credential from ~/.docker/config.json)
@@ -494,17 +497,21 @@ docker logout ghcr.io
 
 On subsequent publishes repeat steps 1–3. If your PAT has expired, generate a new one at the link above.
 
-### First push — set package public (GHCR only)
+### First push — set packages public (GHCR only)
 
-GHCR packages default to **private**. After the first `make docker-publish`, flip the package to public:
+GHCR packages default to **private**. After the first `make docker-publish-all`, flip all three packages to public:
 
-`https://github.com/users/olk/packages/container/architecture-pattern-mcp/settings`
+| Package | Settings URL |
+|---|---|
+| MCP server | `https://github.com/users/olk/packages/container/architecture-pattern-mcp/settings` |
+| TEI embedder | `https://github.com/users/olk/packages/container/architecture-pattern-tei/settings` |
+| TEI reranker | `https://github.com/users/olk/packages/container/architecture-pattern-tei-rerank/settings` |
 
-Set visibility to **Public** and save.
+Set each to **Public** and save.
 
 ### Partial failure recovery
 
-If the push fails mid-way (e.g., GHCR auth was not configured), Docker Hub layers are already uploaded. After fixing auth, re-running `make docker-publish` is safe — each registry reports a cache hit for already-uploaded layers and completes the remaining push.
+If the push fails mid-way (e.g., GHCR auth was not configured), Docker Hub layers are already uploaded. After fixing auth, re-running `make docker-publish-all` is safe — each registry reports a cache hit for already-uploaded layers and completes the remaining push. For targeted retries, individual images can be pushed with `make docker-publish-tei` or `make docker-publish-tei-rerank`.
 
 ---
 

@@ -12,7 +12,7 @@
 
 services:
   architecture-pattern-mcp:
-    image: architecture-pattern-mcp:latest
+    image: ${MCP_IMAGE:-architecture-pattern-mcp:latest}
     container_name: architecture-pattern-mcp
     environment:
       - CONFIG_PATH=/app/config/config.json
@@ -74,7 +74,7 @@ services:
       start_period: 40s
 
   architecture-pattern-tei:
-    image: architecture-pattern-tei:local
+    image: ${TEI_IMAGE:-architecture-pattern-tei:local}
     container_name: architecture-pattern-tei
     restart: unless-stopped
     # No ports published — internal only (reached by MCP via Docker DNS)
@@ -90,7 +90,7 @@ services:
       start_period: 120s
 
   architecture-pattern-tei-rerank:
-    image: architecture-pattern-tei-rerank:local
+    image: ${TEI_RERANK_IMAGE:-architecture-pattern-tei-rerank:local}
     container_name: architecture-pattern-tei-rerank
     restart: unless-stopped
     # No ports published — internal only (reached by MCP via Docker DNS)

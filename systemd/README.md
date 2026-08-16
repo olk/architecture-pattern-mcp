@@ -24,19 +24,33 @@ other to pick up the change.
 - Network access at boot.
 - **Both images pre-built locally** (see Step 0 below).
 
-## Step 0 — Pre-flight: build the images
+## Step 0 — Pre-flight: build or pull the images
 
 The systemd service runs `docker compose up -d` against **pre-built images**.
 The unit has `ExecStartPre` checks that fail loudly if the images are missing,
-so you must build them first:
+so you must either build or pull them first:
 
+**Option A — Build from source** *(requires ~10 GB disk, ~5 GB download on first run)*:
 ```bash
 # From the repo root:
 make docker-build-all
-# Produces: architecture-pattern-mcp:latest and architecture-pattern-tei:local
+# Produces: architecture-pattern-mcp:latest  and  architecture-pattern-tei:local
+#           architecture-pattern-tei-rerank:local
 ```
 
-If you re-pull the repo later, rerun `make docker-build-all` to refresh images.
+**Option B — Pull published images** *(skip the 5 GB local build; retag to :local so the
+`ExecStartPre` guard still passes)*:
+```bash
+VERSION=$(grep -m 1 '^version' pyproject.toml | sed -E 's/.*"([^"]+)".*/\1/')
+for image in olkowa/architecture-pattern-mcp \
+            olkowa/architecture-pattern-tei \
+            olkowa/architecture-pattern-tei-rerank; do
+    docker pull "${image}:${VERSION}"
+    docker tag "${image}:${VERSION}" "${image##*/}:local"
+done
+```
+
+If you re-pull the repo later, rerun the same pull+tag commands to refresh images.
 
 ## Step 1 — Choose: coexist or replace the dev compose?
 

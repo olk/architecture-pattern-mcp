@@ -13,7 +13,9 @@
 # =============================================================================
 
 .PHONY: help install lint lint-fix typecheck unit-tests \
-	client docker-build docker-build-all docker-publish \
+	client docker-build docker-build-tei \
+	docker-build-all docker-publish docker-publish-tei \
+	docker-publish-all \
 	docker-up docker-down docker-logs docker-logs-follow \
 	docker-rm clean
 
@@ -24,6 +26,13 @@ DOCKER_IMAGE    := architecture-pattern-mcp
 DOCKER_TAG      := $(shell grep -m 1 '^version' pyproject.toml | sed -E 's/.*"([^"]+)".*/\1/')
 DOCKER_HUB_REPO := olkowa/architecture-pattern-mcp
 GHCR_REPO       := ghcr.io/olk/architecture-pattern-mcp
+
+TEI_IMAGE            := architecture-pattern-tei
+TEI_RERANK_IMAGE     := architecture-pattern-tei-rerank
+TEI_HUB_REPO         := olkowa/architecture-pattern-tei
+TEI_GHCR_REPO        := ghcr.io/olk/architecture-pattern-tei
+TEI_RERANK_HUB_REPO  := olkowa/architecture-pattern-tei-rerank
+TEI_RERANK_GHCR_REPO := ghcr.io/olk/architecture-pattern-tei-rerank
 
 .DEFAULT_GOAL := help
 
@@ -57,9 +66,30 @@ docker-build: ## Build MCP server Docker image with dev dependencies
 	docker build --target production -f docker/Dockerfile -t $(DOCKER_IMAGE):$(DOCKER_TAG) .
 	docker build --target production -f docker/Dockerfile -t $(DOCKER_IMAGE):latest .
 
-docker-build-all: docker-build ## Build all Docker images (MCP server + TEI embedder + TEI reranker)
-	docker build -f docker/Dockerfile.tei -t architecture-pattern-tei:local .
-	docker build -f docker/Dockerfile.tei-rerank -t architecture-pattern-tei-rerank:local .
+docker-build-tei: ## Build both TEI images (embedder + reranker)
+	docker build -f docker/Dockerfile.tei \
+		-t $(TEI_IMAGE):$(DOCKER_TAG) \
+		-t $(TEI_IMAGE):latest \
+		-t $(TEI_IMAGE):local .
+	docker build -f docker/Dockerfile.tei-rerank \
+		-t $(TEI_RERANK_IMAGE):$(DOCKER_TAG) \
+		-t $(TEI_RERANK_IMAGE):latest \
+		-t $(TEI_RERANK_IMAGE):local .
+
+docker-build-all: docker-build docker-build-tei ## Build all Docker images
+
+# Tag and push a local image to both Docker Hub and GHCR.
+# Args: local_image hub_repo ghcr_repo
+# Usage: $(call publish-image,$(DOCKER_IMAGE),$(DOCKER_HUB_REPO),$(GHCR_REPO))
+publish-image = \
+	docker tag $(1):$(DOCKER_TAG) $(2):$(DOCKER_TAG) && \
+	docker tag $(1):latest $(2):latest && \
+	docker tag $(1):$(DOCKER_TAG) $(3):$(DOCKER_TAG) && \
+	docker tag $(1):latest $(3):latest && \
+	docker push $(2):$(DOCKER_TAG) && \
+	docker push $(2):latest && \
+	docker push $(3):$(DOCKER_TAG) && \
+	docker push $(3):latest
 
 docker-publish: docker-build ## Push MCP server image to Docker Hub + GHCR + git tag v$(DOCKER_TAG)
 	@if [ -n "$$(git status --porcelain)" ]; then \
@@ -67,15 +97,8 @@ docker-publish: docker-build ## Push MCP server image to Docker Hub + GHCR + git
 		git status --short; exit 1; \
 	fi
 	docker login ghcr.io -u olk
-	docker tag $(DOCKER_IMAGE):$(DOCKER_TAG) $(DOCKER_HUB_REPO):$(DOCKER_TAG)
-	docker tag $(DOCKER_IMAGE):latest $(DOCKER_HUB_REPO):latest
-	docker tag $(DOCKER_IMAGE):$(DOCKER_TAG) $(GHCR_REPO):$(DOCKER_TAG)
-	docker tag $(DOCKER_IMAGE):latest $(GHCR_REPO):latest
-	docker push $(DOCKER_HUB_REPO):$(DOCKER_TAG)
-	docker push $(DOCKER_HUB_REPO):latest
-	docker push $(GHCR_REPO):$(DOCKER_TAG)
-	docker push $(GHCR_REPO):latest
-	@echo "Publishing complete. Logging out of ghcr.io."
+	$(call publish-image,$(DOCKER_IMAGE),$(DOCKER_HUB_REPO),$(GHCR_REPO))
+	@echo "MCP image published. Logging out of ghcr.io."
 	docker logout ghcr.io
 	@if git rev-parse -q --verify "refs/tags/v$(DOCKER_TAG)" >/dev/null; then \
 		echo "git tag v$(DOCKER_TAG) already exists - skipping creation"; \
@@ -84,6 +107,14 @@ docker-publish: docker-build ## Push MCP server image to Docker Hub + GHCR + git
 		git tag -a "v$(DOCKER_TAG)" -m "Release v$(DOCKER_TAG)"; \
 	fi
 	git push origin "v$(DOCKER_TAG)"
+
+docker-publish-tei: docker-build-tei ## Push both TEI images to Docker Hub + GHCR
+	docker login ghcr.io -u olk
+	$(call publish-image,$(TEI_IMAGE),$(TEI_HUB_REPO),$(TEI_GHCR_REPO))
+	$(call publish-image,$(TEI_RERANK_IMAGE),$(TEI_RERANK_HUB_REPO),$(TEI_RERANK_GHCR_REPO))
+	docker logout ghcr.io
+
+docker-publish-all: docker-publish docker-publish-tei ## Build and push all three images
 
 docker-up: ## Start services with docker compose
 	$(COMPOSE) up -d --build
