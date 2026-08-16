@@ -27,6 +27,7 @@ An MCP (Model Context Protocol) server that provides architecture design experti
 - [Extending with Custom Patterns](#extending-with-custom-patterns)
 - [Troubleshooting](#troubleshooting)
 - [Building & Development](#building--development)
+- [Publishing](#publishing)
 - [systemd Service (Linux)](#systemd-service-linux)
 - [License](#license)
 
@@ -45,11 +46,8 @@ export GENERATOR_API_KEY=your_key_here
 # 3. Start (Docker builds + starts everything)
 docker compose -f docker/docker-compose.yml up --build
 
-# 4. Verify
-make docker-verify
-
-# 5. Demo
-make docker-verify
+# 4. Demo
+make client
 ```
 
 Server starts on **streamable-http** at `http://localhost:8050/mcp`. Then connect your agent below.
@@ -398,23 +396,72 @@ docker compose -f docker/docker-compose.yml logs architecture-pattern-tei
 | `make lint` | Run ruff linting |
 | `make lint-fix` | Auto-fix lint issues and format |
 | `make typecheck` | Run pyright type checking |
-| `make integration-tests` | Run integration tests |
+| `make unit-tests` | Run unit tests with uv (tests/unit/) |
 | `make client` | Run the example MCP client demo (requires server running) |
-| `make docker-build` | Build the production Docker image |
+| `make docker-build` | Build the MCP server Docker image |
+| `make docker-build-all` | Build MCP server + TEI embedder images |
+| `make docker-publish` | Push image to Docker Hub + GHCR (version + latest) |
 | `make docker-up` | Build and start all services |
 | `make docker-down` | Stop all services |
-| `make docker-verify` | Smoke-test the running MCP server |
-| `make docker-test` | Run unit tests inside Docker |
-
 **Development workflow:**
 
 ```bash
 make install                      # First-time setup
 make lint typecheck              # Before pushing
-make docker-up && make docker-verify   # Start and verify
+make docker-build-all             # Build both images (first time and after code changes)
+make docker-up   # Start services
 make docker-logs-follow          # Watch logs
 make docker-down                 # Stop
 ```
+
+---
+
+## Publishing
+
+The MCP server image is published to two registries simultaneously:
+
+| Registry | Namespace | Image tags |
+|---|---|---|
+| Docker Hub | `olkowa/architecture-pattern-mcp` | `1.0.1`, `latest` |
+| GitHub Container Registry | `ghcr.io/olk/architecture-pattern-mcp` | `1.0.1`, `latest` |
+
+Both registries receive the same local image; the Makefile handles tagging and pushing for each in one invocation.
+
+Each `make docker-publish` also creates and pushes an annotated git tag `v<version>` (e.g., `v1.0.2`) marking the released commit; the target requires a clean worktree.
+
+### Prerequisites
+
+**Docker Hub** — already authenticated locally (`docker login`).
+
+**GitHub Container Registry** — requires a [classic PAT](https://github.com/settings/tokens/new?scopes=write:packages) with `write:packages` scope. 2FA is not an issue — PATs bypass it. After login the token is discarded; the credential persists in `~/.docker/config.json` until you log out.
+
+### Publish (one-time setup + per-session)
+
+```bash
+# 1. Login to GHCR (interactive — paste token at the password prompt)
+docker login ghcr.io -u olk
+
+# 2. Build and push to both registries
+make docker-publish
+
+# 3. Logout from GHCR immediately after publishing
+#    (removes the ghcr.io credential from ~/.docker/config.json)
+docker logout ghcr.io
+```
+
+On subsequent publishes repeat steps 1–3. If your PAT has expired, generate a new one at the link above.
+
+### First push — set package public (GHCR only)
+
+GHCR packages default to **private**. After the first `make docker-publish`, flip the package to public:
+
+`https://github.com/users/olk/packages/container/architecture-pattern-mcp/settings`
+
+Set visibility to **Public** and save.
+
+### Partial failure recovery
+
+If the push fails mid-way (e.g., GHCR auth was not configured), Docker Hub layers are already uploaded. After fixing auth, re-running `make docker-publish` is safe — each registry reports a cache hit for already-uploaded layers and completes the remaining push.
 
 ---
 

@@ -109,7 +109,6 @@ Docker containers take **up to ~2 minutes** to become healthy (TEI has
 systemctl status architecture-pattern-mcp                          # service state
 journalctl -u architecture-pattern-mcp -n 50                     # last 50 log lines
 docker compose -p apmcp-systemd -f /etc/architecture-pattern-mcp/docker-compose.yml ps
-make docker-verify                                                # end-to-end smoke test
 curl -fsS http://localhost:${MCP_HOST_PORT:-8050}/health         # MCP HTTP health
 ```
 

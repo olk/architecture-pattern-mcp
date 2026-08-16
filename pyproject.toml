@@ -17,7 +17,7 @@
 
 [project]
 name = "architecture-pattern-mcp"
-version = "0.2.0"
+version = "1.0.2"
 requires-python = ">=3.12"
 description = "MCP Architect Server providing comprehensive architectural expertise through lightweight pipeline coordinator and domain-specific tools"
 license = { text = "MIT" }
@@ -60,6 +60,13 @@ requires = ["hatchling>=1.0.0"]
 build-backend = "hatchling.build"
 
 [project.optional-dependencies]
+docs = [
+    "sphinx>=7.2.0",
+    "sphinx-autoapi>=3.0.0",
+    "pydata-sphinx-theme>=0.15.0",
+]
+
+[dependency-groups]
 dev = [
     "pytest>=8.0.0",
     "pytest-asyncio>=0.23.0",
@@ -69,15 +76,6 @@ dev = [
     "mypy>=1.8.0",
     "pyright>=1.1.300",
     "pre-commit>=3.6.0",
-    "tomli>=2.0.0; python_version < '3.11'",
-]
-docs = [
-    "sphinx>=7.2.0",
-    "sphinx-autoapi>=3.0.0",
-    "pydata-sphinx-theme>=0.15.0",
-]
-all = [
-    "architecture-pattern-mcp[dev,docs]",
 ]
 
 [project.urls]

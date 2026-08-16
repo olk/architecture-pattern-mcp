@@ -22,7 +22,7 @@ COPY pyproject.toml uv.lock* ./
 # Install dependencies using uv
 # Use --no-dev for production builds as per security best practices
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --no-dev --frozen
+    uv sync --frozen --no-dev
 
 # Pre-download cross-encoder model for reranking at container start-up.
 # Avoids first-query latency spike and ensures the model is available offline.
@@ -37,38 +37,7 @@ COPY src/ ./src/
 COPY ./pattern/*.json ./pattern/
 
 # =============================================================================
-# Stage 2: Test stage (includes dev dependencies)
-# =============================================================================
-FROM build AS test
-
-# Install dev dependencies for testing (including pytest)
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --all-extras
-
-# Copy test files
-COPY tests/ ./tests/
-
-# =============================================================================
-# Stage 3: Integration test stage (includes test-integration deps)
-# =============================================================================
-FROM test AS integration-test
-
-# IT-1: Install integration test dependencies (httpx for HTTP testing)
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --extra dev
-
-# Copy integration test files
-COPY tests/integration/ ./tests/integration/
-
-# Set environment for integration testing
-ENV TESTING=true
-ENV PYTHONPATH=/app/src
-
-# Default command runs integration tests when container starts
-CMD ["/app/.venv/bin/python", "-m", "pytest", "tests/integration/", "-v", "--tb=short"]
-
-# =============================================================================
-# Stage 4: Production stage
+# Stage 2: Production stage
 # =============================================================================
 FROM python:3.12-slim-bookworm AS production
 
@@ -120,6 +89,8 @@ CMD ["/app/.venv/bin/python", "-m", "src.main"]
 # Metadata labels
 # =============================================================================
 LABEL org.opencontainers.image.title="architecture-pattern-mcp"
-LABEL org.opencontainers.image.description="MCP server for architecture desgin"
+LABEL org.opencontainers.image.description="MCP server providing architecture pattern expertise"
 LABEL org.opencontainers.image.version="1.0.0"
 LABEL org.opencontainers.image.authors="Oliver Kowalke"
+LABEL org.opencontainers.image.source="https://github.com/olk/architecture-pattern-mcp"
+LABEL org.opencontainers.image.licenses="MIT"
