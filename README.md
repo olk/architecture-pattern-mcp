@@ -163,7 +163,7 @@ Call list_architecture_patterns() with no filters to see all patterns.
 Or get details on a specific pattern:
 
 ```
-Show me the event-driven architecture pattern.
+Show me detailed information to the event-driven architecture pattern.
 ```
 
 ---
