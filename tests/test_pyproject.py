@@ -87,7 +87,7 @@ class TestPyprojectToml:
         return """\
 [project]
 name = "architecture-pattern-mcp"
-version = "0.1.0"
+version = "1.0.2"
 requires-python = ">=3.12"
 description = "MCP Architect Server providing comprehensive architectural expertise"
 
@@ -107,7 +107,7 @@ build-backend = "hatchling.build"
 
         assert "project" in config
         assert config["project"]["name"] == "architecture-pattern-mcp"
-        assert config["project"]["version"] == "0.1.0"
+        assert config["project"]["version"] == "1.0.2"
 
     def test_load_config_raises_filenotfound_for_missing_file(self) -> None:
         """
@@ -127,7 +127,7 @@ build-backend = "hatchling.build"
         content = """\
 [project]
 name = "architecture-pattern-mcp"
-version = "0.1.0"
+version = "1.0.2"
 requires-python = ">=3.12"
 
 [build-system]
@@ -149,7 +149,7 @@ build-backend = "hatchling.build"
         content = """\
 [project]
 name = "architecture-pattern-mcp"
-version = "0.1.0"
+version = "1.0.2"
 requires-python = ">=3.12"
 
 [build-system]
@@ -160,7 +160,7 @@ build-backend = "hatchling.build"
         pyproject_path.write_text(content)
 
         config = load_toml_config(str(pyproject_path))
-        assert config["project"]["version"] == "0.1.0"
+        assert config["project"]["version"] == "1.0.2"
 
     def test_python_requires_312_or_higher(self, tmp_path: Path) -> None:
         """
@@ -171,7 +171,7 @@ build-backend = "hatchling.build"
         content = """\
 [project]
 name = "architecture-pattern-mcp"
-version = "0.1.0"
+version = "1.0.2"
 requires-python = ">=3.12"
 
 [build-system]
@@ -201,7 +201,7 @@ build-backend = "hatchling.build"
         content = """\
 [project]
 name = "architecture-pattern-mcp"
-version = "0.1.0"
+version = "1.0.2"
 requires-python = ">=3.12"
 
 [build-system]
@@ -271,7 +271,7 @@ class TestPyprojectTomlFromWorktree:
             pytest.skip("pyproject.toml does not exist")
 
         config = load_toml_config(str(pyproject_path))
-        assert config["project"]["version"] == "0.1.0"
+        assert config["project"]["version"] == "1.0.2"
 
     def test_worktree_python_requires(self) -> None:
         """
@@ -440,11 +440,12 @@ class TestDependencyDeclarations:
         patch = int(version_match.group(3))
         assert (major, minor, patch) >= (1, 0, 0), f"python-dotenv version {dotenv_dep} is less than 1.0.0"
 
-    def test_sentence_transformers_dependency(self) -> None:
+    def test_tei_reranker_dependency(self) -> None:
         """
-        AC-200: Verify sentence-transformers>=3.0,<6.0 specified in dependencies
+        AC-200: Verify llama-index-postprocessor-tei-rerank is specified in dependencies.
 
-        # Validates: FR-200, IC-34, AC-200
+        Reranking moved from local sentence-transformers (torch, CUDA stack) to a
+        TEI sidecar in PR feat/tei-rerank-shrink-image.
         """
         pyproject_path = Path(__file__).parent.parent / "pyproject.toml"
         if not pyproject_path.exists():
@@ -453,13 +454,13 @@ class TestDependencyDeclarations:
         config = load_toml_config(str(pyproject_path))
         deps = config["project"]["dependencies"]
 
-        # Find sentence-transformers dependency
-        st_dep = next((d for d in deps if d.startswith("sentence-transformers")), None)
-        assert st_dep is not None, "sentence-transformers dependency not found"
+        tei_dep = next(
+            (d for d in deps if d.startswith("llama-index-postprocessor-tei-rerank")), None
+        )
+        assert tei_dep is not None, "llama-index-postprocessor-tei-rerank dependency not found"
 
-        # Verify version constraint >=3.0,<6.0
-        match = re.match(r"sentence-transformers(>=[\d.]+)", st_dep)
-        assert match is not None, f"Invalid sentence-transformers version format: {st_dep}"
+        match = re.match(r"llama-index-postprocessor-tei-rerank(>=[\d.]+)", tei_dep)
+        assert match is not None, f"Invalid llama-index-postprocessor-tei-rerank version format: {tei_dep}"
 
         version_str = match.group(1)
         version_match = re.match(r">=(\d+)\.(\d+)(?:\.(\d+))?", version_str)
@@ -468,14 +469,9 @@ class TestDependencyDeclarations:
         major = int(version_match.group(1))
         minor = int(version_match.group(2))
         patch = int(version_match.group(3)) if version_match.group(3) is not None else 0
-        assert (major, minor, patch) >= (3, 0, 0), f"sentence-transformers version {st_dep} is less than 3.0.0"
-
-        # Verify upper bound <6.0
-        upper_match = re.search(r"<(\d+)\.(\d+)", st_dep)
-        assert upper_match is not None, f"sentence-transformers must have an upper bound: {st_dep}"
-        upper_major = int(upper_match.group(1))
-        upper_minor = int(upper_match.group(2))
-        assert upper_major < 6 or (upper_major == 6 and upper_minor == 0), f"sentence-transformers upper bound must be <6.0: {st_dep}"
+        assert (major, minor, patch) >= (0, 5, 0), (
+            f"llama-index-postprocessor-tei-rerank version {tei_dep} is less than 0.5.0"
+        )
 
     def test_faiss_cpu_dependency(self) -> None:
         """

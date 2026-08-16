@@ -322,17 +322,16 @@ class TestRetrievalConfig:
         """
         Test that RetrievalConfig accepts valid default values.
 
-        bm25_top_k / dense_top_k / similarity_top_k default to 0, meaning
+        bm25_top_k / dense_top_k default to 0, meaning
         "full corpus" (lossless stage-1 recall). top_k_patterns (the
         post-scoring selection cap) defaults to 5.
         """
         config = RetrievalConfig()
         assert config.bm25_top_k == 0
         assert config.dense_top_k == 0
-        assert config.similarity_top_k == 0
         assert config.top_k_patterns == 5
-        assert config.max_tries == 3
-        assert config.min_quality_score == 100.0
+        assert config.max_tries == 2
+        assert config.min_quality_score == 50.0
         assert config.style_score_threshold == 50.0
         assert config.pattern_context_limits == {
             "benefits": 3,
@@ -351,12 +350,10 @@ class TestRetrievalConfig:
         config = RetrievalConfig(
             bm25_top_k=50,
             dense_top_k=75,
-            similarity_top_k=100,
             top_k_patterns=10,
         )
         assert config.bm25_top_k == 50
         assert config.dense_top_k == 75
-        assert config.similarity_top_k == 100
         assert config.top_k_patterns == 10
 
     def test_retrieval_config_boundary_min_values(self) -> None:
@@ -366,12 +363,10 @@ class TestRetrievalConfig:
         config = RetrievalConfig(
             bm25_top_k=1,
             dense_top_k=1,
-            similarity_top_k=1,
             top_k_patterns=1,
         )
         assert config.bm25_top_k == 1
         assert config.dense_top_k == 1
-        assert config.similarity_top_k == 1
         assert config.top_k_patterns == 1
 
     def test_retrieval_config_boundary_max_values(self) -> None:
@@ -381,12 +376,10 @@ class TestRetrievalConfig:
         config = RetrievalConfig(
             bm25_top_k=1000,
             dense_top_k=1000,
-            similarity_top_k=1000,
             top_k_patterns=100,
         )
         assert config.bm25_top_k == 1000
         assert config.dense_top_k == 1000
-        assert config.similarity_top_k == 1000
         assert config.top_k_patterns == 100
 
     def test_retrieval_config_bm25_top_k_zero_means_full_corpus(self) -> None:
@@ -419,20 +412,20 @@ class TestRetrievalConfig:
         with pytest.raises(ValidationError):
             RetrievalConfig(dense_top_k=1001)
 
-    def test_retrieval_config_similarity_top_k_zero_means_full_corpus(self) -> None:
-        """Test that similarity_top_k=0 is accepted (means "full corpus")."""
-        config = RetrievalConfig(similarity_top_k=0)
-        assert config.similarity_top_k == 0
+    def test_retrieval_config_dense_top_k_zero_means_full_corpus(self) -> None:
+        """Test that dense_top_k=0 is accepted (means "full corpus")."""
+        config = RetrievalConfig(dense_top_k=0)
+        assert config.dense_top_k == 0
 
-    def test_retrieval_config_similarity_top_k_too_low(self) -> None:
-        """Test that similarity_top_k < 0 raises ValidationError."""
+    def test_retrieval_config_dense_top_k_too_low(self) -> None:
+        """Test that dense_top_k < 0 raises ValidationError."""
         with pytest.raises(ValidationError):
-            RetrievalConfig(similarity_top_k=-1)
+            RetrievalConfig(dense_top_k=-1)
 
-    def test_retrieval_config_similarity_top_k_too_high(self) -> None:
-        """Test that similarity_top_k > 1000 raises ValidationError."""
+    def test_retrieval_config_dense_top_k_too_high(self) -> None:
+        """Test that dense_top_k > 1000 raises ValidationError."""
         with pytest.raises(ValidationError):
-            RetrievalConfig(similarity_top_k=1001)
+            RetrievalConfig(dense_top_k=1001)
 
     def test_retrieval_config_top_k_patterns_too_low(self) -> None:
         """Test that top_k_patterns < 1 raises ValidationError."""
@@ -561,7 +554,7 @@ class TestExtraForbid:
             ServerConfig(
                 generator={"provider": "openai", "config": {"model": "gpt-4"}},
                 embedder={"provider": "tei", "config": {"model": "Qwen/Qwen3-Embedding-0.6B", "base_url": "http://localhost:8080"}},
-                retrieval={"bm25_top_k": 30, "dense_top_k": 40, "similarity_top_k": 50, "top_k_patterns": 8},
+                retrieval={"bm25_top_k": 30, "dense_top_k": 40, "top_k_patterns": 8},
                 invalid_top_level_key=True,
             )
 
@@ -572,10 +565,9 @@ class TestExtraForbid:
         config = ServerConfig(
             generator={"provider": "openai", "config": {"model": "gpt-4"}},
             embedder={"provider": "tei", "config": {"model": "Qwen/Qwen3-Embedding-0.6B", "base_url": "http://localhost:8080"}},
-            retrieval={"bm25_top_k": 30, "dense_top_k": 40, "similarity_top_k": 50, "top_k_patterns": 8},
+            retrieval={"bm25_top_k": 30, "dense_top_k": 40, "top_k_patterns": 8},
         )
         assert config.retrieval is not None
         assert config.retrieval.bm25_top_k == 30
         assert config.retrieval.dense_top_k == 40
-        assert config.retrieval.similarity_top_k == 50
         assert config.retrieval.top_k_patterns == 8

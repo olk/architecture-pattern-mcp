@@ -17,7 +17,7 @@
 
 [project]
 name = "architecture-pattern-mcp"
-version = "1.0.2"
+version = "1.0.3"
 requires-python = ">=3.12"
 description = "MCP Architect Server providing comprehensive architectural expertise through lightweight pipeline coordinator and domain-specific tools"
 license = { text = "MIT" }
@@ -49,7 +49,7 @@ dependencies = [
     "llama-index-retrievers-bm25>=0.7.1,<0.8",
     "pydantic>=2.11.7",
     "python-dotenv>=1.0.0",
-    "sentence-transformers>=3.0,<6.0",
+    "llama-index-postprocessor-tei-rerank>=0.5.0,<0.6",
     "faiss-cpu>=1.14.3",
     "boto3>=1.34.0",
     "httpx>=0.27.0",

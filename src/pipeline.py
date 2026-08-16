@@ -399,6 +399,9 @@ class ArchitecturePipeline(Workflow):
                 min_fusion_score=self._retrieval_config.min_fusion_score,
                 enable_reranking=self._retrieval_config.enable_reranking,
                 rerank_top_n=self._retrieval_config.rerank_top_n,
+                reranker_config=self._retrieval_config.reranker.config
+                if self._retrieval_config.reranker
+                else None,
             )
 
             # ── Stage 1 (recall): all candidate patterns + fusion scores ──

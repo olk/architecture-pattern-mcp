@@ -29,6 +29,14 @@
     "min_fusion_score": "{env:RETRIEVAL_MIN_FUSION_SCORE:-0.0}",
     "enable_reranking": "{env:RETRIEVAL_ENABLE_RERANKING:-false}",
     "rerank_top_n": "{env:RETRIEVAL_RERANK_TOP_N:-10}",
+    "reranker": {
+      "enabled": "{env:RERANKER_ENABLED:-false}",
+      "config": {
+        "base_url": "{env:RERANKER_BASE_URL:-http://architecture-pattern-tei-rerank:8080}",
+        "model": "{env:RERANKER_MODEL:-Alibaba-NLP/gte-reranker-modernbert-base}",
+        "timeout": "{env:RERANKER_TIMEOUT:-30.0}"
+      }
+    },
     "max_tries": "{env:RETRIEVAL_MAX_TRIES:-3}",
     "min_quality_score": "{env:RETRIEVAL_MIN_QUALITY_SCORE:-50.0}",
     "pattern_context_limits": {

@@ -302,6 +302,7 @@ class TestRetrievalLogging:
             pattern_loader=loader,
             bm25_top_k=5,
             dense_top_k=5,
+            reranker_config=MagicMock(base_url="http://reranker:8080", model="Alibaba-NLP/gte-reranker-modernbert-base", timeout=30.0),
         )
         return retriever
 
@@ -384,7 +385,7 @@ class TestRetrievalLogging:
         ]
 
         with caplog.at_level(logging.INFO, logger="src.patterns.retriever"), \
-             patch("src.patterns.retriever.SentenceTransformerRerank") as mock_reranker_cls:
+             patch("src.patterns.retriever.TextEmbeddingInference") as mock_reranker_cls:
             mock_reranker = MagicMock()
             mock_reranker.postprocess_nodes.return_value = retriever._dense_retriever.retrieve.return_value[:1]
             mock_reranker_cls.return_value = mock_reranker

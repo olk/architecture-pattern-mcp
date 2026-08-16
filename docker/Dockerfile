@@ -1,96 +1,87 @@
+# syntax=docker/dockerfile:1.7
+
 # =============================================================================
-# FR-273: The system SHALL support containerized deployment via Docker
-# ADR-5: Docker container with multi-stage build for slim production image
-# TECH-7: Multi-stage build reduces attack surface; non-root user (mcpuser)
-#         for production; health check endpoint for container orchestration
-# IC-41: The system SHALL use hatchling as the build backend
-# IC-42: python -m src.server command and architecture-pattern-mcp command
+# FR-273: containerized deployment via Docker
+# ADR-5:  multi-stage build for slim production image
+# TECH-7: non-root user (mcpuser) for production; health check endpoint
+# IC-41:  hatchling as build backend
+# IC-42:  python -m src.main entry point
+#
+# Changes vs prior version:
+#   - Reranking moved to a TEI sidecar; torch / sentence-transformers removed
+#     from this image entirely (~8 GB saving).
+#   - uv binary copied from the official distroless image instead of pip-installed.
+#   - Layer ownership via COPY --chown avoids the extra chown -R layer that
+#     duplicated the multi-GB venv in the filesystem.
+#   - uv sync uses --no-install-project (project is never installed; runtime
+#     uses PYTHONPATH=/app/src).
 # =============================================================================
-# Stage 1: Build stage with Python 3.12 and uv for dependency installation
-# =============================================================================
+
+# ---- Build stage ------------------------------------------------------------
 FROM python:3.12-slim-bookworm AS build
 
-# Install uv package manager for fast dependency installation
-# IC-41: Using hatchling as build backend requires uv for wheel creation
-RUN pip install --no-cache-dir uv
+# Copy uv binary from the official distroless image (~50 MB, no Python layer).
+# Pin to a stable tag; replace 0.7.0 with the current stable at release time.
+COPY --from=ghcr.io/astral-sh/uv:0.7.0 /uv /uvx /bin/
+
+ENV UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    UV_NO_CACHE=1 \
+    UV_PYTHON_DOWNLOADS=0 \
+    PYTHONDONTWRITEBYTECODE=1
 
 WORKDIR /app
 
-# Copy dependency files first for better layer caching
-COPY pyproject.toml uv.lock* ./
+# Dependencies first — layer caching: edit pyproject.toml / uv.lock without
+# reinstalling everything.
+COPY pyproject.toml uv.lock ./
 
-# Install dependencies using uv
-# Use --no-dev for production builds as per security best practices
+# Install ONLY dependencies.  The project itself is never installed; runtime
+# uses PYTHONPATH=/app/src.  --no-install-project also avoids hatchling
+# attempting to build a wheel before src/ is copied.
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-dev
+    uv sync --frozen --no-dev --no-install-project
 
-# Pre-download cross-encoder model for reranking at container start-up.
-# Avoids first-query latency spike and ensures the model is available offline.
-# Cache is stored in /root/.cache/huggingface by default.
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv run --no-project python -c "from sentence_transformers import CrossEncoder; CrossEncoder('cross-encoder/ms-marco-MiniLM-L-2-v2'); print('Reranker model pre-download complete')"
-
-# Copy application source code
+# Source + pattern assets — copied after deps so a src/ edit does not bust
+# the dependency cache layer.
 COPY src/ ./src/
-
-# Copy architecture pattern
 COPY ./pattern/*.json ./pattern/
 
-# =============================================================================
-# Stage 2: Production stage
-# =============================================================================
+# ---- Production stage ------------------------------------------------------
 FROM python:3.12-slim-bookworm AS production
 
-# Create non-root user for security
-# TECH-7: Non-root user (mcpuser) for production container security
+# Non-root user (TECH-7)
 RUN groupadd --gid 1000 mcpgroup && \
     useradd --uid 1000 --gid 1000 --shell /bin/bash --create-home mcpuser
 
-# Set working directory
 WORKDIR /app
 
-# Copy installed packages from build stage
-COPY --from=build /app/.venv /app/.venv
+# --chown creates files owned by mcpuser in a single filesystem operation.
+# Unlike a separate `RUN chown -R`, this does NOT duplicate the multi-GB venv
+# into an extra image layer.
+COPY --from=build --chown=1000:1000 /app/.venv /app/.venv
+COPY --from=build --chown=1000:1000 /app/src ./src
+COPY --from=build --chown=1000:1000 /app/pyproject.toml ./
+COPY --from=build --chown=1000:1000 /app/pattern ./pattern
 
-# Copy application source
-COPY --from=build /app/src ./src
-COPY --from=build /app/pyproject.toml ./
+ENV PATH="/app/.venv/bin:$PATH" \
+    PYTHONPATH="/app/src" \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
 
-# Copy architecture pattern
-COPY --from=build /app/pattern ./pattern
+USER 1000:1000
 
-# Set environment variables for the application
-# Set Python to use virtualenv
-ENV VIRTUAL_ENV="/app/.venv"
-ENV PATH="/app/.venv/bin:$PATH"
-# Add /app/src to PYTHONPATH so 'mcp_server' package can be found
-ENV PYTHONPATH="/app/src"
-# Python optimization for production
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
-
-# Change ownership to non-root user
-RUN chown -R mcpuser:mcpgroup /app
-
-# Switch to non-root user
-USER mcpuser
-
-# HEALTHCHECK instruction for container orchestration
-# TECH-7: Health check endpoint for container orchestration
-# Verifies the application is responding on port 8000
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+# HEALTHCHECK: verifies the app responds on port 8050 (not 8000 as older
+# comments stated).
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8050/health')" || exit 1
 
-# IC-42: python -m src.server command for running the MCP server
-# Entrypoint uses python -m src.server as specified
+# IC-42: python -m src.main for running the MCP server
 CMD ["/app/.venv/bin/python", "-m", "src.main"]
 
-# =============================================================================
-# Metadata labels
-# =============================================================================
-LABEL org.opencontainers.image.title="architecture-pattern-mcp"
-LABEL org.opencontainers.image.description="MCP server providing architecture pattern expertise"
-LABEL org.opencontainers.image.version="1.0.0"
-LABEL org.opencontainers.image.authors="Oliver Kowalke"
-LABEL org.opencontainers.image.source="https://github.com/olk/architecture-pattern-mcp"
-LABEL org.opencontainers.image.licenses="MIT"
+LABEL org.opencontainers.image.title="architecture-pattern-mcp" \
+      org.opencontainers.image.description="MCP server providing architecture pattern expertise" \
+      org.opencontainers.image.version="1.0.2" \
+      org.opencontainers.image.authors="Oliver Kowalke" \
+      org.opencontainers.image.source="https://github.com/olk/architecture-pattern-mcp" \
+      org.opencontainers.image.licenses="MIT"

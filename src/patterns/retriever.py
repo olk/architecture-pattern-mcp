@@ -29,7 +29,7 @@ Stage-1 (recall) retrieval pipeline:
   4. BM25 leg:   tokenize(normalized_domain) → bm25s top-K via DomainBM25Index.as_retriever
      (bm25_top_k / dense_top_k = 0 means "full corpus" — lossless recall)
   5. Apply fusion function: simple | reciprocal_rerank | relative_score | dist_based_score
-  6. Optionally rerank with SentenceTransformerRerank (cross-encoder)
+  6. Optionally rerank with TextEmbeddingInference (cross-encoder via TEI sidecar)
   7. Resolve each NodeWithScore.slug → patterns via PatternLoader.filter_by_domain
   8. Aggregate: pattern_score = max(fusion_score) over slugs surfacing it
   9. Return ALL resolved patterns with fusion scores (NO top-K truncation here).
@@ -43,8 +43,8 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
-from llama_index.core.postprocessor import SentenceTransformerRerank
 from llama_index.core.schema import QueryBundle
+from llama_index.postprocessor.tei_rerank import TextEmbeddingInference
 
 if TYPE_CHECKING:
     from llama_index.core.retrievers import BaseRetriever
@@ -112,6 +112,7 @@ class HybridPatternRetriever:
         min_fusion_score: float = 0.0,
         enable_reranking: bool = False,
         rerank_top_n: int = 10,
+        reranker_config: Any | None = None,
     ) -> None:
         self._bm25 = bm25_index
         self._vector = vector_index
@@ -123,7 +124,8 @@ class HybridPatternRetriever:
         self._min_fusion_score = min_fusion_score
         self._enable_reranking = enable_reranking
         self._rerank_top_n = rerank_top_n
-        self._reranker: SentenceTransformerRerank | None = None
+        self._reranker_config = reranker_config
+        self._reranker: TextEmbeddingInference | None = None
         self._dense_retriever: BaseRetriever | None = None
         self._bm25_retriever: BaseRetriever | None = None
 
@@ -165,9 +167,9 @@ class HybridPatternRetriever:
         )
 
     def _ensure_reranker(self) -> None:
-        """Lazily build the cross-encoder once (loads weights on first use).
+        """Lazily build the TEI-backed cross-encoder once.
 
-        ``keep_retrieval_score=True`` causes SentenceTransformerRerank to
+        ``keep_retrieval_score=True`` causes TextEmbeddingInference to
         stash the RRF score in ``node.metadata["retrieval_score"]`` before
         overwriting ``node.score`` with the cross-encoder logit. The caller
         restores the RRF score after reranking so downstream fusion-score
@@ -175,12 +177,17 @@ class HybridPatternRetriever:
         """
         if self._reranker is not None:
             return
-        # top_n is overridden per-call (lossless: score all, truncate downstream).
-        self._reranker = SentenceTransformerRerank(
-            model="cross-encoder/ms-marco-MiniLM-L-2-v2",
+        if self._reranker_config is None:
+            raise RuntimeError(
+                "enable_reranking=True but no reranker_config provided"
+            )
+        self._reranker = TextEmbeddingInference(
+            base_url=self._reranker_config.base_url,
+            model_name=self._reranker_config.model,
+            timeout=self._reranker_config.timeout,
             top_n=1,
-            keep_retrieval_score=True,
         )
+        self._reranker.keep_retrieval_score = True
 
     def retrieve(
         self,

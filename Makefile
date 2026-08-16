@@ -57,8 +57,9 @@ docker-build: ## Build MCP server Docker image with dev dependencies
 	docker build --target production -f docker/Dockerfile -t $(DOCKER_IMAGE):$(DOCKER_TAG) .
 	docker build --target production -f docker/Dockerfile -t $(DOCKER_IMAGE):latest .
 
-docker-build-all: docker-build ## Build all Docker images (MCP server + TEI embedder)
+docker-build-all: docker-build ## Build all Docker images (MCP server + TEI embedder + TEI reranker)
 	docker build -f docker/Dockerfile.tei -t architecture-pattern-tei:local .
+	docker build -f docker/Dockerfile.tei-rerank -t architecture-pattern-tei-rerank:local .
 
 docker-publish: docker-build ## Push MCP server image to Docker Hub + GHCR + git tag v$(DOCKER_TAG)
 	@if [ -n "$$(git status --porcelain)" ]; then \

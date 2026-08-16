@@ -102,6 +102,21 @@ class EmbedderConfig(BaseModel):
     config: EmbedderInnerConfig
 
 
+class RerankerInnerConfig(BaseModel):
+    """Reranker per-provider configuration (TEI-backed)."""
+
+    base_url: str = ""
+    model: str = "Alibaba-NLP/gte-reranker-modernbert-base"
+    timeout: float = Field(30.0, gt=0)
+
+
+class RerankerConfig(BaseModel):
+    """Reranker provider configuration."""
+
+    enabled: bool = False
+    config: RerankerInnerConfig | None = None
+
+
 FusionMode = Literal["simple", "reciprocal_rerank", "relative_score", "dist_based_score"]
 
 SCORE_AWARE_MODES: frozenset[str] = frozenset({"relative_score", "dist_based_score"})
@@ -153,6 +168,7 @@ class RetrievalConfig(BaseModel):
     )
     enable_reranking: bool = False
     rerank_top_n: int = Field(10, ge=1, le=100)
+    reranker: RerankerConfig | None = None
     min_quality_score: float = Field(
         50.0, ge=0.0, le=100.0,
         description=(
@@ -261,6 +277,20 @@ class RetrievalConfig(BaseModel):
         if abs(s - 1.0) > 1e-3:
             raise ValueError(
                 f"analysis_blend_weight + fusion_blend_weight must sum to 1.0, got {s}"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _check_reranker_required_when_enabled(self) -> "RetrievalConfig":
+        if self.enable_reranking and (
+            self.reranker is None
+            or self.reranker.config is None
+            or not self.reranker.enabled
+        ):
+            raise ValueError(
+                "enable_reranking=True requires a reranker config with "
+                "enabled=True and a non-empty base_url. "
+                "Set RERANKER_BASE_URL and RERANKER_ENABLED=true."
             )
         return self
 

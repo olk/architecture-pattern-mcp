@@ -44,7 +44,15 @@ services:
       - RETRIEVAL_QUALITY_WEIGHT=0.0
       - RETRIEVAL_ENABLE_RERANKING=true
       - RETRIEVAL_RERANK_TOP_N=10
+
+      - RERANKER_ENABLED=true
+      - RERANKER_BASE_URL=http://architecture-pattern-tei-rerank:8080
+      - RERANKER_MODEL=Alibaba-NLP/gte-reranker-modernbert-base
+      - RERANKER_TIMEOUT=30
+
     depends_on:
+      architecture-pattern-tei-rerank:
+        condition: service_healthy
       architecture-pattern-tei:
         condition: service_healthy
     ports:
@@ -74,3 +82,18 @@ services:
       timeout: 5s
       retries: 5
       start_period: 120s
+
+  architecture-pattern-tei-rerank:
+    image: architecture-pattern-tei-rerank:local
+    container_name: architecture-pattern-tei-rerank
+    restart: unless-stopped
+    # No ports published — internal only (reached by MCP via Docker DNS)
+    environment:
+      - HF_HUB_OFFLINE=1
+      - HUGGINGFACE_HUB_CACHE=/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8080/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
