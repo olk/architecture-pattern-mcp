@@ -65,6 +65,7 @@ docker-publish: docker-build ## Push MCP server image to Docker Hub + GHCR + git
 		echo "ERROR: uncommitted changes - commit before publishing:"; \
 		git status --short; exit 1; \
 	fi
+	docker login ghcr.io -u olk
 	docker tag $(DOCKER_IMAGE):$(DOCKER_TAG) $(DOCKER_HUB_REPO):$(DOCKER_TAG)
 	docker tag $(DOCKER_IMAGE):latest $(DOCKER_HUB_REPO):latest
 	docker tag $(DOCKER_IMAGE):$(DOCKER_TAG) $(GHCR_REPO):$(DOCKER_TAG)
@@ -99,7 +100,6 @@ docker-rm: ## Remove Docker image
 	docker rmi $(DOCKER_IMAGE):$(DOCKER_TAG)
 
 ##@ Maintenance
-
 clean: ## Remove caches and build artifacts
 	rm -rf .pytest_cache .ruff_cache dist build
 	find . -type d -name __pycache__ -not -path "./.venv/*" -exec rm -rf {} +
