@@ -35,7 +35,6 @@
       "enabled": "{env:RERANKER_ENABLED:-false}",
       "config": {
         "base_url": "{env:RERANKER_BASE_URL:-http://architecture-pattern-tei-rerank:8080}",
-        "model": "{env:RERANKER_MODEL:-Alibaba-NLP/gte-reranker-modernbert-base}",
         "timeout": "{env:RERANKER_TIMEOUT:-30.0}"
       }
     },

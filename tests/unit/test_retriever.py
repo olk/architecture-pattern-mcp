@@ -302,7 +302,7 @@ class TestRetrievalLogging:
             pattern_loader=loader,
             bm25_top_k=5,
             dense_top_k=5,
-            reranker_config=MagicMock(base_url="http://reranker:8080", model="Alibaba-NLP/gte-reranker-modernbert-base", timeout=30.0),
+            reranker_config=MagicMock(base_url="http://reranker:8080", timeout=30.0),
         )
         return retriever
 

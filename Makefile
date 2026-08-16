@@ -69,12 +69,10 @@ docker-build: ## Build MCP server Docker image with dev dependencies
 docker-build-tei: ## Build both TEI images (embedder + reranker)
 	docker build -f docker/Dockerfile.tei \
 		-t $(TEI_IMAGE):$(DOCKER_TAG) \
-		-t $(TEI_IMAGE):latest \
-		-t $(TEI_IMAGE):local .
+		-t $(TEI_IMAGE):latest .
 	docker build -f docker/Dockerfile.tei-rerank \
 		-t $(TEI_RERANK_IMAGE):$(DOCKER_TAG) \
-		-t $(TEI_RERANK_IMAGE):latest \
-		-t $(TEI_RERANK_IMAGE):local .
+		-t $(TEI_RERANK_IMAGE):latest .
 
 docker-build-all: docker-build docker-build-tei ## Build all Docker images
 

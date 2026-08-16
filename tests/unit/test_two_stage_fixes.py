@@ -448,7 +448,7 @@ class TestT6RerankLossless:
             pattern_loader=_MockLoader(),
             enable_reranking=True,
             rerank_top_n=1,
-            reranker_config=MagicMock(base_url="http://localhost:8080", model="Alibaba-NLP/gte-reranker-modernbert-base", timeout=30.0),
+            reranker_config=MagicMock(base_url="http://localhost:8080", timeout=30.0),
         )
         # Pre-seed retrievers
         retriever._dense_retriever = _MockVec().as_retriever(2)

@@ -45,7 +45,7 @@ import os
 from typing import Any, ClassVar, Literal
 
 from dotenv import load_dotenv
-from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
 from src.config_expansion import expand_env_in_obj
 
@@ -103,8 +103,9 @@ class EmbedderConfig(BaseModel):
 class RerankerInnerConfig(BaseModel):
     """Reranker per-provider configuration (TEI-backed)."""
 
+    model_config = ConfigDict(extra="forbid")
+
     base_url: str = ""
-    model: str = "Alibaba-NLP/gte-reranker-modernbert-base"
     timeout: float = Field(30.0, gt=0)
 
 

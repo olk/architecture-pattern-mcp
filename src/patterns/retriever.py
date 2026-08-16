@@ -51,6 +51,7 @@ if TYPE_CHECKING:
 
 from src.patterns._fusion import FusionMode, apply_fusion
 from src.patterns.bm25_index import DomainBM25Index
+from src.patterns.embedder import TEI_RERANKER_MODEL
 from src.patterns.loader import PatternLoader
 from src.patterns.vector_index import DomainVectorIndex
 from src.patterns.vector_retriever import DomainVectorRetriever
@@ -181,7 +182,7 @@ class HybridPatternRetriever:
             )
         self._reranker = TextEmbeddingInference(
             base_url=self._reranker_config.base_url,
-            model_name=self._reranker_config.model,
+            model_name=TEI_RERANKER_MODEL,
             timeout=self._reranker_config.timeout,
             top_n=1,
         )

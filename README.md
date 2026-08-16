@@ -342,8 +342,7 @@ The server reads `~/.config/architecture-pattern-mcp/config.json` (override with
 | `RETRIEVAL_MAX_TRIES` | `3` | Max design loop attempts |
 | `RETRIEVAL_MIN_QUALITY_SCORE` | `50.0` | Early-stop quality threshold |
 | `RERANKER_ENABLED` | `false` | Enable reranker |
-| `RERANKER_BASE_URL` | *(default reranker URL)* | Reranker base URL |
-| `RERANKER_MODEL` | *(default)* | Reranker model |
+| `RERANKER_BASE_URL` | *(default reranker URL)* | TEI reranker endpoint (host:port); model is fixed to `gte-reranker-modernbert-base` |
 | `RERANKER_TIMEOUT` | `30.0` | Reranker timeout (seconds) |
 | `PATTERN_DIRECTORY` | `~/.config/architecture-pattern-mcp/pattern` | Pattern files directory |
 | `VALIDATION_MAX_RETRIES` | `2` | Max self-healing retry attempts |

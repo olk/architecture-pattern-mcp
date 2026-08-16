@@ -47,7 +47,6 @@ services:
 
       - RERANKER_ENABLED=true
       - RERANKER_BASE_URL=http://architecture-pattern-tei-rerank:8080
-      - RERANKER_MODEL=Alibaba-NLP/gte-reranker-modernbert-base
       - RERANKER_TIMEOUT=30
 
       - TRANSPORT=streamable-http
@@ -74,7 +73,7 @@ services:
       start_period: 40s
 
   architecture-pattern-tei:
-    image: ${TEI_IMAGE:-architecture-pattern-tei:local}
+    image: ${TEI_IMAGE:-architecture-pattern-tei:latest}
     container_name: architecture-pattern-tei
     restart: unless-stopped
     # No ports published — internal only (reached by MCP via Docker DNS)
@@ -90,7 +89,7 @@ services:
       start_period: 120s
 
   architecture-pattern-tei-rerank:
-    image: ${TEI_RERANK_IMAGE:-architecture-pattern-tei-rerank:local}
+    image: ${TEI_RERANK_IMAGE:-architecture-pattern-tei-rerank:latest}
     container_name: architecture-pattern-tei-rerank
     restart: unless-stopped
     # No ports published — internal only (reached by MCP via Docker DNS)
