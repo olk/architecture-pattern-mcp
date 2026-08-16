@@ -104,8 +104,6 @@ class SoftwareArchitectAgent:
             "top_p": self._generator.config.top_p,
             "top_k": self._generator.config.top_k,
         }
-        if self._generator.config.max_tokens is not None:
-            additional_kwargs["max_tokens"] = self._generator.config.max_tokens
         if self._generator.config.stream:
             additional_kwargs["stream"] = True
 

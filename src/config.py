@@ -65,10 +65,6 @@ class GeneratorInnerConfig(BaseModel):
     temperature: float = 0.7
     top_p: float = 1.0
     top_k: int = 20
-    max_tokens: int | None = Field(
-        default=None,
-        description="Maximum tokens to generate; set to match schema size for decode optimization",
-    )
     stream: bool = Field(
         default=False,
         description="Enable streaming responses for improved time-to-first-byte",
@@ -242,9 +238,11 @@ class RetrievalConfig(BaseModel):
             or not self.reranker.enabled
         ):
             raise ValueError(
-                "enable_reranking=True requires a reranker config with "
-                "enabled=True and a non-empty base_url. "
-                "Set RERANKER_BASE_URL and RERANKER_ENABLED=true."
+                "enable_reranking=True requires retrieval.reranker.enabled=True "
+                "with a non-empty RerankerInnerConfig.base_url. Set "
+                "RERANKER_ENABLED=true and RERANKER_BASE_URL, and ensure the "
+                "deployed config.json contains the retrieval.reranker block "
+                "(an outdated config file copied from an older image may omit it)."
             )
         return self
 

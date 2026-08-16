@@ -318,7 +318,6 @@ The server reads `~/.config/architecture-pattern-mcp/config.json` (override with
 | `GENERATOR_TEMPERATURE` | `0.7` | Sampling temperature |
 | `GENERATOR_TOP_P` | `1.0` | Top-p sampling |
 | `GENERATOR_TOP_K` | `20` | Top-k sampling |
-| `GENERATOR_MAX_TOKENS` | *(none)* | Max tokens to generate |
 | `GENERATOR_STREAM` | `false` | Enable streaming responses |
 | `EMBEDDER_PROVIDER` | `tei` | Embedder provider |
 | `EMBEDDER_BASE_URL` | `http://127.0.0.1:8080` | TEI embedder URL |

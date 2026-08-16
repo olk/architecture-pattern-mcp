@@ -103,7 +103,7 @@ async def server_main(
         )
         await server.run()
     except ValueError as e:
-        logger.critical(f"Invalid transport configuration: {e}")
+        logger.critical(f"Invalid configuration: {e}")
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
     except Exception as e:
