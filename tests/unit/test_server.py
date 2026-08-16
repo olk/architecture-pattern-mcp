@@ -20,7 +20,7 @@
 # SOFTWARE.
 
 """
-Unit tests for MCPArchitectServer (FR-240, FR-241, FR-242).
+Unit tests for MCPArchitectServer (FR-240, FR-241, FR-242, FR-247 to FR-250).
 
 Validates:
 - AC-240: Verify MCPArchitectServer class exists, accepts optional config_path parameter
@@ -106,6 +106,37 @@ class TestMCPArchitectServerLifespan:
 
         # After the generator is done (StopAsyncIteration), cleanup should have been called
         # Note: The actual cleanup happens in the finally block which runs when generator closes
+
+
+class TestMCPArchitectServerPromptRegistration:
+    """
+    Tests for MCPArchitectServer prompt registration.
+
+    FR-247: The system SHALL expose four MCP prompts via prompts/list handler
+    FR-248: Prompt design_architecture_workflow guides the design workflow
+    FR-249: Prompt explore_pattern_catalog embeds live pattern metadata
+    FR-250: Prompts SHALL be idempotently registered
+
+    Test Case IDs: UT-15
+    """
+
+    @pytest.mark.asyncio
+    async def test_lifespan_registers_four_prompts(self):
+        """FR-247: Verify lifespan registers 4 prompts."""
+        server = MCPArchitectServer()
+        async with server._mcp.lifespan():
+            await server._initialize()
+            server._register_prompts(server._mcp)
+
+            components = server._mcp.local_provider._components
+            prompt_keys = [k for k in components.keys() if "prompt" in k.lower()]
+            names = {k.split(":")[1].split("@")[0] for k in prompt_keys}
+            assert names == {
+                "design_architecture_workflow",
+                "explore_pattern_catalog",
+                "evaluate_my_architecture",
+                "compare_architecture_styles",
+            }
 
 
 class TestMCPArchitectServerToolRegistration:

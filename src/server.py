@@ -25,6 +25,10 @@ MCPArchitectServer - FastMCP server entry point with lifespan management and too
 FR-240: The system SHALL provide an MCPArchitectServer class
 FR-241: The system SHALL expose four MCP tools via list_tools handler
 FR-242: The system SHALL route tool calls via call_tool handler
+FR-247: The system SHALL expose four MCP prompts via prompts/list handler
+FR-248: Prompt design_architecture_workflow SHALL guide analyze -> generate -> evaluate -> refine
+FR-249: Prompt explore_pattern_catalog SHALL dynamically embed live pattern metadata
+FR-250: Prompts SHALL be idempotently registered (survive lifespan re-entry)
 
 Implementation Constraints:
 - IC-37: Lifespan function SHALL use yield statement
@@ -35,6 +39,7 @@ Implementation Constraints:
 Architecture Decisions:
 - ADR-1: Python 3.12+ with FastMCP for MCP Protocol Implementation
 - ADR-3: MCP Tool-Based API with Four Core Tools
+- ADR-9: User-Invoked Workflow Prompts as Slash-Command Templates
 - DP-4: Factory Pattern for tool creation
 - DP-7: Adapter Pattern for protocol interface adaptation
 
@@ -51,6 +56,7 @@ from typing import Any
 
 from fastmcp import Context, FastMCP
 from fastmcp.exceptions import ToolError
+from fastmcp.server.transforms import PromptsAsTools
 
 from src.agent import SoftwareArchitectAgent
 from src.config import ConfigManager, ServerConfig
@@ -254,11 +260,15 @@ class MCPArchitectServer:
             lifespan=self.lifespan,
             on_duplicate="error",
         )
+        # add_transform is once-per-instance; do NOT move into lifespan without an
+        # idempotency guard — add_transform appends, it does not replace.
+        self._mcp.add_transform(PromptsAsTools(self._mcp))
         self._agent: SoftwareArchitectAgent | None = None
         self._pipeline: ArchitecturePipeline | None = None
         self._tools: dict[str, Any] = {}
         self._tools_registered: set[str] = set()
         self._resources_registered: bool = False
+        self._prompts_registered: bool = False
 
         logger.debug(
             "MCPArchitectServer instance created",
@@ -418,6 +428,9 @@ class MCPArchitectServer:
             # Register MCP Resources (pattern://, template://, component://)
             self._register_resources(server)
 
+            # Register MCP Prompts (user-invoked workflow templates)
+            self._register_prompts(server)
+
             # Build component blueprints once so resource handlers can read them
             component_blueprints = build_component_blueprints(self._pattern_loader)
 
@@ -552,6 +565,28 @@ class MCPArchitectServer:
             },
         )
         self._resources_registered = True
+
+    def _register_prompts(self, server: FastMCP) -> None:
+        """
+        Register MCP Prompts with FastMCP: user-invoked workflow templates.
+
+        FR-247, FR-250. ADR-9.
+
+        Idempotent: skips re-registration on lifespan re-entry. Mirrors
+        _register_resources structure exactly.
+        """
+        if self._prompts_registered:
+            return
+
+        from src.mcp_prompts import register_prompts
+
+        count = register_prompts(server, self._pattern_loader)
+
+        logger.info(
+            "MCP Prompts registered",
+            extra={"prompt_count": count},
+        )
+        self._prompts_registered = True
 
     async def run(self) -> None:
         """Run the FastMCP server asynchronously using FastMCP's built-in dispatcher."""

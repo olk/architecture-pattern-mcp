@@ -199,6 +199,28 @@ Show me details about the blackboard pattern.
 
 ---
 
+## 💬 Prompts
+
+This server also exposes four user-invoked workflow prompts (slash commands
+in MCP clients). Unlike tools, the LLM does not autonomously invoke prompts —
+the user selects one and fills in its arguments. Each prompt encodes a tested
+tool-orchestration recipe (ADR-9).
+
+| Prompt | Args | What it does |
+|---|---|---|
+| `/design_architecture_workflow` | requirements\* | Full analyze → generate → evaluate pipeline |
+| `/explore_pattern_catalog` | `domain`, `category` | Live catalog discovery with embedded pattern names |
+| `/evaluate_my_architecture` | `focus` | Guide evaluation criteria + finding prioritisation |
+| `/compare_architecture_styles` | style_a\*, style_b\*, requirements\* | Two designs side-by-side; ~2× token cost |
+
+\* = required argument
+
+### Tool-only clients
+
+Clients that only support the tools protocol (no native `prompts/list` or `prompts/get`) can access all four workflow prompts via the generated `list_prompts` and `get_prompt` tools, which route through the server's middleware chain exactly as native prompt calls do.
+
+---
+
 ## 📖 Pattern Catalog
 
 ### Via MCP tools (recommended — works in all clients)
