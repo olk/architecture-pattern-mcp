@@ -11,11 +11,10 @@ RemainAfterExit=yes
 User=graemer
 WorkingDirectory=/etc/architecture-pattern-mcp
 EnvironmentFile=/etc/architecture-pattern-mcp/.env
-
 ExecStartPre=/usr/bin/docker image inspect architecture-pattern-mcp:latest
-ExecStartPre=/usr/bin/docker image inspect architecture-pattern-tei:local
+ExecStartPre=/usr/bin/docker image inspect architecture-pattern-tei:latest
+ExecStartPre=/usr/bin/docker image inspect architecture-pattern-tei-rerank:latest
 ExecStartPre=/usr/bin/docker compose config --quiet
-
 ExecStart=/usr/bin/docker compose up -d --remove-orphans
 ExecReload=/usr/bin/docker compose up -d --remove-orphans
 ExecStop=/usr/bin/docker compose down
