@@ -178,8 +178,14 @@ class DesignArchitectureTool:
         tags={"architecture", "design"},
         annotations=ToolAnnotations(
             title="Design Architecture",
-            readOnlyHint=False,
+            # readOnlyHint=True per OpenAI MCP directory guidance: this tool computes
+            # an architecture design via LLM and changes no server state.  (Previously
+            # False to discourage auto-confirm of expensive LLM calls; the auto-confirm
+            # tradeoff was explicitly accepted.)
+            readOnlyHint=True,
             destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
         ),
     )
     async def design(

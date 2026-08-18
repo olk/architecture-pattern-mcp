@@ -515,31 +515,46 @@ class MCPArchitectServer:
         Register tools with FastMCP using the standalone @tool decorator pattern.
 
         Each tool class method is already decorated with @tool (from fastmcp.tools).
-        We register the bound method via server.add_tool(), which FastMCP recognizes
-        as a properly decorated tool.
+        Tools are registered via server.add_tool() with direct attribute access on the
+        tool instance — the explicit per-tool form eliminates the unresolvable
+        "bound_method" variable that static analyzers flagged as a phantom tool,
+        and preserves per-tool idempotency for partial-failure resilience.
 
-        Idempotent: skips re-registering a tool that has already been registered
-        with this FastMCP instance (handles lifespan re-entry when Client connects).
+        Idempotent: each tool is individually skipped if already registered with
+        this FastMCP instance (handles lifespan re-entry when Client connects).
 
         Args:
             server: FastMCP server instance
         """
-        method_map = {
-            "design_architecture": "design",
-            "analyze_architecture": "analyze",
-            "generate_architecture": "generate",
-            "evaluate_architecture": "evaluate",
-            "list_architecture_patterns": "list_architecture_patterns",
-            "get_architecture_pattern": "get_architecture_pattern",
-        }
-        for tool_name, method_name in method_map.items():
-            if tool_name in self._tools_registered:
-                continue
-            instance = self._tools[tool_name]
-            bound_method = getattr(instance, method_name)
-            server.add_tool(bound_method)
-            self._tools_registered.add(tool_name)
-            logger.debug(f"Registered tool: {tool_name}")
+        if "design_architecture" not in self._tools_registered:
+            server.add_tool(self._tools["design_architecture"].design)
+            self._tools_registered.add("design_architecture")
+            logger.debug("Registered tool: design_architecture")
+
+        if "analyze_architecture" not in self._tools_registered:
+            server.add_tool(self._tools["analyze_architecture"].analyze)
+            self._tools_registered.add("analyze_architecture")
+            logger.debug("Registered tool: analyze_architecture")
+
+        if "generate_architecture" not in self._tools_registered:
+            server.add_tool(self._tools["generate_architecture"].generate)
+            self._tools_registered.add("generate_architecture")
+            logger.debug("Registered tool: generate_architecture")
+
+        if "evaluate_architecture" not in self._tools_registered:
+            server.add_tool(self._tools["evaluate_architecture"].evaluate)
+            self._tools_registered.add("evaluate_architecture")
+            logger.debug("Registered tool: evaluate_architecture")
+
+        if "list_architecture_patterns" not in self._tools_registered:
+            server.add_tool(self._tools["list_architecture_patterns"].list_architecture_patterns)
+            self._tools_registered.add("list_architecture_patterns")
+            logger.debug("Registered tool: list_architecture_patterns")
+
+        if "get_architecture_pattern" not in self._tools_registered:
+            server.add_tool(self._tools["get_architecture_pattern"].get_architecture_pattern)
+            self._tools_registered.add("get_architecture_pattern")
+            logger.debug("Registered tool: get_architecture_pattern")
 
     def _register_resources(self, server: FastMCP) -> None:
         """

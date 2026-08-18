@@ -162,6 +162,9 @@ class AnalyzeArchitectureTool:
         annotations=ToolAnnotations(
             title="Analyze Architecture",
             readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
         ),
     )
     async def analyze(

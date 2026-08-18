@@ -152,6 +152,8 @@ class EvaluateArchitectureTool:
             title="Evaluate Architecture",
             readOnlyHint=True,
             destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
         ),
     )
     async def evaluate(

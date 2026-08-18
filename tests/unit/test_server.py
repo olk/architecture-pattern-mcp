@@ -39,6 +39,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from fastmcp import Client
 from src.server import ERROR_SERVER_INIT, MCPArchitectServer
 
 
@@ -185,6 +186,30 @@ class TestMCPArchitectServerToolRegistration:
             assert "analyze_architecture" in tool_names
             assert "generate_architecture" in tool_names
             assert "evaluate_architecture" in tool_names
+
+    @pytest.mark.asyncio
+    async def test_all_tools_declare_all_four_annotation_hints(self):
+        """Every exposed tool declares all four MCP annotation hints (OpenAI directory requirement).
+
+        Guards against regressions where annotation hints are missing or non-boolean.
+        The four required hints are: readOnlyHint, destructiveHint, idempotentHint, openWorldHint.
+        """
+        server = MCPArchitectServer()
+        async with server._mcp.lifespan():
+            await server._initialize()
+            server._register_tools(server._mcp)
+            server._register_prompts(server._mcp)
+            async with Client(server._mcp) as client:
+                tools = await client.list_tools()
+                assert len(tools) == 8, f"Expected 8 tools, got {len(tools)}"
+                for t in tools:
+                    ann = t.annotations
+                    assert ann is not None, f"{t.name} missing annotations"
+                    for hint in ("readOnlyHint", "destructiveHint", "idempotentHint", "openWorldHint"):
+                        value = getattr(ann, hint)
+                        assert isinstance(
+                            value, bool,
+                        ), f"{t.name}.{hint} is {value!r}, expected bool"
 
     def test_call_tool_routes_to_tool_implementation(self):
         """FR-242: Verify call_tool method exists and is callable"""

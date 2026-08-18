@@ -92,6 +92,8 @@ class ListArchitecturePatternsTool:
             title="List Architecture Patterns",
             readOnlyHint=True,
             destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
         ),
     )
     async def list_architecture_patterns(
@@ -180,6 +182,8 @@ class GetArchitecturePatternTool:
             title="Get Architecture Pattern",
             readOnlyHint=True,
             destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
         ),
     )
     async def get_architecture_pattern(
