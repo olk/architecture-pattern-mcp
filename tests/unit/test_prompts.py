@@ -209,6 +209,30 @@ class TestPromptsAsTools:
                 assert "get_prompt" in tool_names
 
     @pytest.mark.asyncio
+    async def test_generated_tools_carry_annotations(self):
+        """list_prompts and get_prompt carry ToolAnnotations via AnnotatedPromptsAsTools."""
+        server = MCPArchitectServer()
+        async with server._mcp.lifespan():
+            await server._initialize()
+            server._register_tools(server._mcp)
+            server._register_prompts(server._mcp)
+            async with Client(server._mcp) as client:
+                tools = await client.list_tools()
+                by_name = {t.name: t for t in tools}
+
+                for tool_name, expected_title in (
+                    ("list_prompts", "List Prompts"),
+                    ("get_prompt", "Get Prompt"),
+                ):
+                    ann = by_name[tool_name].annotations
+                    assert ann is not None, f"{tool_name} has no annotations"
+                    assert ann.title == expected_title
+                    assert ann.readOnlyHint is True
+                    assert ann.destructiveHint is False
+                    assert ann.idempotentHint is True
+                    assert ann.openWorldHint is False
+
+    @pytest.mark.asyncio
     async def test_list_prompts_tool_returns_all_workflow_prompts(self):
         """list_prompts tool returns JSON with all 4 workflow prompts and argument metadata."""
         import json

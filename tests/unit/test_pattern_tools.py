@@ -31,9 +31,11 @@ from __future__ import annotations
 
 import pytest
 from fastmcp.exceptions import ToolError
+from unittest.mock import patch
 
 from src.patterns.loader import PatternLoader
 from src.tools.patterns import (
+    ERROR_PATTERN_CATALOG,
     GetArchitecturePatternTool,
     ListArchitecturePatternsTool,
     get_architecture_pattern_tool,
@@ -155,3 +157,32 @@ def test_factory_functions_return_instances(loader):
     get_inst = get_architecture_pattern_tool(loader)
     assert isinstance(list_inst, ListArchitecturePatternsTool)
     assert isinstance(get_inst, GetArchitecturePatternTool)
+
+
+@pytest.mark.asyncio
+async def test_list_patterns_wraps_loader_errors(list_tool):
+    """Loader exception surfaces as ToolError with ERROR_PATTERN_CATALOG prefix."""
+    with patch.object(list_tool._pattern_resource._loader, "load_all", side_effect=RuntimeError("disk on fire")):
+        with pytest.raises(ToolError) as exc_info:
+            await list_tool.list_architecture_patterns()
+
+    assert ERROR_PATTERN_CATALOG in str(exc_info.value)
+    assert "disk on fire" in str(exc_info.value)
+
+
+@pytest.mark.asyncio
+async def test_get_pattern_wraps_loader_errors_but_preserves_not_found(get_tool):
+    """Loader exception → ToolError with ERR_013; not-found ToolError passes through."""
+    # Unexpected loader failure path
+    with patch.object(get_tool._pattern_resource._loader, "get_by_name", side_effect=RuntimeError("disk on fire")):
+        with pytest.raises(ToolError) as exc_info:
+            await get_tool.get_architecture_pattern(name="microservices")
+    assert ERROR_PATTERN_CATALOG in str(exc_info.value)
+    assert "disk on fire" in str(exc_info.value)
+
+    # Not-found path — original ToolError must survive unmodified
+    with patch.object(get_tool._pattern_resource._loader, "get_by_name", return_value=None):
+        with pytest.raises(ToolError) as exc_info:
+            await get_tool.get_architecture_pattern(name="does-not-exist-xyz")
+    assert ERROR_PATTERN_CATALOG not in str(exc_info.value)
+    assert "Pattern not found" in str(exc_info.value)

@@ -51,12 +51,14 @@ import json
 import logging
 import os
 import sys
+from collections.abc import Sequence
 from contextlib import asynccontextmanager
 from typing import Any
 
 from fastmcp import Context, FastMCP
 from fastmcp.exceptions import ToolError
-from fastmcp.server.transforms import PromptsAsTools
+from fastmcp.server.transforms import GetToolNext, PromptsAsTools, Transform, VersionSpec
+from fastmcp.tools.base import Tool, ToolAnnotations
 
 from src.agent import SoftwareArchitectAgent
 from src.config import ConfigManager, ServerConfig
@@ -184,6 +186,55 @@ def configure_logging(log_level: str = "INFO", log_format: str = "json") -> None
     root_logger.addHandler(stderr_handler)
 
 
+_PROMPTS_AS_TOOLS_HINTS: dict[str, ToolAnnotations] = {
+    "list_prompts": ToolAnnotations(
+        title="List Prompts",
+        readOnlyHint=True,
+        destructiveHint=False,
+        idempotentHint=True,
+        openWorldHint=False,
+    ),
+    "get_prompt": ToolAnnotations(
+        title="Get Prompt",
+        readOnlyHint=True,
+        destructiveHint=False,
+        idempotentHint=True,
+        openWorldHint=False,
+    ),
+}
+
+
+class AnnotatedPromptsAsTools(PromptsAsTools):
+    """PromptsAsTools that injects ToolAnnotations on the generated tools.
+
+    Works around PrefectHQ/fastmcp#3459 (still open for PromptsAsTools as of 3.4.4):
+    the upstream transform emits list_prompts / get_prompt with annotations=None,
+    so MCP clients must assume worst-case. Both generated tools are pure reads of
+    server-internal prompt metadata, so we declare readOnlyHint=True post-hoc via
+    the public Transform API instead of touching upstream's underscore-prefixed factories.
+    """
+
+    async def list_tools(self, tools: Sequence[Tool]) -> Sequence[Tool]:
+        result = await super().list_tools(tools)
+        return [_with_prompts_as_tools_annotations(t) for t in result]
+
+    async def get_tool(
+        self, name: str, call_next: GetToolNext, *, version: VersionSpec | None = None
+    ) -> Tool | None:
+        tool = await super().get_tool(name, call_next, version=version)
+        return _with_prompts_as_tools_annotations(tool) if tool else None
+
+
+def _with_prompts_as_tools_annotations(tool: Tool) -> Tool:
+    """Return a copy of `tool` with injected ToolAnnotations if it matches a known
+    transform-generated tool name. Otherwise return the tool unchanged. Idempotent:
+    once FastMCP upstream adds annotations to PromptsAsTools, this becomes a no-op."""
+    hints = _PROMPTS_AS_TOOLS_HINTS.get(tool.name)
+    if hints is None or tool.annotations is not None:
+        return tool
+    return tool.model_copy(update={"annotations": hints})
+
+
 class MCPArchitectServer:
     """
     FastMCP server providing architecture design, analysis, generation, and evaluation tools.
@@ -262,7 +313,7 @@ class MCPArchitectServer:
         )
         # add_transform is once-per-instance; do NOT move into lifespan without an
         # idempotency guard — add_transform appends, it does not replace.
-        self._mcp.add_transform(PromptsAsTools(self._mcp))
+        self._mcp.add_transform(AnnotatedPromptsAsTools(self._mcp))
         self._agent: SoftwareArchitectAgent | None = None
         self._pipeline: ArchitecturePipeline | None = None
         self._tools: dict[str, Any] = {}

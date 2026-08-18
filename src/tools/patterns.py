@@ -47,6 +47,8 @@ from src.resources.patterns import PatternResource
 logger = logging.getLogger(__name__)
 
 
+ERROR_PATTERN_CATALOG = "ERR_013"
+
 _VALID_CATEGORIES = (
     "messaging",
     "structural",
@@ -121,29 +123,34 @@ class ListArchitecturePatternsTool:
         Returns:
             List of minimal pattern descriptors: [{name, description}, ...].
         """
-        category_lc = category.lower().strip() if category else None
-        if category_lc and category_lc not in _VALID_CATEGORIES:
-            return []
+        try:
+            category_lc = category.lower().strip() if category else None
+            if category_lc and category_lc not in _VALID_CATEGORIES:
+                return []
 
-        all_patterns = self._pattern_resource._loader.load_all()
+            all_patterns = self._pattern_resource._loader.load_all()
 
-        if category_lc:
-            all_patterns = [p for p in all_patterns if p.get("category") == category_lc]
+            if category_lc:
+                all_patterns = [p for p in all_patterns if p.get("category") == category_lc]
 
-        domain_lc = domain.lower().strip() if domain else None
-        if domain_lc:
-            all_patterns = [
-                p for p in all_patterns
-                if domain_lc in [d.lower() for d in p.get("suitable_domains", [])]
+            domain_lc = domain.lower().strip() if domain else None
+            if domain_lc:
+                all_patterns = [
+                    p for p in all_patterns
+                    if domain_lc in [d.lower() for d in p.get("suitable_domains", [])]
+                ]
+
+            return [
+                {
+                    "name": p.get("name", ""),
+                    "description": (p.get("context", "") or "")[:120],
+                }
+                for p in all_patterns
             ]
-
-        return [
-            {
-                "name": p.get("name", ""),
-                "description": (p.get("context", "") or "")[:120],
-            }
-            for p in all_patterns
-        ]
+        except Exception as e:
+            raise ToolError(
+                f"{ERROR_PATTERN_CATALOG}: Failed to load pattern catalog: {e}"
+            ) from e
 
 
 class GetArchitecturePatternTool:
@@ -199,10 +206,17 @@ class GetArchitecturePatternTool:
         Raises:
             ToolError: If no pattern with the given name exists.
         """
-        data = self._pattern_resource.load_pattern(name)
-        if data is None:
-            raise ToolError(f"Pattern not found: {name}")
-        return data
+        try:
+            data = self._pattern_resource.load_pattern(name)
+            if data is None:
+                raise ToolError(f"Pattern not found: {name}")
+            return data
+        except ToolError:
+            raise
+        except Exception as e:
+            raise ToolError(
+                f"{ERROR_PATTERN_CATALOG}: Failed to load pattern: {e}"
+            ) from e
 
 
 def list_architecture_patterns_tool(pattern_loader: Any) -> ListArchitecturePatternsTool:
