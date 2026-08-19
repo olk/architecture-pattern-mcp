@@ -63,7 +63,7 @@ services:
     ports:
       - "${MCP_HOST_PORT:-8050}:8050"
     volumes:
-      - /etc/architecture-pattern-mcp/config:/app/config
+      - ../config:/app/config
     restart: on-failure
     healthcheck:
       test: ["CMD", "python", "-m", "src.main", "--health"]
