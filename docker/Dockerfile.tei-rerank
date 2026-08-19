@@ -44,17 +44,6 @@ snapshot_download( \
         'tokenizer*', 'special_tokens*', \
         'onnx/model.onnx', \
     ], \
-)" \
-    || python -c "import os; \
-from huggingface_hub import snapshot_download; \
-snapshot_download( \
-    'Alibaba-NLP/gte-reranker-modernbert-base', \
-    local_dir='/data/reranker-model', \
-    allow_patterns=[ \
-        '*.json', '*.txt', \
-        'tokenizer*', 'special_tokens*', \
-        'onnx/model.onnx', \
-    ], \
 )"
 
 # Stage 2: runtime image with the model baked in.
@@ -63,11 +52,6 @@ FROM ghcr.io/huggingface/text-embeddings-inference:cpu-1.9
 COPY --from=model-downloader /data /data
 
 ENV HF_HUB_OFFLINE=1
-
-EXPOSE 8080
-
-HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=5 \
-    CMD curl -fsS http://127.0.0.1:8080/health || exit 1
 
 CMD ["--model-id", "/data/reranker-model", \
      "--hostname", "0.0.0.0", \

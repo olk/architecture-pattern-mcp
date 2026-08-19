@@ -129,6 +129,8 @@ FROM ghcr.io/huggingface/text-embeddings-inference:cpu-1.9
 
 COPY --from=model-downloader /data /data
 
+ENV HF_HUB_OFFLINE=1
+
 RUN sed -i -E 's/("max_position_embeddings"[[:space:]]*:[[:space:]]*)32768/\18192/' \
         /data/qwen3-embedding-0.6b/config.json
 
