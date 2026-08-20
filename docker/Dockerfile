@@ -46,6 +46,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # the dependency cache layer.
 COPY src/ ./src/
 COPY ./pattern/*.json ./pattern/
+COPY ../config/config.json ./config/config.json
 
 # ---- Production stage ------------------------------------------------------
 FROM python:3.12-slim-bookworm AS production
@@ -63,11 +64,13 @@ COPY --from=build --chown=1000:1000 /app/.venv /app/.venv
 COPY --from=build --chown=1000:1000 /app/src ./src
 COPY --from=build --chown=1000:1000 /app/pyproject.toml ./
 COPY --from=build --chown=1000:1000 /app/pattern ./pattern
+COPY --from=build --chown=1000:1000 /app/config ./config
 
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONPATH="/app/src" \
     PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
+    PYTHONUNBUFFERED=1 \
+    CONFIG_PATH=/app/config/config.json
 
 USER 1000:1000
 
@@ -81,7 +84,7 @@ CMD ["/app/.venv/bin/python", "-m", "src.main"]
 
 LABEL org.opencontainers.image.title="architecture-pattern-mcp" \
       org.opencontainers.image.description="MCP server providing architecture pattern expertise" \
-      org.opencontainers.image.version="1.0.2" \
+      org.opencontainers.image.version="1.0.11" \
       org.opencontainers.image.authors="Oliver Kowalke" \
       org.opencontainers.image.source="https://github.com/olk/architecture-pattern-mcp" \
       org.opencontainers.image.licenses="MIT"

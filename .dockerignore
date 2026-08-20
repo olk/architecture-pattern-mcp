@@ -25,6 +25,8 @@ docs
 
 # Local configuration (mounted as volume at runtime, not baked into image)
 config
+# Re-include config.json for the baked-config image build
+!config/config.json
 
 # Helm charts (not needed for Docker image)
 charts
