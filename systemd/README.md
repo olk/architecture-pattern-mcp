@@ -34,8 +34,8 @@ so you must either build or pull them first:
 ```bash
 # From the repo root:
 make docker-build-all
-# Produces: architecture-pattern-mcp:latest  and  architecture-pattern-tei:local
-#           architecture-pattern-tei-rerank:local
+# Produces: architecture-pattern-mcp:latest  and  pattern-tei:local
+#           pattern-tei-rerank:local
 ```
 
 **Option B — Pull published images** *(skip the 5 GB local build; retag to :local so the
@@ -43,8 +43,8 @@ make docker-build-all
 ```bash
 VERSION=$(grep -m 1 '^version' pyproject.toml | sed -E 's/.*"([^"]+)".*/\1/')
 for image in olkowa/architecture-pattern-mcp \
-            olkowa/architecture-pattern-tei \
-            olkowa/architecture-pattern-tei-rerank; do
+            olkowa/pattern-tei \
+            olkowa/pattern-tei-rerank; do
     docker pull "${image}:${VERSION}"
     docker tag "${image}:${VERSION}" "${image##*/}:local"
 done

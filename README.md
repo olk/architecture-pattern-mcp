@@ -433,7 +433,7 @@ Full JSON Schema with all enums: `docs/pattern-schema.json`
 The server waits for the TEI embedder to become healthy:
 
 ```bash
-docker compose -f docker/docker-compose.yml logs architecture-pattern-tei
+docker compose -f docker/docker-compose.yml logs pattern-tei
 ```
 
 ### LLM provider errors (502 / 401)
@@ -487,8 +487,8 @@ All three images are published to two registries simultaneously:
 | Image | Docker Hub | GHCR | Tags |
 |---|---|---|---|
 | MCP server | `olkowa/architecture-pattern-mcp` | `ghcr.io/olk/architecture-pattern-mcp` | `$(DOCKER_TAG)`, `latest` |
-| TEI embedder | `olkowa/architecture-pattern-tei` | `ghcr.io/olk/architecture-pattern-tei` | `$(DOCKER_TAG)`, `latest` |
-| TEI reranker | `olkowa/architecture-pattern-tei-rerank` | `ghcr.io/olk/architecture-pattern-tei-rerank` | `$(DOCKER_TAG)`, `latest` |
+| TEI embedder | `olkowa/pattern-tei` | `ghcr.io/olk/pattern-tei` | `$(DOCKER_TAG)`, `latest` |
+| TEI reranker | `olkowa/pattern-tei-rerank` | `ghcr.io/olk/pattern-tei-rerank` | `$(DOCKER_TAG)`, `latest` |
 
 All three images share the same `$(DOCKER_TAG)` (the version from `pyproject.toml`), so `tei:1.0.3` always ships with `mcp:1.0.3`. Blob deduplication keeps re-tagging unchanged TEI images cheap.
 
@@ -525,8 +525,8 @@ GHCR packages default to **private**. After the first `make docker-publish-all`,
 | Package | Settings URL |
 |---|---|
 | MCP server | `https://github.com/users/olk/packages/container/architecture-pattern-mcp/settings` |
-| TEI embedder | `https://github.com/users/olk/packages/container/architecture-pattern-tei/settings` |
-| TEI reranker | `https://github.com/users/olk/packages/container/architecture-pattern-tei-rerank/settings` |
+| TEI embedder | `https://github.com/users/olk/packages/container/pattern-tei/settings` |
+| TEI reranker | `https://github.com/users/olk/packages/container/pattern-tei-rerank/settings` |
 
 Set each to **Public** and save.
 

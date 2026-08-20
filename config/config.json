@@ -33,7 +33,7 @@
     "reranker": {
       "enabled": "{env:RERANKER_ENABLED:-false}",
       "config": {
-        "base_url": "{env:RERANKER_BASE_URL:-http://architecture-pattern-tei-rerank:8080}",
+        "base_url": "{env:RERANKER_BASE_URL:-http://pattern-tei-rerank:8080}",
         "timeout": "{env:RERANKER_TIMEOUT:-30.0}"
       }
     },
