@@ -29,7 +29,7 @@ services:
       - GENERATOR_TOP_K=20
 
       - EMBEDDER_PROVIDER=tei
-      - EMBEDDER_BASE_URL=http://pattern-tei:8080/v1
+      - EMBEDDER_BASE_URL=http://pattern-tei-embed:8080/v1
       - EMBEDDER_BATCH_SIZE=8
       - EMBEDDER_API_KEY=not-needed
 
@@ -60,9 +60,9 @@ services:
       - LOGGING_FORMAT=json
 
     depends_on:
-      pattern-tei-rerank:
+      pattern-tei-embed:
         condition: service_healthy
-      pattern-tei:
+      pattern-tei-rerank:
         condition: service_healthy
     ports:
       - "${MCP_HOST_PORT:-8060}:8050"
@@ -76,9 +76,9 @@ services:
       retries: 3
       start_period: 40s
 
-  pattern-tei:
-    image: ${TEI_IMAGE:-pattern-tei:latest}
-    container_name: architecture-pattern-tei
+  pattern-tei-embed:
+    image: ${TEI_IMAGE:-pattern-tei-embed:latest}
+    container_name: architecture-pattern-tei-embed
     restart: unless-stopped
     # No ports published — internal only (reached by MCP via Docker DNS)
     environment:

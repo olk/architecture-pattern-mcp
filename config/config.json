@@ -14,7 +14,7 @@
   "embedder": {
     "provider": "{env:EMBEDDER_PROVIDER:-tei}",
     "config": {
-      "base_url": "{env:EMBEDDER_BASE_URL:-http://localhost:8080}",
+      "base_url": "{env:EMBEDDER_BASE_URL:-http://pattern-tei-embed:8080}",
       "api_key": "{env:EMBEDDER_API_KEY}",
       "embed_batch_size": "{env:EMBEDDER_BATCH_SIZE:-16}",
       "query_instruction": "{env:EMBEDDER_QUERY_INSTRUCTION:-}",

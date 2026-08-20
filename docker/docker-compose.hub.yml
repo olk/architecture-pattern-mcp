@@ -1,7 +1,7 @@
 # Hub-friendly compose for users pulling olkowa/architecture-pattern-mcp from Docker Hub.
 #
 # This compose starts ONLY the MCP server.  The TEI embedder and TEI reranker are
-# separate infrastructure (olkowa/pattern-tei and olkowa/pattern-tei-rerank) that
+# separate infrastructure (olkowa/pattern-tei-embed and olkowa/pattern-tei-rerank) that
 # must be started separately — see "Start the TEI sidecars first" below.
 #
 # Usage:
@@ -10,7 +10,7 @@
 #
 # Prerequisites:
 #   - Docker Engine with compose plugin (v2.24+)
-#   - olkowa/pattern-tei and olkowa/pattern-tei-rerank running on a Docker network
+#   - olkowa/pattern-tei-embed and olkowa/pattern-tei-rerank running on a Docker network
 #     with the hostnames tei-embedder and tei-rerank (see tei-infra project)
 #   - An LLM API key for any LiteLLM-compatible provider
 #     (OpenAI, Anthropic, MiniMax, DeepSeek, Ollama, vLLM, OpenRouter …)
@@ -46,7 +46,7 @@ services:
       # Embedder — connect to the TEI sidecar.  The default assumes tei-infra's
       # compose is running on the same Docker network with the hostname tei-embedder.
       - EMBEDDER_PROVIDER=tei
-      - EMBEDDER_BASE_URL=${EMBEDDER_BASE_URL:-http://tei-embedder:8080}
+      - EMBEDDER_BASE_URL=${EMBEDDER_BASE_URL:-http://pattern-tei-embed:8080}
       - EMBEDDER_BATCH_SIZE=${EMBEDDER_BATCH_SIZE:-8}
       - EMBEDDER_API_KEY=not-needed
 
@@ -57,7 +57,7 @@ services:
       - RETRIEVAL_TOP_K_PATTERNS=5
       - RETRIEVAL_MODE=reciprocal_rerank
       - RETRIEVAL_MIN_FUSION_SCORE=0.015
-      - RETRIEVAL_ENABLE_RERANKING=${RETRIEVAL_ENABLE_RERANKING:-false}
+      - RETRIEVAL_ENABLE_RERANKING=${RETRIEVAL_ENABLE_RERANKING:-true}
       - RETRIEVAL_RERANK_TOP_N=10
       - RETRIEVAL_USE_LEAN_WIRE_SCHEMA=false
       - RETRIEVAL_STYLE_SCORE_THRESHOLD=50.0
@@ -68,8 +68,8 @@ services:
 
       # Reranker — enable RETRIEVAL_ENABLE_RERANKING=true and set RERANKER_BASE_URL
       # to point at the tei-rerank sidecar when needed.
-      - RERANKER_ENABLED=${RERANKER_ENABLED:-false}
-      - RERANKER_BASE_URL=${RERANKER_BASE_URL:-http://tei-rerank:8080}
+      - RERANKER_ENABLED=${RERANKER_ENABLED:-true}
+      - RERANKER_BASE_URL=${RERANKER_BASE_URL:-http://pattern-tei-rerank:8080}
       - RERANKER_TIMEOUT=30
 
       - TRANSPORT=streamable-http

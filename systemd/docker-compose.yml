@@ -30,7 +30,7 @@ services:
       - GENERATOR_TOP_K=20
 
       - EMBEDDER_PROVIDER=tei
-      - EMBEDDER_BASE_URL=http://pattern-tei:8080/v1
+      - EMBEDDER_BASE_URL=http://pattern-tei-embed:8080/v1
       - EMBEDDER_BATCH_SIZE=8
       - EMBEDDER_API_KEY=not-needed
 

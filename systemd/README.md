@@ -41,7 +41,7 @@ so you must either build or pull it first. TEI images are managed by the
 ```bash
 # From the repo root:
 make docker-build-all
-# Produces: architecture-pattern-mcp:latest, pattern-tei:latest,
+# Produces: architecture-pattern-mcp:latest, pattern-tei-embed:latest,
 #           pattern-tei-rerank:latest
 # TEI images are consumed by pattern-tei-infra, not this stack.
 ```
@@ -51,7 +51,7 @@ make docker-build-all
 ```bash
 VERSION=$(grep -m 1 '^version' pyproject.toml | sed -E 's/.*"([^"]+)".*/\1/')
 for image in olkowa/architecture-pattern-mcp \
-            olkowa/pattern-tei \
+            olkowa/pattern-tei-embed \
             olkowa/pattern-tei-rerank; do
     docker pull "${image}:${VERSION}"
     docker tag "${image}:${VERSION}" "${image##*/}:local"

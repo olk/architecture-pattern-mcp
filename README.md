@@ -487,7 +487,7 @@ All three images are published to two registries simultaneously:
 | Image | Docker Hub | GHCR | Tags |
 |---|---|---|---|
 | MCP server | `olkowa/architecture-pattern-mcp` | `ghcr.io/olk/architecture-pattern-mcp` | `$(DOCKER_TAG)`, `latest` |
-| TEI embedder | `olkowa/pattern-tei` | `ghcr.io/olk/pattern-tei` | `$(DOCKER_TAG)`, `latest` |
+| TEI embedder | `olkowa/pattern-tei-embed` | `ghcr.io/olk/pattern-tei-embed` | `$(DOCKER_TAG)`, `latest` |
 | TEI reranker | `olkowa/pattern-tei-rerank` | `ghcr.io/olk/pattern-tei-rerank` | `$(DOCKER_TAG)`, `latest` |
 
 All three images share the same `$(DOCKER_TAG)` (the version from `pyproject.toml`), so `tei:1.0.3` always ships with `mcp:1.0.3`. Blob deduplication keeps re-tagging unchanged TEI images cheap.
@@ -525,7 +525,7 @@ GHCR packages default to **private**. After the first `make docker-publish-all`,
 | Package | Settings URL |
 |---|---|
 | MCP server | `https://github.com/users/olk/packages/container/architecture-pattern-mcp/settings` |
-| TEI embedder | `https://github.com/users/olk/packages/container/pattern-tei/settings` |
+| TEI embedder | `https://github.com/users/olk/packages/container/pattern-tei-embed/settings` |
 | TEI reranker | `https://github.com/users/olk/packages/container/pattern-tei-rerank/settings` |
 
 Set each to **Public** and save.
@@ -557,11 +557,11 @@ lives under `/etc/architecture-pattern-mcp/` on the host. The systemd-managed
 project uses the distinct name `apmcp-systemd` so it can coexist with the dev
 compose if needed.
 
-> **TEI sidecars are NOT defined in this stack** — the `pattern-tei` embedder
+> **TEI sidecars are NOT defined in this stack** — the `pattern-tei-embed` embedder
 > and `pattern-tei-rerank` reranker containers live in the shared
 > [`pattern-tei-infra`](https://github.com/olk/pattern-tei-infra) stack.  This
 > stack owns the `pattern-tei-shared` Docker network and exposes the sidecars at
-> `http://pattern-tei:8080/v1` (embedder) and `http://pattern-tei-rerank:8080`
+> `http://pattern-tei-embed:8080/v1` (embedder) and `http://pattern-tei-rerank:8080`
 > (reranker).  The systemd MCP stack joins that network and reaches them by
 > those DNS names.
 >

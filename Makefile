@@ -27,10 +27,10 @@ DOCKER_TAG      := $(shell grep -m 1 '^version' pyproject.toml | sed -E 's/.*"([
 DOCKER_HUB_REPO := olkowa/architecture-pattern-mcp
 GHCR_REPO       := ghcr.io/olk/architecture-pattern-mcp
 
-TEI_IMAGE            := pattern-tei
+TEI_EMBED_IMAGE      := pattern-tei-embed
 TEI_RERANK_IMAGE     := pattern-tei-rerank
-TEI_HUB_REPO         := olkowa/pattern-tei
-TEI_GHCR_REPO        := ghcr.io/olk/pattern-tei
+TEI_EMBED_HUB_REPO   := olkowa/pattern-tei-embed
+TEI_EMBED_GHCR_REPO  := ghcr.io/olk/pattern-tei-embed
 TEI_RERANK_HUB_REPO  := olkowa/pattern-tei-rerank
 TEI_RERANK_GHCR_REPO := ghcr.io/olk/pattern-tei-rerank
 
@@ -59,7 +59,7 @@ unit-tests: install ## Run unit tests with uv (tests/unit/)
 
 ##@ Demo
 client: ## Run the pipes-and-filters MCP client demo
-	@ARCHITECTURE_CLIENT_URL=http://localhost:8060/mcp uv run python examples/architecture_client.py
+	@ARCHITECTURE_CLIENT_URL=http://localhost:8050/mcp uv run python examples/architecture_client.py
 
 ##@ Docker
 docker-build: ## Build MCP server Docker image with dev dependencies
@@ -68,8 +68,8 @@ docker-build: ## Build MCP server Docker image with dev dependencies
 
 docker-build-tei: ## Build both TEI images (embedder + reranker)
 	docker build -f docker/Dockerfile.tei \
-		-t $(TEI_IMAGE):$(DOCKER_TAG) \
-		-t $(TEI_IMAGE):latest .
+		-t $(TEI_EMBED_IMAGE):$(DOCKER_TAG) \
+		-t $(TEI_EMBED_IMAGE):latest .
 	docker build -f docker/Dockerfile.tei-rerank \
 		-t $(TEI_RERANK_IMAGE):$(DOCKER_TAG) \
 		-t $(TEI_RERANK_IMAGE):latest .
@@ -108,7 +108,7 @@ docker-publish: docker-build ## Push MCP server image to Docker Hub + GHCR + git
 
 docker-publish-tei: docker-build-tei ## Push both TEI images to Docker Hub + GHCR
 	docker login ghcr.io -u olk
-	$(call publish-image,$(TEI_IMAGE),$(TEI_HUB_REPO),$(TEI_GHCR_REPO))
+	$(call publish-image,$(TEI_EMBED_IMAGE),$(TEI_EMBED_HUB_REPO),$(TEI_EMBED_GHCR_REPO))
 	$(call publish-image,$(TEI_RERANK_IMAGE),$(TEI_RERANK_HUB_REPO),$(TEI_RERANK_GHCR_REPO))
 	docker logout ghcr.io
 
