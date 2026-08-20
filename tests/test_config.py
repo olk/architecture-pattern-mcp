@@ -82,7 +82,7 @@ class TestLoadConfig:
                 "provider": "openai",
                 "config": {
                     "model": "gpt-4",
-                    "temperature": 0.7
+                    "temperature": 0.1
                 }
             },
             "embedder": {
@@ -118,7 +118,7 @@ class TestLoadConfig:
 
         assert config["generator"]["provider"] == "openai"
         assert config["generator"]["config"]["model"] == "gpt-4"
-        assert config["generator"]["config"]["temperature"] == 0.7
+        assert config["generator"]["config"]["temperature"] == 0.1
         assert config["embedder"]["provider"] == "tei"
 
     def test_load_config_raises_filenotfound_for_missing_file(

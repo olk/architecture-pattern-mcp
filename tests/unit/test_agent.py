@@ -66,7 +66,7 @@ class TestSoftwareArchitectAgentInit:
         # Scenario: Create agent with valid ServerConfig
         """
         config = ServerConfig(
-            generator={"provider": "openai", "config": {"model": "gpt-4", "temperature": 0.7}},
+            generator={"provider": "openai", "config": {"model": "gpt-4", "temperature": 0.1}},
             embedder={"provider": "tei", "config": {"base_url": "http://localhost:8080"}}
         )
 
@@ -74,7 +74,7 @@ class TestSoftwareArchitectAgentInit:
 
         assert agent is not None
         assert agent._model_string == "openai/gpt-4"
-        assert agent._generator.config.temperature == 0.7
+        assert agent._generator.config.temperature == 0.1
 
     def test_agent_initialization_model_string_format(self):
         """
@@ -133,7 +133,7 @@ class TestGenerateStructured:
         # Scenario: LLM returns valid JSON matching schema
         """
         config = ServerConfig(
-            generator={"provider": "openai", "config": {"model": "gpt-4", "temperature": 0.7}},
+            generator={"provider": "openai", "config": {"model": "gpt-4", "temperature": 0.1}},
             embedder={"provider": "tei", "config": {"base_url": "http://localhost:8080"}}
         )
         agent = SoftwareArchitectAgent(config)
@@ -170,7 +170,7 @@ class TestGenerateStructured:
         # Scenario: Verify messages are correctly formatted
         """
         config = ServerConfig(
-            generator={"provider": "openai", "config": {"model": "gpt-4", "temperature": 0.7}},
+            generator={"provider": "openai", "config": {"model": "gpt-4", "temperature": 0.1}},
             embedder={"provider": "tei", "config": {"base_url": "http://localhost:8080"}}
         )
         agent = SoftwareArchitectAgent(config)
@@ -222,7 +222,7 @@ class TestErrorMapping:
         # Scenario: Connector raises an exception
         """
         config = ServerConfig(
-            generator={"provider": "openai", "config": {"model": "gpt-4", "temperature": 0.7}},
+            generator={"provider": "openai", "config": {"model": "gpt-4", "temperature": 0.1}},
             embedder={"provider": "tei", "config": {"base_url": "http://localhost:8080"}}
         )
         agent = SoftwareArchitectAgent(config)
@@ -258,7 +258,7 @@ class TestErrorMapping:
         breaking the retry loop (which only catches ValidationError).
         """
         config = ServerConfig(
-            generator={"provider": "openai", "config": {"model": "gpt-4", "temperature": 0.7}},
+            generator={"provider": "openai", "config": {"model": "gpt-4", "temperature": 0.1}},
             embedder={"provider": "tei", "config": {"base_url": "http://localhost:8080"}}
         )
         agent = SoftwareArchitectAgent(config)

@@ -301,7 +301,7 @@ The server reads `~/.config/architecture-pattern-mcp/config.json` (override with
       "model": "gpt-4o-mini",
       "base_url": "https://api.openai.com/v1",
       "api_key": "{env:GENERATOR_API_KEY}",
-      "temperature": 0.7,
+      "temperature": 0.1,
       "top_p": 1.0,
       "top_k": 20
     }
@@ -338,7 +338,7 @@ The server reads `~/.config/architecture-pattern-mcp/config.json` (override with
 | `GENERATOR_PROVIDER` | `openai` | Provider: `openai`, `minimax`, `anthropic`, … |
 | `GENERATOR_BASE_URL` | `https://api.openai.com/v1` | API base URL |
 | `GENERATOR_MODEL` | `gpt-4o-mini` | Model name |
-| `GENERATOR_TEMPERATURE` | `0.7` | Sampling temperature |
+| `GENERATOR_TEMPERATURE` | `0.1` | Sampling temperature |
 | `GENERATOR_TOP_P` | `1.0` | Top-p sampling |
 | `GENERATOR_TOP_K` | `20` | Top-k sampling |
 | `GENERATOR_STREAM` | `false` | Enable streaming responses |

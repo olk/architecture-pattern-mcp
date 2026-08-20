@@ -142,7 +142,7 @@ class TestExpandEnvInObj:
             "config": {
                 "model": "{env:GENERATOR_MODEL:-gpt-4o-mini}",
                 "api_key": "{env:GENERATOR_API_KEY}",
-                "temperature": 0.7,
+                "temperature": 0.1,
                 "enabled": True,
             }
         }
@@ -156,7 +156,7 @@ class TestExpandEnvInObj:
             "config": {
                 "model": "MiniMax-M2.7",
                 "api_key": "sk-secret",
-                "temperature": 0.7,
+                "temperature": 0.1,
                 "enabled": True,
             }
         }

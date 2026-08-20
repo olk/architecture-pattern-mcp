@@ -40,7 +40,7 @@ def mock_config_manager():
                 "model": "gpt-4",
                 "base_url": "",
                 "api_key": None,
-                "temperature": 0.7,
+                "temperature": 0.1,
                 "top_p": 1.0,
                 "top_k": 20,
             }

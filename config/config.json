@@ -5,7 +5,7 @@
       "model": "{env:GENERATOR_MODEL:-gpt-4o-mini}",
       "base_url": "{env:GENERATOR_BASE_URL:-https://api.openai.com/v1}",
       "api_key": "{env:GENERATOR_API_KEY}",
-      "temperature": "{env:GENERATOR_TEMPERATURE:-0.7}",
+      "temperature": "{env:GENERATOR_TEMPERATURE:-0.1}",
       "top_p": "{env:GENERATOR_TOP_P:-1.0}",
       "top_k": "{env:GENERATOR_TOP_K:-20}",
       "stream": "{env:GENERATOR_STREAM:-false}"

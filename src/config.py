@@ -62,7 +62,7 @@ class GeneratorInnerConfig(BaseModel):
     model: str
     base_url: str = ""
     api_key: str | None = None
-    temperature: float = 0.7
+    temperature: float = 0.1
     top_p: float = 1.0
     top_k: int = 20
     stream: bool = Field(

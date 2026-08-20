@@ -25,7 +25,7 @@ services:
       - GENERATOR_MODEL=minimax/MiniMax-M2.7
       - GENERATOR_BASE_URL=https://api.minimax.io/v1
       - GENERATOR_API_KEY=${MINIMAXAI_API_KEY}
-      - GENERATOR_TEMPERATURE=0.7
+      - GENERATOR_TEMPERATURE=0.1
       - GENERATOR_TOP_P=1.0
       - GENERATOR_TOP_K=20
 
