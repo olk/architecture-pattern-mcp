@@ -1,0 +1,91 @@
+# Hub-friendly compose for users pulling olkowa/architecture-pattern-mcp from Docker Hub.
+#
+# This compose starts ONLY the MCP server.  The TEI embedder and TEI reranker are
+# separate infrastructure (olkowa/pattern-tei and olkowa/pattern-tei-rerank) that
+# must be started separately — see "Start the TEI sidecars first" below.
+#
+# Usage:
+#   TAG=0.1.0 docker compose -f docker-compose.hub.yml up -d   # pinned version
+#   docker compose -f docker-compose.hub.yml up -d            # latest
+#
+# Prerequisites:
+#   - Docker Engine with compose plugin (v2.24+)
+#   - olkowa/pattern-tei and olkowa/pattern-tei-rerank running on a Docker network
+#     with the hostnames tei-embedder and tei-rerank (see tei-infra project)
+#   - An LLM API key for any LiteLLM-compatible provider
+#     (OpenAI, Anthropic, MiniMax, DeepSeek, Ollama, vLLM, OpenRouter …)
+#
+# Quick start:
+#   # 1. Start the TEI sidecars (separate tei-infra project)
+#   git clone https://github.com/olk/tei-infra.git && cd tei-infra
+#   docker compose up -d
+#
+#   # 2. Start the MCP server
+#   cd ..
+#   mkdir architecture-pattern-mcp && cd architecture-pattern-mcp
+#   curl -fsSLo docker-compose.yml https://raw.githubusercontent.com/olk/architecture-pattern-mcp/main/docker/docker-compose.hub.yml
+#   curl -fsSLo config.json https://raw.githubusercontent.com/olk/architecture-pattern-mcp/main/config/config.json
+#   printf 'GENERATOR_API_KEY=sk-...\n' > .env
+#   docker compose up -d && curl -fsS http://localhost:8050/health
+
+services:
+  architecture-pattern-mcp:
+    image: olkowa/architecture-pattern-mcp:${TAG:-latest}
+    container_name: architecture-pattern-mcp
+    environment:
+      # Generator — bring your own LLM.  Defaults match config/config.json (OpenAI).
+      # Override any of these via .env, e.g. GENERATOR_PROVIDER=minimax.
+      - GENERATOR_PROVIDER=${GENERATOR_PROVIDER:-openai}
+      - GENERATOR_MODEL=${GENERATOR_MODEL:-gpt-4o-mini}
+      - GENERATOR_BASE_URL=${GENERATOR_BASE_URL:-https://api.openai.com/v1}
+      - GENERATOR_API_KEY=${GENERATOR_API_KEY:?Set GENERATOR_API_KEY in .env}
+      - GENERATOR_TEMPERATURE=${GENERATOR_TEMPERATURE:-0.7}
+      - GENERATOR_TOP_P=${GENERATOR_TOP_P:-1.0}
+      - GENERATOR_TOP_K=${GENERATOR_TOP_K:-20}
+
+      # Embedder — connect to the TEI sidecar.  The default assumes tei-infra's
+      # compose is running on the same Docker network with the hostname tei-embedder.
+      - EMBEDDER_PROVIDER=tei
+      - EMBEDDER_BASE_URL=${EMBEDDER_BASE_URL:-http://tei-embedder:8080}
+      - EMBEDDER_BATCH_SIZE=${EMBEDDER_BATCH_SIZE:-8}
+      - EMBEDDER_API_KEY=not-needed
+
+      - PATTERN_DIRECTORY=./pattern
+
+      - RETRIEVAL_BM25_TOP_K=20
+      - RETRIEVAL_DENSE_TOP_K=20
+      - RETRIEVAL_TOP_K_PATTERNS=5
+      - RETRIEVAL_MODE=reciprocal_rerank
+      - RETRIEVAL_MIN_FUSION_SCORE=0.015
+      - RETRIEVAL_ENABLE_RERANKING=${RETRIEVAL_ENABLE_RERANKING:-false}
+      - RETRIEVAL_RERANK_TOP_N=10
+      - RETRIEVAL_USE_LEAN_WIRE_SCHEMA=false
+      - RETRIEVAL_STYLE_SCORE_THRESHOLD=50.0
+      - RETRIEVAL_ANALYSIS_BLEND_WEIGHT=0.7
+      - RETRIEVAL_FUSION_BLEND_WEIGHT=0.3
+      - RETRIEVAL_WEIGHT_SMOOTHING_ALPHA=0.7
+      - RETRIEVAL_VERBOSE_TIMING=false
+
+      # Reranker — enable RETRIEVAL_ENABLE_RERANKING=true and set RERANKER_BASE_URL
+      # to point at the tei-rerank sidecar when needed.
+      - RERANKER_ENABLED=${RERANKER_ENABLED:-false}
+      - RERANKER_BASE_URL=${RERANKER_BASE_URL:-http://tei-rerank:8080}
+      - RERANKER_TIMEOUT=30
+
+      - TRANSPORT=streamable-http
+      - HOST=0.0.0.0
+      - PORT=8050
+      - LOGGING_LEVEL=INFO
+      - LOGGING_FORMAT=json
+      - CONFIG_PATH=/app/config/config.json
+    ports:
+      - "${MCP_HOST_PORT:-8050}:8050"
+    volumes:
+      - ./config:/app/config
+    restart: on-failure
+    healthcheck:
+      test: ["CMD", "python", "-m", "src.main", "--health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s

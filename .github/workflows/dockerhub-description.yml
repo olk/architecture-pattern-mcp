@@ -1,0 +1,24 @@
+name: dockerhub-description
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - docs/dockerhub/**
+      - .github/workflows/dockerhub-description.yml
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Docker Hub Description
+        uses: peter-evans/dockerhub-description@v5
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_PASSWORD }}
+          repository: olkowa/architecture-pattern-mcp
+          short-description: "MCP server: 36 architecture patterns for AI agents. BYO LLM (OpenAI, Anthropic, MiniMax). External TEI sidecars."
+          readme-filepath: docs/dockerhub/mcp.md
+          enable-url-completion: true

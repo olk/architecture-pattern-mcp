@@ -557,11 +557,32 @@ lives under `/etc/architecture-pattern-mcp/` on the host. The systemd-managed
 project uses the distinct name `apmcp-systemd` so it can coexist with the dev
 compose if needed.
 
-> **TEI sidecars are NOT defined in this stack** — they live in the shared
-> `pattern-tei-infra` stack at `[pattern-tei-infra](https://github.com/olk/pattern-tei-infra)`. This stack
-> joins the `pattern-tei-shared` external network to reach them by DNS.
-> **Prerequisite:** `systemctl enable --now pattern-tei-infra.service`
-> (one-time install on the host). See [pattern-tei-infra/README.md`](/https://github.com/olk/pattern-tei-infra/README.md).
+> **TEI sidecars are NOT defined in this stack** — the `pattern-tei` embedder
+> and `pattern-tei-rerank` reranker containers live in the shared
+> [`pattern-tei-infra`](https://github.com/olk/pattern-tei-infra) stack.  This
+> stack owns the `pattern-tei-shared` Docker network and exposes the sidecars at
+> `http://pattern-tei:8080/v1` (embedder) and `http://pattern-tei-rerank:8080`
+> (reranker).  The systemd MCP stack joins that network and reaches them by
+> those DNS names.
+>
+> **Prerequisite — one-time TEI infra setup:**
+>
+> ```bash
+> # Clone the infra stack (if not already on the host)
+> git clone https://github.com/olk/pattern-tei-infra.git ~/pattern-tei-infra
+>
+> # Install and enable the pattern-tei-infra systemd unit
+> sudo install -m 644 ~/pattern-tei-infra/pattern-tei-infra.service \
+>                 /etc/systemd/system/
+> sudo systemctl daemon-reload
+> sudo systemctl enable --now pattern-tei-infra.service
+> # Wait ~2 min for the TEI sidecars to become healthy
+> ```
+>
+> **Start `architecture-pattern-mcp.service` only AFTER** `pattern-tei-infra.service`
+> is `active (running)`. See
+> [`pattern-tei-infra/README.md`](https://github.com/olk/pattern-tei-infra/README.md)
+> for full details.
 
 ### Prerequisites
 
