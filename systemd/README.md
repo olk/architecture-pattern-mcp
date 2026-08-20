@@ -12,9 +12,11 @@ This directory ships **two compose files** with different purposes:
 | `docker/docker-compose.yml` (repo root) | **Development**. Has `build:` sections, uses `${HOME}` for the config volume, designed for `make docker-up` / `make docker-down`. |
 | `systemd/docker-compose.yml` (this dir) | **Production / systemd**. No `build:` (images must be pre-built), uses absolute paths, designed for `systemctl enable`. |
 
-Both describe the **same logical stack** (MCP server + TEI embedder) but are
-tailored to their respective deployment contexts. Don't edit one expecting the
-other to pick up the change.
+Both describe the **MCP server** but differ in TEI handling: the systemd
+stack reaches TEI via the shared `pattern-tei-shared` external network (sidecars
+owned by `pattern-tei-infra`), while the dev stack runs its own TEI sidecars
+with unique container names. Don't edit one expecting the other to pick up
+the change.
 
 ## Prerequisites
 
@@ -23,19 +25,25 @@ other to pick up the change.
 - `graemer` is in the `docker` group.
 - Network access at boot.
 - **Both images pre-built locally** (see Step 0 below).
+- **Shared TEI infra stack installed and enabled** — see
+  [`pattern-tei-infra/README.md`](https://github.com/olk/pattern-tei-infra/README.md).
+  The systemd MCP stack joins the `pattern-tei-shared` external network to reach
+  the embedder/reranker; `pattern-tei-infra.service` must be active first.
 
 ## Step 0 — Pre-flight: build or pull the images
 
 The systemd service runs `docker compose up -d` against **pre-built images**.
-The unit has `ExecStartPre` checks that fail loudly if the images are missing,
-so you must either build or pull them first:
+The unit has `ExecStartPre` checks that fail loudly if the MCP image is missing,
+so you must either build or pull it first. TEI images are managed by the
+`pattern-tei-infra` stack — build them from either repo:
 
 **Option A — Build from source** *(requires ~10 GB disk, ~5 GB download on first run)*:
 ```bash
 # From the repo root:
 make docker-build-all
-# Produces: architecture-pattern-mcp:latest  and  pattern-tei:local
-#           pattern-tei-rerank:local
+# Produces: architecture-pattern-mcp:latest, pattern-tei:latest,
+#           pattern-tei-rerank:latest
+# TEI images are consumed by pattern-tei-infra, not this stack.
 ```
 
 **Option B — Pull published images** *(skip the 5 GB local build; retag to :local so the
@@ -52,32 +60,27 @@ done
 
 If you re-pull the repo later, rerun the same pull+tag commands to refresh images.
 
-## Step 1 — Choose: coexist or replace the dev compose?
+## Step 1 — Coexist with the dev compose
 
 The systemd-managed project is given a distinct name (`apmcp-systemd`, set via
-`COMPOSE_PROJECT_NAME` in the `.env` file), so it can coexist with the dev
-compose side-by-side without colliding. Choose one:
-
-**Option A — Coexist** *(recommended if you also develop)*:
-Leave your dev `make docker-up` running. Install the systemd service. It manages
-a **separate** set of containers under the `apmcp-systemd` project. Both bind
-to `network_mode: host` on the same ports — only one set can run at a time.
-Stop one before starting the other:
+`COMPOSE_PROJECT_NAME` in the `.env` file). The dev compose uses unique TEI
+container names (`architecture-pattern-tei*`) and a different host port (8060 vs
+8050). Both stacks can now run **concurrently** — no need to stop one before
+starting the other:
 
 ```bash
-sudo systemctl stop architecture-pattern-mcp && make docker-up
-# or: make docker-down && sudo systemctl start architecture-pattern-mcp
-```
-
-**Option B — Fully replace** *(production-only host)*:
-```bash
-# Stop and remove the dev-managed containers first.
-docker compose -f docker/docker-compose.yml down --remove-orphans
+make docker-up                                  # dev on :8060
+sudo systemctl start architecture-pattern-mcp  # prod on :8050
 ```
 
 ## Step 2 — Install
 
 ```bash
+# 0. Install + enable shared TEI infra (once — see ${HOME}/pattern-tei-infra/)
+sudo install -m 644 ${HOME}/pattern-tei-infra/pattern-tei-infra.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now pattern-tei-infra.service
+
 # 1. Create the deployment directory tree.
 sudo install -d /etc/architecture-pattern-mcp/config
 
@@ -116,8 +119,9 @@ compose file, keeping the entire deployment self-contained.
 ## Step 3 — Verify
 
 `systemctl status` reports `active (exited)` within seconds of boot, but the
-Docker containers take **up to ~2 minutes** to become healthy (TEI has
-`start_period: 120s`). The unit does **not** wait for healthchecks.
+MCP container takes **up to ~40 s** to become healthy (`start_period: 40s`);
+TEI readiness is owned by `pattern-tei-infra` (`start_period: 120s` there).
+The unit does **not** wait for healthchecks.
 
 ```bash
 systemctl status architecture-pattern-mcp                          # service state
@@ -155,10 +159,10 @@ sudo systemctl reload architecture-pattern-mcp
 ## Restart policy
 
 Container restart policies live in `systemd/docker-compose.yml`
-(`on-failure` for the MCP server, `unless-stopped` for TEI). The systemd unit
-deliberately does **not** set `Restart=`, so we don't double-manage the stack:
-containers own their in-run restarts, the unit only manages the stack's presence
-at boot.
+(`on-failure` for the MCP server). TEI restart policies live in the
+`pattern-tei-infra` stack. The systemd unit deliberately does **not** set
+`Restart=`, so we don't double-manage the stack: containers own their
+in-run restarts, the unit only manages the stack's presence at boot.
 
 ## Uninstall
 
@@ -181,9 +185,8 @@ sudo rm -rf /etc/architecture-pattern-mcp
   check `journalctl -u architecture-pattern-mcp`.
 - **MCP server can't reach TEI at boot** → wait ~2 min for TEI's
   `start_period` to elapse, or check TEI health with `docker compose ps`.
-- **Container name conflict when running `make docker-up` while the service
-  is up** → `network_mode: host` binds the same ports on both stacks. Stop
-  one before starting the other.
+- **`network pattern-tei-shared not found`** → the shared TEI infra stack isn't
+  running. Start it first: `sudo systemctl start pattern-tei-infra`.
 
 ## Files
 

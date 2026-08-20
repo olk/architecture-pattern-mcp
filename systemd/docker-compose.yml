@@ -7,6 +7,10 @@
 #   - The systemd unit injects COMPOSE_PROJECT_NAME=apmcp-systemd so this
 #     stack is distinct from the dev compose (different project label, no
 #     container_name collisions).
+#   - TEI sidecars are NOT defined here — they live in the shared
+#     `pattern-tei-infra` stack (https://github.com/olk/pattern-tei-infra).  This
+#     stack joins the `pattern-tei-shared` external network to reach them by DNS.
+#     Prerequisite: `systemctl enable --now pattern-tei-infra.service`.
 #
 # Installed at: /etc/architecture-pattern-mcp/docker-compose.yml
 
@@ -14,6 +18,7 @@ services:
   architecture-pattern-mcp:
     image: ${MCP_IMAGE:-architecture-pattern-mcp:latest}
     container_name: architecture-pattern-mcp
+    networks: [pattern-tei-shared]
     environment:
       - CONFIG_PATH=/app/config/config.json
       - GENERATOR_PROVIDER=minimax
@@ -55,11 +60,8 @@ services:
       - LOGGING_LEVEL=INFO
       - LOGGING_FORMAT=json
 
-    depends_on:
-      pattern-tei-rerank:
-        condition: service_healthy
-      pattern-tei:
-        condition: service_healthy
+    depends_on: []
+
     ports:
       - "${MCP_HOST_PORT:-8050}:8050"
     volumes:
@@ -72,33 +74,6 @@ services:
       retries: 3
       start_period: 40s
 
-  pattern-tei:
-    image: ${TEI_IMAGE:-pattern-tei:latest}
-    container_name: pattern-tei
-    restart: unless-stopped
-    # No ports published — internal only (reached by MCP via Docker DNS)
-    environment:
-      - HF_HUB_OFFLINE=1
-      - HUGGINGFACE_HUB_CACHE=/data
-      - MAX_CLIENT_BATCH_SIZE=32
-    healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8080/health || exit 1"]
-      interval: 30s
-      timeout: 5s
-      retries: 5
-      start_period: 120s
-
-  pattern-tei-rerank:
-    image: ${TEI_RERANK_IMAGE:-pattern-tei-rerank:latest}
-    container_name: pattern-tei-rerank
-    restart: unless-stopped
-    # No ports published — internal only (reached by MCP via Docker DNS)
-    environment:
-      - HF_HUB_OFFLINE=1
-      - HUGGINGFACE_HUB_CACHE=/data
-    healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8080/health || exit 1"]
-      interval: 30s
-      timeout: 5s
-      retries: 5
-      start_period: 60s
+networks:
+  pattern-tei-shared:
+    external: true

@@ -1,14 +1,18 @@
-# Production Compose for systemd deployment.
+# Development Compose for local use with `make docker-up`.
 #
-# This file is a deployment variant of docker/docker-compose.yml:
-#   - No `build:` sections (images must be pre-built from the dev compose
-#     via `make docker-build-all` before enabling the service).
-#   - Absolute paths everywhere (no ${HOME}, no relative `build.context`).
-#   - The systemd unit injects COMPOSE_PROJECT_NAME=apmcp-systemd so this
-#     stack is distinct from the dev compose (different project label, no
-#     container_name collisions).
+# Dev variant (distinct from the systemd/production stack at
+# systemd/docker-compose.yml and /etc/architecture-pattern-mcp/):
+#   - Uses service DNS (pattern-tei / pattern-tei-rerank) — no network_mode needed.
+#   - Config is read from ../config (mounted at /app/config).
+#   - TEI sidecars use unique container names (architecture-pattern-tei*) so the dev
+#     stack can run concurrently with the systemd stack and/or the shared
+#     tei-infra stack without container-name conflicts.
+#   - Default host port is 8060 (systemd uses 8050) so dev and prod can coexist.
 #
-# Installed at: /etc/architecture-pattern-mcp/docker-compose.yml
+# Usage:
+#   make docker-up   # or: docker compose -f docker/docker-compose.yml up -d --build
+
+name: architecture-pattern-mcp-dev
 
 services:
   architecture-pattern-mcp:
@@ -61,7 +65,7 @@ services:
       pattern-tei:
         condition: service_healthy
     ports:
-      - "${MCP_HOST_PORT:-8050}:8050"
+      - "${MCP_HOST_PORT:-8060}:8050"
     volumes:
       - ../config:/app/config
     restart: on-failure
@@ -74,7 +78,7 @@ services:
 
   pattern-tei:
     image: ${TEI_IMAGE:-pattern-tei:latest}
-    container_name: pattern-tei
+    container_name: architecture-pattern-tei
     restart: unless-stopped
     # No ports published — internal only (reached by MCP via Docker DNS)
     environment:
@@ -90,7 +94,7 @@ services:
 
   pattern-tei-rerank:
     image: ${TEI_RERANK_IMAGE:-pattern-tei-rerank:latest}
-    container_name: pattern-tei-rerank
+    container_name: architecture-pattern-tei-rerank
     restart: unless-stopped
     # No ports published — internal only (reached by MCP via Docker DNS)
     environment:

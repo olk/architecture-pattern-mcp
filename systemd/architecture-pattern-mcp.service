@@ -1,9 +1,10 @@
 [Unit]
-Description=Architecture Pattern MCP server (Docker Compose stack)
+Description=Architecture Pattern MCP server (Docker Compose stack; TEI via pattern-tei-infra)
 Documentation=https://github.com/architecture-pattern/architecture-pattern-mcp
 Requires=docker.service
 After=docker.service network-online.target
-Wants=network-online.target
+Wants=network-online.target pattern-tei-infra.service
+After=pattern-tei-infra.service
 
 [Service]
 Type=oneshot
@@ -12,8 +13,6 @@ User=graemer
 WorkingDirectory=/etc/architecture-pattern-mcp
 EnvironmentFile=/etc/architecture-pattern-mcp/.env
 ExecStartPre=/usr/bin/docker image inspect architecture-pattern-mcp:latest
-ExecStartPre=/usr/bin/docker image inspect pattern-tei:latest
-ExecStartPre=/usr/bin/docker image inspect pattern-tei-rerank:latest
 ExecStartPre=/usr/bin/docker compose config --quiet
 ExecStart=/usr/bin/docker compose up -d --remove-orphans
 ExecReload=/usr/bin/docker compose up -d --remove-orphans

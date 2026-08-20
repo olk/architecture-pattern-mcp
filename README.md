@@ -51,7 +51,7 @@ docker compose -f docker/docker-compose.yml up --build
 make client
 ```
 
-Server starts on **streamable-http** at `http://localhost:8050/mcp`. Then connect your agent below.
+Server starts on **streamable-http** at `http://localhost:8060/mcp` (dev compose host port; systemd uses 8050). Then connect your agent below.
 
 ---
 
@@ -97,7 +97,7 @@ uv run python -m src.main --port 8050
   "mcp": {
     "architecture-pattern": {
       "type": "remote",
-      "url": "http://localhost:8050/mcp"
+      "url": "http://localhost:8060/mcp"
     }
   }
 }
@@ -557,15 +557,27 @@ lives under `/etc/architecture-pattern-mcp/` on the host. The systemd-managed
 project uses the distinct name `apmcp-systemd` so it can coexist with the dev
 compose if needed.
 
+> **TEI sidecars are NOT defined in this stack** — they live in the shared
+> `pattern-tei-infra` stack at `[pattern-tei-infra](https://github.com/olk/pattern-tei-infra)`. This stack
+> joins the `pattern-tei-shared` external network to reach them by DNS.
+> **Prerequisite:** `systemctl enable --now pattern-tei-infra.service`
+> (one-time install on the host). See [pattern-tei-infra/README.md`](/https://github.com/olk/pattern-tei-infra/README.md).
+
 ### Prerequisites
 
 - systemd-based Linux host with Docker (`docker compose version`).
 - `<user>` is in the `docker` group.
 - Both images pre-built locally (`make docker-build-all` from the repo).
+- **Shared TEI infra stack installed and enabled** (see tei-infra README).
 
 ### Install
 
 ```bash
+# 0. Install + enable shared TEI infra (once)
+sudo install -m 644 {HOME}/pattern-tei-infra/pattern-tei-infra.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now pattern-tei-infra.service
+
 # 1. Build images (once)
 make docker-build-all
 

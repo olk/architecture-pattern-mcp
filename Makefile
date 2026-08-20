@@ -59,7 +59,7 @@ unit-tests: install ## Run unit tests with uv (tests/unit/)
 
 ##@ Demo
 client: ## Run the pipes-and-filters MCP client demo
-	@ARCHITECTURE_CLIENT_URL=http://localhost:8050/mcp uv run python examples/architecture_client.py
+	@ARCHITECTURE_CLIENT_URL=http://localhost:8060/mcp uv run python examples/architecture_client.py
 
 ##@ Docker
 docker-build: ## Build MCP server Docker image with dev dependencies
