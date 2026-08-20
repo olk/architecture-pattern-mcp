@@ -25,7 +25,7 @@ services:
       - GENERATOR_TOP_K=20
 
       - EMBEDDER_PROVIDER=tei
-      - EMBEDDER_BASE_URL=http://architecture-pattern-tei:8080/v1
+      - EMBEDDER_BASE_URL=http://pattern-tei:8080/v1
       - EMBEDDER_BATCH_SIZE=8
       - EMBEDDER_API_KEY=not-needed
 
@@ -46,7 +46,7 @@ services:
       - RETRIEVAL_VERBOSE_TIMING=false
 
       - RERANKER_ENABLED=true
-      - RERANKER_BASE_URL=http://architecture-pattern-tei-rerank:8080
+      - RERANKER_BASE_URL=http://pattern-tei-rerank:8080
       - RERANKER_TIMEOUT=30
 
       - TRANSPORT=streamable-http
@@ -56,9 +56,9 @@ services:
       - LOGGING_FORMAT=json
 
     depends_on:
-      architecture-pattern-tei-rerank:
+      pattern-tei-rerank:
         condition: service_healthy
-      architecture-pattern-tei:
+      pattern-tei:
         condition: service_healthy
     ports:
       - "${MCP_HOST_PORT:-8050}:8050"
@@ -72,9 +72,9 @@ services:
       retries: 3
       start_period: 40s
 
-  architecture-pattern-tei:
-    image: ${TEI_IMAGE:-architecture-pattern-tei:latest}
-    container_name: architecture-pattern-tei
+  pattern-tei:
+    image: ${TEI_IMAGE:-pattern-tei:latest}
+    container_name: pattern-tei
     restart: unless-stopped
     # No ports published — internal only (reached by MCP via Docker DNS)
     environment:
@@ -88,9 +88,9 @@ services:
       retries: 5
       start_period: 120s
 
-  architecture-pattern-tei-rerank:
-    image: ${TEI_RERANK_IMAGE:-architecture-pattern-tei-rerank:latest}
-    container_name: architecture-pattern-tei-rerank
+  pattern-tei-rerank:
+    image: ${TEI_RERANK_IMAGE:-pattern-tei-rerank:latest}
+    container_name: pattern-tei-rerank
     restart: unless-stopped
     # No ports published — internal only (reached by MCP via Docker DNS)
     environment:

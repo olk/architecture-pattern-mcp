@@ -27,12 +27,12 @@ DOCKER_TAG      := $(shell grep -m 1 '^version' pyproject.toml | sed -E 's/.*"([
 DOCKER_HUB_REPO := olkowa/architecture-pattern-mcp
 GHCR_REPO       := ghcr.io/olk/architecture-pattern-mcp
 
-TEI_IMAGE            := architecture-pattern-tei
-TEI_RERANK_IMAGE     := architecture-pattern-tei-rerank
-TEI_HUB_REPO         := olkowa/architecture-pattern-tei
-TEI_GHCR_REPO        := ghcr.io/olk/architecture-pattern-tei
-TEI_RERANK_HUB_REPO  := olkowa/architecture-pattern-tei-rerank
-TEI_RERANK_GHCR_REPO := ghcr.io/olk/architecture-pattern-tei-rerank
+TEI_IMAGE            := pattern-tei
+TEI_RERANK_IMAGE     := pattern-tei-rerank
+TEI_HUB_REPO         := olkowa/pattern-tei
+TEI_GHCR_REPO        := ghcr.io/olk/pattern-tei
+TEI_RERANK_HUB_REPO  := olkowa/pattern-tei-rerank
+TEI_RERANK_GHCR_REPO := ghcr.io/olk/pattern-tei-rerank
 
 .DEFAULT_GOAL := help
 
