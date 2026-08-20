@@ -146,7 +146,7 @@ from Kafka, parse JSON, enrich with geolocation from Redis, write to InfluxDB
 and S3.
 ```
 
-Then call the `design_architecture` tool with:
+This calls the `design_architecture` tool with:
 - `requirements`: "ETL pipeline for IoT sensor data: ingest 10k events/sec from Kafka, parse JSON, enrich with geolocation from Redis, write to InfluxDB and S3"
 - `domain`: "data-processing"
 - `style`: "pipe-and-filter"
