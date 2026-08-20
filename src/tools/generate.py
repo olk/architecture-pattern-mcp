@@ -45,6 +45,8 @@ Architecture:
 - DP-7: Adapter Pattern for protocol interface adaptation
 """
 
+import asyncio
+import contextlib
 import logging
 from typing import Annotated, Any
 
@@ -56,6 +58,7 @@ from fastmcp.tools import tool
 from fastmcp.tools.base import ToolAnnotations
 
 from src.agent import ERROR_LLM_PROVIDER, SoftwareArchitectAgent
+from src.config import TasksConfig
 from src.errors import ERROR_INVALID_ARCHITECTURE, MalformedArchitectureOverviewError
 from src.pipeline import ArchitecturePipeline
 from src.schemas.design import ArchitectureDesign
@@ -155,19 +158,22 @@ class GenerateArchitectureTool:
     def __init__(
         self,
         agent: SoftwareArchitectAgent,
-        pipeline: ArchitecturePipeline
+        pipeline: ArchitecturePipeline,
+        tasks_config: TasksConfig | None = None,
     ) -> None:
         """
         Initialize GenerateArchitectureTool.
-        
+
         AC-222: Verify GenerateArchitectureTool class exists, accepts SoftwareArchitectAgent
-        
+
         Args:
             agent: SoftwareArchitectAgent instance for LLM interactions
             pipeline: ArchitecturePipeline instance for orchestrating generation
+            tasks_config: TasksConfig for heartbeat settings (None = defaults applied)
         """
         self._agent = agent
         self._pipeline = pipeline
+        self._tasks_config = tasks_config
 
         logger.debug(
             "GenerateArchitectureTool initialized",
@@ -183,17 +189,13 @@ class GenerateArchitectureTool:
         tags={"architecture", "generation"},
         annotations=ToolAnnotations(
             title="Generate Architecture",
-            # readOnlyHint=True per OpenAI MCP directory guidance: this tool computes
-            # an architecture design via LLM and changes no server state.  (Previously
-            # False to discourage auto-confirm of expensive LLM calls; the auto-confirm
-            # tradeoff was explicitly accepted.)
             readOnlyHint=True,
             destructiveHint=False,
-            idempotentHint=True,
+            idempotentHint=False,  # non-idempotent: each run creates a new LLM generation
             openWorldHint=False,
         ),
     )
-    async def generate(
+    async def generate(  # noqa: PLR0912
         self,
         requirements: Annotated[str, Field(description="Architecture requirements description", min_length=1)],
         style: Annotated[str, Field(description="Architecture style to use", min_length=1)],
@@ -263,12 +265,17 @@ class GenerateArchitectureTool:
             resolved.append(p)
 
         try:
-            architecture_design = await self._pipeline.generate(
-                requirements=requirements,
-                style=style,
-                domain=domain,
-                selected_patterns=resolved,
-            )
+            hb = self._start_heartbeat(ctx, "generate_architecture")
+            try:
+                architecture_design = await self._pipeline.generate(
+                    requirements=requirements,
+                    style=style,
+                    domain=domain,
+                    selected_patterns=resolved,
+                )
+            finally:
+                if hb is not None:
+                    hb.cancel()
 
             output = self._map_to_output(architecture_design)
 
@@ -302,6 +309,32 @@ class GenerateArchitectureTool:
             raise ToolError(
                 f"{ERROR_GENERATION_FAILED}: Failed to generate architecture design: {error_msg}"
             ) from e
+
+    def _start_heartbeat(
+        self, ctx: Context | None, label: str
+    ) -> asyncio.Task[None] | None:
+        """Start a parallel heartbeat that emits progress notifications.
+
+        Keeps client HTTP/stdio idle timers alive during long synchronous calls.
+        Silently no-ops when ctx is None, heartbeat is disabled, or ctx.report_progress
+        is not supported by the client transport.
+        """
+        cfg = self._tasks_config
+        if ctx is None or cfg is None or not cfg.heartbeat_enabled:
+            return None
+
+        async def _hb() -> None:
+            step = 0
+            try:
+                while True:
+                    await asyncio.sleep(cfg.heartbeat_interval_seconds)
+                    step += 1
+                    with contextlib.suppress(Exception):
+                        await ctx.report_progress(progress=step, message=f"{label} in progress")
+            except asyncio.CancelledError:
+                pass
+
+        return asyncio.create_task(_hb())
 
     def _map_to_output(self, architecture_design: ArchitectureDesign) -> GenerateArchitectureOutput:
         """
@@ -348,18 +381,20 @@ class GenerateArchitectureTool:
 # ADR-3: MCP Tool-Based API - FastMCP @tool decorator
 def generate_architecture_tool(
     agent: SoftwareArchitectAgent,
-    pipeline: ArchitecturePipeline
+    pipeline: ArchitecturePipeline,
+    tasks_config=None,
 ) -> GenerateArchitectureTool:
     """
     Factory function to create GenerateArchitectureTool instance.
-    
+
     DP-4: Factory Pattern - Consistent tool initialization with proper dependencies
-    
+
     Args:
         agent: SoftwareArchitectAgent instance for LLM interactions
         pipeline: ArchitecturePipeline instance for orchestrating generation
-        
+        tasks_config: TasksConfig for heartbeat settings (None = defaults applied)
+
     Returns:
         GenerateArchitectureTool instance ready for MCP tool registration
     """
-    return GenerateArchitectureTool(agent=agent, pipeline=pipeline)
+    return GenerateArchitectureTool(agent=agent, pipeline=pipeline, tasks_config=tasks_config)

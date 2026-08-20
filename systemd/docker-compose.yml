@@ -54,6 +54,8 @@ services:
       - RERANKER_BASE_URL=http://pattern-tei-rerank:8080
       - RERANKER_TIMEOUT=30
 
+      - TASKS_HEARTBEAT_ENABLED=true
+      - TASKS_HEARTBEAT_INTERVAL_SECONDS=30
       - TRANSPORT=streamable-http
       - HOST=0.0.0.0
       - PORT=8050

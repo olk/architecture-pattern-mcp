@@ -61,6 +61,7 @@ from fastmcp.server.transforms import GetToolNext, PromptsAsTools, Transform, Ve
 from fastmcp.tools.base import Tool, ToolAnnotations
 
 from src.agent import SoftwareArchitectAgent
+from src.tools.jobs import JobsStore
 from src.config import ConfigManager, ServerConfig
 from src.patterns.loader import PatternLoader
 from src.patterns.vector_index import DomainVectorIndex
@@ -379,7 +380,8 @@ class MCPArchitectServer:
             # DP-4: Factory Pattern - consistent tool creation
             if self._agent and self._pipeline:
                 self._tools = create_all_tools(
-                    self._agent, self._pipeline, self._pattern_loader
+                    self._agent, self._pipeline, self._pattern_loader,
+                    tasks_config=self._config.tasks,
                 )
 
                 logger.info(
@@ -425,7 +427,7 @@ class MCPArchitectServer:
         """
         Cleanup server resources.
 
-        IC-38: Cleanup code wrapped in finally blocks
+        IC-38: Cleanup wrapped in finally blocks
         """
         try:
             # Cleanup agent resources if needed
@@ -435,6 +437,13 @@ class MCPArchitectServer:
             # Cleanup pipeline resources if needed
             if self._pipeline:
                 logger.debug("Cleaning up ArchitecturePipeline")
+
+            # Close JobsStore singleton (Fix 4)
+            try:
+                if JobsStore._instance is not None and JobsStore._instance._db is not None:
+                    await JobsStore._instance.close()
+            except Exception as exc:
+                logger.debug("JobsStore cleanup", extra={"error": str(exc)})
 
             # Clear tools
             self._tools.clear()
@@ -472,6 +481,9 @@ class MCPArchitectServer:
         try:
             # Initialize resources
             await self._initialize()
+
+            # Pre-initialise the JobsStore singleton (Fix 4 job trio)
+            await JobsStore.get_instance()
 
             # Register tools with FastMCP using @tool-decorated bound methods
             self._register_tools(server)

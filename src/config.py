@@ -260,6 +260,30 @@ class ValidationConfig(BaseModel):
     retry_on_fail: bool = True
 
 
+class TasksConfig(BaseModel):
+    """Heartbeat configuration for long-running tools.
+
+    Implements Fix 2 of the long-running-tool timeout fix: a parallel coroutine
+    emits progress notifications at regular intervals during a tool's execution,
+    keeping client idle timers alive.
+
+    FR-XXX: Heartbeat settings SHALL be configurable via config.json.
+    """
+
+    heartbeat_enabled: bool = Field(
+        default=True,
+        description="Emit progress notifications from a parallel coroutine during long tool calls. "
+                    "Keeps client HTTP/stdio idle timers alive; works for every client.",
+    )
+    heartbeat_interval_seconds: int = Field(
+        default=30,
+        ge=5,
+        le=600,
+        description="Heartbeat emit interval in seconds. Must be shorter than the "
+                    "client's idle timeout (5 minutes for HTTP transport).",
+    )
+
+
 class ServerConfig(BaseModel):
     """
     # E-13: INVALID_CONFIG - Config structure invalid (HTTP 400, severity: warn)
@@ -289,6 +313,19 @@ class ServerConfig(BaseModel):
 
     # Validation: self-healing retry loop settings for LLM structured generation
     validation: ValidationConfig = Field(default_factory=lambda: ValidationConfig())
+
+    # Foreground wall-clock cap on every tool (seconds). None = no cap.
+    tool_timeout_seconds: int | None = Field(default=None, ge=1)
+
+    @field_validator("tool_timeout_seconds", mode="before")
+    @classmethod
+    def _empty_string_to_none(cls, v: Any) -> Any:
+        if v == "":
+            return None
+        return v
+
+    # Heartbeat settings for long-running tools
+    tasks: TasksConfig = Field(default_factory=lambda: TasksConfig())
 
     # Transport mode: "stdio" for local, "streamable-http" for HTTP
     transport: str = "streamable-http"

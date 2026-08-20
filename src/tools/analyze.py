@@ -43,6 +43,8 @@ Architecture:
 - DP-7: Adapter Pattern for protocol interface adaptation
 """
 
+import asyncio
+import contextlib
 import logging
 from typing import Annotated, Any
 
@@ -54,6 +56,7 @@ from fastmcp.tools import tool
 from fastmcp.tools.base import ToolAnnotations
 
 from src.agent import ERROR_LLM_PROVIDER, SoftwareArchitectAgent
+from src.config import TasksConfig
 from src.patterns.retriever import DEFAULT_FALLBACK_PATTERN_NAME
 from src.pipeline import AnalysisResult, ArchitecturePipeline
 
@@ -133,19 +136,22 @@ class AnalyzeArchitectureTool:
     def __init__(
         self,
         agent: SoftwareArchitectAgent,
-        pipeline: ArchitecturePipeline
+        pipeline: ArchitecturePipeline,
+        tasks_config: TasksConfig | None = None,
     ) -> None:
         """
         Initialize AnalyzeArchitectureTool.
-        
+
         AC-221: Verify AnalyzeArchitectureTool class exists, accepts SoftwareArchitectAgent
-        
+
         Args:
             agent: SoftwareArchitectAgent instance for LLM interactions
             pipeline: ArchitecturePipeline instance for orchestrating analysis
+            tasks_config: TasksConfig for heartbeat settings (None = defaults applied)
         """
         self._agent = agent
         self._pipeline = pipeline
+        self._tasks_config = tasks_config
 
         logger.debug(
             "AnalyzeArchitectureTool initialized",
@@ -163,11 +169,11 @@ class AnalyzeArchitectureTool:
             title="Analyze Architecture",
             readOnlyHint=True,
             destructiveHint=False,
-            idempotentHint=True,
+            idempotentHint=False,  # non-idempotent: each run triggers a fresh LLM analysis
             openWorldHint=False,
         ),
     )
-    async def analyze(
+    async def analyze(  # noqa: PLR0912
         self,
         requirements: Annotated[str, Field(description="Architecture requirements description", min_length=1)],
         domain: Annotated[str, Field(description="Target architecture domain", min_length=1)],
@@ -205,10 +211,15 @@ class AnalyzeArchitectureTool:
             await ctx.info(f"analyze_architecture: domain={domain}, req_len={len(requirements)}")
 
         try:
-            analysis_result = await self._pipeline.analyze(
-                requirements=requirements,
-                domain=domain
-            )
+            hb = self._start_heartbeat(ctx, "analyze_architecture")
+            try:
+                analysis_result = await self._pipeline.analyze(
+                    requirements=requirements,
+                    domain=domain
+                )
+            finally:
+                if hb is not None:
+                    hb.cancel()
 
             output = self._map_to_output(analysis_result)
 
@@ -262,6 +273,32 @@ class AnalyzeArchitectureTool:
             quality_metrics=pd_result.quality_metrics.model_dump() if pd_result.quality_metrics else None,
         )
 
+    def _start_heartbeat(
+        self, ctx: Context | None, label: str
+    ) -> asyncio.Task[None] | None:
+        """Start a parallel heartbeat that emits progress notifications.
+
+        Keeps client HTTP/stdio idle timers alive during long synchronous calls.
+        Silently no-ops when ctx is None, heartbeat is disabled, or ctx.report_progress
+        is not supported by the client transport.
+        """
+        cfg = self._tasks_config
+        if ctx is None or cfg is None or not cfg.heartbeat_enabled:
+            return None
+
+        async def _hb() -> None:
+            step = 0
+            try:
+                while True:
+                    await asyncio.sleep(cfg.heartbeat_interval_seconds)
+                    step += 1
+                    with contextlib.suppress(Exception):
+                        await ctx.report_progress(progress=step, message=f"{label} in progress")
+            except asyncio.CancelledError:
+                pass
+
+        return asyncio.create_task(_hb())
+
     def _is_llm_error(self, error: Exception) -> bool:
         """
         Check if error is an LLM provider error.
@@ -307,18 +344,20 @@ class AnalyzeArchitectureTool:
 # ADR-3: MCP Tool-Based API - FastMCP @tool decorator
 def analyze_architecture_tool(
     agent: SoftwareArchitectAgent,
-    pipeline: ArchitecturePipeline
+    pipeline: ArchitecturePipeline,
+    tasks_config=None,
 ) -> AnalyzeArchitectureTool:
     """
     Factory function to create AnalyzeArchitectureTool instance.
-    
+
     DP-4: Factory Pattern - Consistent tool initialization with proper dependencies
-    
+
     Args:
         agent: SoftwareArchitectAgent instance for LLM interactions
         pipeline: ArchitecturePipeline instance for orchestrating analysis
-        
+        tasks_config: TasksConfig for heartbeat settings (None = defaults applied)
+
     Returns:
         AnalyzeArchitectureTool instance ready for MCP tool registration
     """
-    return AnalyzeArchitectureTool(agent=agent, pipeline=pipeline)
+    return AnalyzeArchitectureTool(agent=agent, pipeline=pipeline, tasks_config=tasks_config)

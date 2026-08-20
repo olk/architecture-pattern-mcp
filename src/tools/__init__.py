@@ -29,33 +29,42 @@ Each factory function creates a tool instance with the appropriate dependencies.
 """
 
 from src.tools.analyze import AnalyzeArchitectureTool, analyze_architecture_tool
+from src.tools.cancel_design import CancelDesignTool, cancel_design_tool
 from src.tools.design import DesignArchitectureTool, design_architecture_tool
 from src.tools.evaluate import EvaluateArchitectureTool, evaluate_architecture_tool
 from src.tools.generate import GenerateArchitectureTool, generate_architecture_tool
+from src.tools.get_design_status import GetDesignStatusTool, get_design_status_tool
 from src.tools.patterns import (
     GetArchitecturePatternTool,
     ListArchitecturePatternsTool,
     get_architecture_pattern_tool,
     list_architecture_patterns_tool,
 )
+from src.tools.start_design import StartDesignArchitectureTool, start_design_architecture_tool
 
 __all__ = [
     "AnalyzeArchitectureTool",
+    "CancelDesignTool",
     "DesignArchitectureTool",
     "EvaluateArchitectureTool",
     "GenerateArchitectureTool",
+    "GetDesignStatusTool",
     "GetArchitecturePatternTool",
     "ListArchitecturePatternsTool",
+    "StartDesignArchitectureTool",
     "analyze_architecture_tool",
+    "cancel_design_tool",
     "design_architecture_tool",
     "evaluate_architecture_tool",
     "generate_architecture_tool",
+    "get_design_status_tool",
     "get_architecture_pattern_tool",
     "list_architecture_patterns_tool",
+    "start_design_architecture_tool",
 ]
 
 
-def create_all_tools(agent, pipeline, pattern_loader):
+def create_all_tools(agent, pipeline, pattern_loader, tasks_config=None):
     """
     Factory function to create all MCP tool instances.
 
@@ -65,15 +74,19 @@ def create_all_tools(agent, pipeline, pattern_loader):
         agent: SoftwareArchitectAgent instance for LLM interactions.
         pipeline: ArchitecturePipeline instance for orchestrating design pipeline.
         pattern_loader: PatternLoader instance for direct pattern catalog access.
+        tasks_config: TasksConfig instance for heartbeat settings (None = defaults applied).
 
     Returns:
         dict: Dictionary mapping tool names to tool instances.
     """
     return {
-        "design_architecture": design_architecture_tool(agent, pipeline),
-        "analyze_architecture": analyze_architecture_tool(agent, pipeline),
-        "generate_architecture": generate_architecture_tool(agent, pipeline),
-        "evaluate_architecture": evaluate_architecture_tool(agent, pipeline),
+        "design_architecture": design_architecture_tool(agent, pipeline, tasks_config=tasks_config),
+        "analyze_architecture": analyze_architecture_tool(agent, pipeline, tasks_config=tasks_config),
+        "generate_architecture": generate_architecture_tool(agent, pipeline, tasks_config=tasks_config),
+        "evaluate_architecture": evaluate_architecture_tool(agent, pipeline, tasks_config=tasks_config),
         "list_architecture_patterns": list_architecture_patterns_tool(pattern_loader),
         "get_architecture_pattern": get_architecture_pattern_tool(pattern_loader),
+        "start_design_architecture": start_design_architecture_tool(agent, pipeline),
+        "get_design_status": get_design_status_tool(),
+        "cancel_design": cancel_design_tool(),
     }

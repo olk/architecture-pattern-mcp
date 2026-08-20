@@ -60,6 +60,11 @@
     "max_retries": "{env:VALIDATION_MAX_RETRIES:-2}",
     "retry_on_fail": "{env:VALIDATION_RETRY_ON_FAIL:-true}"
   },
+  "tool_timeout_seconds": "{env:TOOL_TIMEOUT_SECONDS:-}",
+  "tasks": {
+    "heartbeat_enabled": "{env:TASKS_HEARTBEAT_ENABLED:-true}",
+    "heartbeat_interval_seconds": "{env:TASKS_HEARTBEAT_INTERVAL_SECONDS:-30}"
+  },
   "transport": "{env:TRANSPORT:-streamable-http}",
   "host": "{env:HOST:-0.0.0.0}",
   "port": "{env:PORT:-8050}",

@@ -48,6 +48,8 @@ Architecture:
 - DP-7: Adapter Pattern - adapts FastMCP protocol to internal implementation
 """
 
+import asyncio
+import contextlib
 import logging
 from typing import Annotated, Any
 
@@ -59,6 +61,7 @@ from fastmcp.tools import tool
 from fastmcp.tools.base import ToolAnnotations
 
 from src.agent import ERROR_LLM_PROVIDER, LLMError, SoftwareArchitectAgent
+from src.config import TasksConfig
 from src.errors import ERROR_INVALID_ARCHITECTURE, MalformedArchitectureOverviewError
 from src.pipeline import ArchitecturePipeline
 from src.schemas.evaluation import PipelineResult
@@ -148,21 +151,24 @@ class DesignArchitectureTool:
     def __init__(
         self,
         agent: SoftwareArchitectAgent,
-        pipeline: ArchitecturePipeline
+        pipeline: ArchitecturePipeline,
+        tasks_config: TasksConfig | None = None,
     ) -> None:
         """
         Initialize DesignArchitectureTool.
-        
+
         DP-5: Dependency Injection - Constructor injection of all dependencies
-        
+
         AC-224: Verify DesignArchitectureTool class exists, accepts SoftwareArchitectAgent
-        
+
         Args:
             agent: SoftwareArchitectAgent instance for LLM interactions
             pipeline: ArchitecturePipeline instance for orchestrating design pipeline
+            tasks_config: Heartbeat configuration for long-running tool defence
         """
         self._agent = agent
         self._pipeline = pipeline
+        self._tasks_config = tasks_config
 
         logger.debug(
             "DesignArchitectureTool initialized",
@@ -178,17 +184,16 @@ class DesignArchitectureTool:
         tags={"architecture", "design"},
         annotations=ToolAnnotations(
             title="Design Architecture",
-            # readOnlyHint=True per OpenAI MCP directory guidance: this tool computes
-            # an architecture design via LLM and changes no server state.  (Previously
-            # False to discourage auto-confirm of expensive LLM calls; the auto-confirm
-            # tradeoff was explicitly accepted.)
+            # readOnlyHint=True: this tool computes an architecture design via LLM
+            # and changes no server state.
             readOnlyHint=True,
             destructiveHint=False,
-            idempotentHint=True,
+            idempotentHint=False,  # non-idempotent: each run creates a new LLM pipeline
             openWorldHint=False,
         ),
     )
-    async def design(
+    async def design(  # noqa: PLR0912
+
         self,
         requirements: Annotated[str, Field(description="Architecture requirements description", min_length=1)],
         domain: Annotated[str, Field(description="Target architecture domain", min_length=1)],
@@ -234,11 +239,16 @@ class DesignArchitectureTool:
             if not domain or not domain.strip():
                 raise ToolError(f"{ERROR_REQUIREMENTS_VALIDATION}: Requirements validation fails")
 
-            refined = await self._pipeline.run_design(
-                requirements=requirements,
-                domain=domain,
-                style=override_style
-            )
+            hb = self._start_heartbeat(ctx, "design_architecture")
+            try:
+                refined = await self._pipeline.run_design(
+                    requirements=requirements,
+                    domain=domain,
+                    style=override_style
+                )
+            finally:
+                if hb is not None:
+                    hb.cancel()
 
             output = self._map_to_output(refined)
 
@@ -271,6 +281,36 @@ class DesignArchitectureTool:
             if ctx is not None:
                 await ctx.error(f"Unexpected error during design: {error_msg}")
             raise
+
+    def _start_heartbeat(
+        self, ctx: Context | None, label: str
+    ) -> asyncio.Task[None] | None:
+        """Start a parallel heartbeat that emits progress notifications.
+
+        Keeps client HTTP/stdio idle timers alive during long synchronous calls.
+        Cancelled automatically via task.cancel() in the outer finally block.
+        Silently no-ops when ctx is None, heartbeat is disabled, or ctx.report_progress
+        is not supported by the client transport.
+        """
+        cfg = self._tasks_config
+        if ctx is None or cfg is None or not cfg.heartbeat_enabled:
+            return None
+
+        async def _hb() -> None:
+            step = 0
+            try:
+                while True:
+                    await asyncio.sleep(cfg.heartbeat_interval_seconds)
+                    step += 1
+                    with contextlib.suppress(Exception):
+                        await ctx.report_progress(
+                            progress=step,
+                            message=f"{label} in progress",
+                        )
+            except asyncio.CancelledError:
+                pass
+
+        return asyncio.create_task(_hb())
 
     def _map_to_output(self, refined: PipelineResult) -> DesignArchitectureOutput:
         """
@@ -315,18 +355,20 @@ class DesignArchitectureTool:
 # ADR-3: MCP Tool-Based API - FastMCP @tool decorator
 def design_architecture_tool(
     agent: SoftwareArchitectAgent,
-    pipeline: ArchitecturePipeline
+    pipeline: ArchitecturePipeline,
+    tasks_config=None,
 ) -> DesignArchitectureTool:
     """
     Factory function to create DesignArchitectureTool instance.
-    
+
     DP-4: Factory Pattern - Consistent tool initialization with proper dependencies
-    
+
     Args:
         agent: SoftwareArchitectAgent instance for LLM interactions
         pipeline: ArchitecturePipeline instance for orchestrating design pipeline
-        
+        tasks_config: TasksConfig for heartbeat settings (None = defaults applied)
+
     Returns:
         DesignArchitectureTool instance ready for MCP tool registration
     """
-    return DesignArchitectureTool(agent=agent, pipeline=pipeline)
+    return DesignArchitectureTool(agent=agent, pipeline=pipeline, tasks_config=tasks_config)

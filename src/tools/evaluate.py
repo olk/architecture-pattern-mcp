@@ -44,6 +44,8 @@ Architecture:
 - DP-7: Adapter Pattern for protocol interface adaptation
 """
 
+import asyncio
+import contextlib
 import logging
 from typing import Annotated, Any
 
@@ -56,6 +58,7 @@ from fastmcp.tools import tool
 from fastmcp.tools.base import ToolAnnotations
 
 from src.agent import ERROR_LLM_PROVIDER, LLMError, SoftwareArchitectAgent
+from src.config import TasksConfig
 from src.errors import ERROR_INVALID_ARCHITECTURE, MalformedArchitectureOverviewError
 from src.pipeline import ArchitectureEvaluation, ArchitecturePipeline
 
@@ -122,19 +125,22 @@ class EvaluateArchitectureTool:
     def __init__(
         self,
         agent: SoftwareArchitectAgent,
-        pipeline: ArchitecturePipeline
+        pipeline: ArchitecturePipeline,
+        tasks_config: TasksConfig | None = None,
     ) -> None:
         """
         Initialize EvaluateArchitectureTool.
-        
+
         AC-223: Verify EvaluateArchitectureTool class exists, accepts SoftwareArchitectAgent
-        
+
         Args:
             agent: SoftwareArchitectAgent instance for LLM interactions
             pipeline: ArchitecturePipeline instance for orchestrating evaluation
+            tasks_config: TasksConfig for heartbeat settings (None = defaults applied)
         """
         self._agent = agent
         self._pipeline = pipeline
+        self._tasks_config = tasks_config
 
         logger.debug(
             "EvaluateArchitectureTool initialized",
@@ -152,11 +158,11 @@ class EvaluateArchitectureTool:
             title="Evaluate Architecture",
             readOnlyHint=True,
             destructiveHint=False,
-            idempotentHint=True,
+            idempotentHint=False,  # non-idempotent: each run triggers a fresh LLM evaluation
             openWorldHint=False,
         ),
     )
-    async def evaluate(
+    async def evaluate(  # noqa: PLR0912
         self,
         architecture: Annotated[dict[str, Any], Field(description="Architecture design as dictionary")],
         criteria: Annotated[str, Field(description="Evaluation criteria description", min_length=1)],
@@ -209,11 +215,16 @@ class EvaluateArchitectureTool:
                     f"{ERROR_MIN_REQUIREMENTS}: Architecture does not meet minimum requirements"
                 )
 
-            evaluation = await self._pipeline.evaluate(
-                architecture=architecture_design,
-                criteria=criteria,
-                domain=domain,
-            )
+            hb = self._start_heartbeat(ctx, "evaluate_architecture")
+            try:
+                evaluation = await self._pipeline.evaluate(
+                    architecture=architecture_design,
+                    criteria=criteria,
+                    domain=domain,
+                )
+            finally:
+                if hb is not None:
+                    hb.cancel()
 
             output = self._map_to_output(evaluation)
 
@@ -260,6 +271,32 @@ class EvaluateArchitectureTool:
         """
         from src.tools._adapters import design_from_dict
         return design_from_dict(architecture)
+
+    def _start_heartbeat(
+        self, ctx: Context | None, label: str
+    ) -> asyncio.Task[None] | None:
+        """Start a parallel heartbeat that emits progress notifications.
+
+        Keeps client HTTP/stdio idle timers alive during long synchronous calls.
+        Silently no-ops when ctx is None, heartbeat is disabled, or ctx.report_progress
+        is not supported by the client transport.
+        """
+        cfg = self._tasks_config
+        if ctx is None or cfg is None or not cfg.heartbeat_enabled:
+            return None
+
+        async def _hb() -> None:
+            step = 0
+            try:
+                while True:
+                    await asyncio.sleep(cfg.heartbeat_interval_seconds)
+                    step += 1
+                    with contextlib.suppress(Exception):
+                        await ctx.report_progress(progress=step, message=f"{label} in progress")
+            except asyncio.CancelledError:
+                pass
+
+        return asyncio.create_task(_hb())
 
     def _check_minimum_requirements(self, architecture: ArchitectureDesign) -> bool:
         """
@@ -311,18 +348,20 @@ class EvaluateArchitectureTool:
 # ADR-3: MCP Tool-Based API - FastMCP @tool decorator
 def evaluate_architecture_tool(
     agent: SoftwareArchitectAgent,
-    pipeline: ArchitecturePipeline
+    pipeline: ArchitecturePipeline,
+    tasks_config=None,
 ) -> EvaluateArchitectureTool:
     """
     Factory function to create EvaluateArchitectureTool instance.
-    
+
     DP-4: Factory Pattern - Consistent tool initialization with proper dependencies
-    
+
     Args:
         agent: SoftwareArchitectAgent instance for LLM interactions
         pipeline: ArchitecturePipeline instance for orchestrating evaluation
-        
+        tasks_config: TasksConfig for heartbeat settings (None = defaults applied)
+
     Returns:
         EvaluateArchitectureTool instance ready for MCP tool registration
     """
-    return EvaluateArchitectureTool(agent=agent, pipeline=pipeline)
+    return EvaluateArchitectureTool(agent=agent, pipeline=pipeline, tasks_config=tasks_config)

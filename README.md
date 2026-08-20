@@ -173,10 +173,13 @@ Show me detailed information to the event-driven architecture pattern.
 
 | Tool | Description |
 |---|---|
-| `analyze_architecture` | Analyse requirements and domain → recommended style, patterns, quality metrics |
-| `generate_architecture` | Generate an architecture design from requirements and selected patterns |
-| `evaluate_architecture` | Score an existing design against quality attributes |
-| `design_architecture` | Full pipeline: analyse → generate → evaluate → refine (up to 3 attempts) |
+| `analyze_architecture` | Analyse requirements and domain → recommended style, patterns, quality metrics. *Long-running (LLM call). Not idempotent.* |
+| `generate_architecture` | Generate an architecture design from requirements and selected patterns. *Long-running (LLM call). Not idempotent.* |
+| `evaluate_architecture` | Score an existing design against quality attributes. *Long-running (LLM call). Not idempotent.* |
+| `design_architecture` | Full pipeline: analyse → generate → evaluate → refine (up to 3 attempts). *Long-running (often > 5 minutes). Not idempotent.* |
+| `start_design_architecture` | Start a design_architecture job and return a job_id immediately. Poll `get_design_status` until done. |
+| `get_design_status` | Poll job status. |
+| `cancel_design` | Cancel a running job. |
 | `list_architecture_patterns` | List all 36 patterns; filter by `category` and/or `domain` |
 | `get_architecture_pattern` | Get full JSON for a specific pattern by name |
 
@@ -369,6 +372,8 @@ The server reads `~/.config/architecture-pattern-mcp/config.json` (override with
 | `PATTERN_DIRECTORY` | `~/.config/architecture-pattern-mcp/pattern` | Pattern files directory |
 | `VALIDATION_MAX_RETRIES` | `2` | Max self-healing retry attempts |
 | `VALIDATION_RETRY_ON_FAIL` | `true` | Retry on validation failure |
+| `TASKS_HEARTBEAT_ENABLED` | `true` | Emit progress notifications during long tool calls |
+| `TASKS_HEARTBEAT_INTERVAL_SECONDS` | `30` | Heartbeat interval in seconds (keep below client idle timeout) |
 | `TRANSPORT` | `streamable-http` | Transport mode: `stdio`, `streamable-http` |
 | `HOST` | `0.0.0.0` | HTTP bind host |
 | `PORT` | `8050` | HTTP bind port |
@@ -419,6 +424,30 @@ Valid `category` values: `messaging`, `structural`, `cloud`, `data`, `ai_cogniti
 Full JSON Schema with all enums: `docs/pattern-schema.json`
 
 ---
+
+## Long-running tools & timeouts
+
+`design_architecture` (and to a lesser extent `analyze_architecture`, `generate_architecture`, `evaluate_architecture`) run multi-stage LLM pipelines that **can take more than 5 minutes per call**. This is inherent to the workload, not a bug: the generator LLM must **process** a large input payload — the selected pattern definitions from the 36-pattern catalog, your requirements, and the full output of every previous stage — and **generate** a large, strictly structured JSON document (components, relationships, API contracts, data models, event contracts, quality scores) one token at a time. The `design_architecture` pipeline repeats generate → evaluate up to three times (plus self-healing validation retries), so a single call can comprise 9+ LLM round trips. Depending on your agent and transport, this can hit client-side idle timers.
+
+### The heartbeat defence (Fix 2 — applied by default)
+
+Every pipeline tool emits `progress` notifications from a parallel coroutine every 30 seconds, keeping client HTTP/stdio idle timers alive. This covers Claude Code and OpenCode without any configuration.
+
+### The async job trio (Fix 4 — always available)
+
+For full control, three tools provide a job handle:
+
+```
+start_design_architecture(requirements, domain, override_style)  → job_id
+get_design_status(job_id)                                  → {status, result, error}
+cancel_design(job_id)                                      → {cancelled, status}
+```
+
+Use these when you need durable job state or cancellation support. The job store is SQLite at `~/.config/architecture-pattern-mcp/jobs.db`.
+
+### What this server does NOT solve
+
+- **TS-SDK clients (Cursor, Claude Desktop)** hardcode a 60-second request timeout and do not reset the clock on progress notifications. Only the async job trio (`start_`/`get_status`/`cancel_`) works for those clients.
 
 ## Troubleshooting
 
