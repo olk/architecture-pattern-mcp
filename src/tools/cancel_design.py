@@ -20,7 +20,7 @@
 # SOFTWARE.
 
 """
-cancel_design tool — Fix 4: cancel a running start_design_architecture job.
+cancel_design tool — cancel a running start_design_architecture job.
 
 Sets the job status to 'cancelled'. The background asyncio task checks
 is_cancelled() before each stage and exits promptly when it sees the flag.
@@ -49,8 +49,10 @@ class CancelDesignTool:
         name="cancel_design",
         description=(
             "Cancel a running start_design_architecture job. "
-            "The background pipeline task checks the cancellation flag between stages "
-            "and exits promptly. A job that has already completed cannot be cancelled."
+            "The background task checks the cancellation flag between pipeline stages "
+            "and exits at the next stage boundary. Cancellation is best-effort and may "
+            "take up to one LLM call to take effect. A job that has already completed, "
+            "failed, or been cancelled cannot be cancelled again."
         ),
         tags={"architecture", "design"},
         annotations=ToolAnnotations(

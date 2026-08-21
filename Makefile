@@ -58,8 +58,11 @@ unit-tests: install ## Run unit tests with uv (tests/unit/)
 	$(UV) run pytest tests/unit/ -v
 
 ##@ Demo
-client: ## Run the pipes-and-filters MCP client demo
+client: ## Run the pipes-and-filters MCP client demo (synchronous design_architecture)
 	@ARCHITECTURE_CLIENT_URL=http://localhost:8060/mcp uv run python examples/architecture_client.py
+
+client-async: ## Run the async job trio demo (start_design_architecture + get_design_status)
+	@ARCHITECTURE_CLIENT_URL=http://localhost:8060/mcp uv run python examples/architecture_client_async.py
 
 ##@ Docker
 docker-build: ## Build MCP server Docker image with dev dependencies

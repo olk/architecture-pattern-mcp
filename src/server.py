@@ -23,7 +23,7 @@
 MCPArchitectServer - FastMCP server entry point with lifespan management and tool registration.
 
 FR-240: The system SHALL provide an MCPArchitectServer class
-FR-241: The system SHALL expose four MCP tools via list_tools handler
+FR-241: The system SHALL expose nine MCP tools via list_tools handler
 FR-242: The system SHALL route tool calls via call_tool handler
 FR-247: The system SHALL expose four MCP prompts via prompts/list handler
 FR-248: Prompt design_architecture_workflow SHALL guide analyze -> generate -> evaluate -> refine
@@ -47,6 +47,7 @@ Error Handling:
 - E-11: ERR_011 - Server initialization failed (HTTP 500, severity: critical)
 """
 
+import asyncio
 import json
 import logging
 import os
@@ -243,11 +244,22 @@ class MCPArchitectServer:
     FR-240: MCPArchitectServer class implemented with FastMCP
     AC-240: Verify MCPArchitectServer class exists, accepts optional config_path parameter
 
-    This server exposes four MCP tools:
-    - design_architecture: High-level wrapper delegating to full architecture pipeline
-    - analyze_architecture: Analyzes requirements and derives architecture recommendations
-    - generate_architecture: Generates new architecture design based on requirements
-    - evaluate_architecture: Evaluates an architecture design
+    This server exposes nine MCP tools:
+
+    Synchronous (may take minutes):
+      - design_architecture: Full pipeline: analyse → generate → evaluate → refine (up to 3 attempts)
+      - analyze_architecture: Analyzes requirements and derives architecture recommendations
+      - generate_architecture: Generates new architecture design based on requirements
+      - evaluate_architecture: Evaluates an architecture design against quality attributes
+
+    Manual async job pattern (start/get_status/cancel):
+      - start_design_architecture: Starts a design job and returns a job_id immediately
+      - get_design_status: Polls job status; returns full design output when completed
+      - cancel_design: Cancels a running job (best-effort; exits at next stage boundary)
+
+    Read-only pattern catalogue:
+      - list_architecture_patterns: Lists all 36 patterns; filter by category and/or domain
+      - get_architecture_pattern: Returns the full JSON spec for a specific pattern
 
     Attributes:
         _config_path: Optional path to configuration file
@@ -438,7 +450,17 @@ class MCPArchitectServer:
             if self._pipeline:
                 logger.debug("Cleaning up ArchitecturePipeline")
 
-            # Close JobsStore singleton (Fix 4)
+            # Cancel in-flight start_design_architecture background tasks
+            if "start_design_architecture" in self._tools:
+                instance = self._tools["start_design_architecture"]
+                tasks = list(instance._running_tasks)
+                for task in tasks:
+                    task.cancel()
+                if tasks:
+                    await asyncio.gather(*instance._running_tasks, return_exceptions=True)
+                logger.debug("Cancelled %d background design tasks", len(tasks))
+
+            # Close JobsStore singleton
             try:
                 if JobsStore._instance is not None and JobsStore._instance._db is not None:
                     await JobsStore._instance.close()
@@ -482,7 +504,7 @@ class MCPArchitectServer:
             # Initialize resources
             await self._initialize()
 
-            # Pre-initialise the JobsStore singleton (Fix 4 job trio)
+            # Pre-initialise the JobsStore singleton (job trio)
             await JobsStore.get_instance()
 
             # Register tools with FastMCP using @tool-decorated bound methods
@@ -567,6 +589,21 @@ class MCPArchitectServer:
             server.add_tool(self._tools["get_architecture_pattern"].get_architecture_pattern)
             self._tools_registered.add("get_architecture_pattern")
             logger.debug("Registered tool: get_architecture_pattern")
+
+        if "start_design_architecture" not in self._tools_registered:
+            server.add_tool(self._tools["start_design_architecture"].start_design)
+            self._tools_registered.add("start_design_architecture")
+            logger.debug("Registered tool: start_design_architecture")
+
+        if "get_design_status" not in self._tools_registered:
+            server.add_tool(self._tools["get_design_status"].get_status)
+            self._tools_registered.add("get_design_status")
+            logger.debug("Registered tool: get_design_status")
+
+        if "cancel_design" not in self._tools_registered:
+            server.add_tool(self._tools["cancel_design"].cancel)
+            self._tools_registered.add("cancel_design")
+            logger.debug("Registered tool: cancel_design")
 
     def _register_resources(self, server: FastMCP) -> None:
         """

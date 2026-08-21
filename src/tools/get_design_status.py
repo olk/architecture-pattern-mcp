@@ -20,7 +20,7 @@
 # SOFTWARE.
 
 """
-get_design_status tool — Fix 4: poll job state.
+get_design_status tool — poll job state.
 
 Returns the current status, progress message, and result/error of a
 start_design_architecture job.

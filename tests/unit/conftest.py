@@ -29,6 +29,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from src.tools.jobs import JobsStore
+
 
 @pytest.fixture(autouse=True)
 def mock_config_manager():
@@ -69,3 +71,18 @@ def mock_config_manager():
     mock_cm.DEFAULT_CONFIG_PATH = "/tmp/test_config.json"
     with patch('src.config.ConfigManager.load_config', mock_cm.load_config):
         yield mock_cm
+
+
+@pytest.fixture(autouse=True)
+async def jobs_store(tmp_path, monkeypatch):
+    """Isolate JobsStore to a per-test tmp_path SQLite database.
+
+    Resets the singleton between tests so jobs from one test never bleed into another.
+    Requires ``asyncio_mode = "auto"`` in pyproject.toml pytest config.
+    """
+    db = tmp_path / "jobs.db"
+    monkeypatch.setenv("ARCHITECTURE_PATTERN_JOBS_DB", str(db))
+    await JobsStore.reset_for_test()
+    yield await JobsStore.get_instance()
+    await JobsStore.reset_for_test()
+    monkeypatch.delenv("ARCHITECTURE_PATTERN_JOBS_DB", raising=False)

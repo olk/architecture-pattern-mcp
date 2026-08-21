@@ -20,7 +20,7 @@
 # SOFTWARE.
 
 """
-start_design_architecture tool — Fix 4: manual async job pattern.
+start_design_architecture tool — manual async job pattern.
 
 Creates a pending job and returns immediately with a job_id.
 The actual pipeline runs in a background asyncio task; poll get_design_status
@@ -97,7 +97,7 @@ class StartDesignArchitectureTool:
         )
 
         task = asyncio.create_task(
-            self._run_job(job_id, requirements, domain, override_style),
+            self._run_job(job_id, requirements, domain, override_style, ctx),
             name=f"design-job-{job_id}",
         )
         self._running_tasks.add(task)
@@ -118,14 +118,19 @@ class StartDesignArchitectureTool:
         requirements: str,
         domain: str,
         override_style: str | None,
+        ctx: Context | None = None,
     ) -> None:
         """Background task: run the pipeline and update job state."""
         store = await JobsStore.get_instance()
 
         try:
             await store.set_running(job_id)
+            if ctx:
+                await ctx.info(f"Job {job_id}: running design pipeline for domain='{domain}'")
 
             if await store.is_cancelled(job_id):
+                if ctx:
+                    await ctx.info(f"Job {job_id}: cancelled before pipeline started")
                 return
 
             from src.tools._adapters import design_to_pydantic
@@ -137,7 +142,12 @@ class StartDesignArchitectureTool:
             )
 
             if await store.is_cancelled(job_id):
+                if ctx:
+                    await ctx.info(f"Job {job_id}: cancelled after pipeline, discarding result")
                 return
+
+            if ctx:
+                await ctx.info(f"Job {job_id}: pipeline finished, storing result (attempts={refined.attempts})")
 
             output = {
                 "design": design_to_pydantic(refined.design).model_dump(),
@@ -167,6 +177,8 @@ class StartDesignArchitectureTool:
                 error_text = f"ERR_999: {error_text}"
             await store.set_failed(job_id, error_text)
             logger.error("Job failed", extra={"job_id": job_id, "error": error_text})
+            if ctx:
+                await ctx.info(f"Job {job_id}: failed — {error_text}")
 
 
 def start_design_architecture_tool(

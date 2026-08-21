@@ -26,6 +26,7 @@ An MCP (Model Context Protocol) server that provides architecture design experti
   - [Local Development (uv)](#local-development-uv)
 - [Configuration](#configuration)
 - [Extending with Custom Patterns](#extending-with-custom-patterns)
+- [Long-running tools & timeouts](#long-running-tools--timeouts)
 - [Troubleshooting](#troubleshooting)
 - [Building & Development](#building--development)
 - [Publishing](#publishing)
@@ -136,9 +137,11 @@ codex mcp add architecture-pattern \
 
 ## Use the Tools
 
-### Design your first architecture
+All tools accept `requirements` (free text) and `domain` (e.g. `data-processing`, `microservices`, `e-commerce`) as arguments. The examples below show the exact tool call shape so you can use them in any MCP client or API consumer.
 
-In Claude Code (or your agent), try:
+### Try each tool
+
+In Claude Code (or any MCP client), paste the natural-language instruction:
 
 ```
 Build a scalable ETL pipeline for IoT sensor data: ingest 10k events/sec
@@ -146,16 +149,100 @@ from Kafka, parse JSON, enrich with geolocation from Redis, write to InfluxDB
 and S3.
 ```
 
-This calls the `design_architecture` tool with:
-- `requirements`: "ETL pipeline for IoT sensor data: ingest 10k events/sec from Kafka, parse JSON, enrich with geolocation from Redis, write to InfluxDB and S3"
-- `domain`: "data-processing"
-- `style`: "pipe-and-filter"
+Your agent calls `design_architecture` internally. The server returns a full architecture design: components (Kafka source, JSON parser filter, geolocation enricher, InfluxDB sink, S3 sink), quality attribute scores (scalability: 9.1, maintainability: 8.2, …), and specific recommendations.
 
-The server returns a full architecture design: components (Kafka source, JSON parser filter, geolocation enricher, InfluxDB sink, S3 sink), quality attribute scores (scalability: 9.1, maintainability: 8.2, …), and specific recommendations.
+**Or call tools directly** from your agent:
+
+```
+Call analyze_architecture with:
+  requirements: "Real-time data processing pipeline for 10k events/sec IoT sensor data"
+  domain: "data-processing"
+
+Call generate_architecture with:
+  requirements: "ETL pipeline: Kafka → JSON parse → Redis geo-enrich → InfluxDB + S3"
+  domain: "data-processing"
+  selected_patterns: ["pipe-and-filter"]
+
+Call evaluate_architecture with:
+  architecture: { ... paste a design dict here ... }
+  criteria: "scalability, reliability"
+
+Call list_architecture_patterns()  # all 36 patterns
+Call list_architecture_patterns(category="messaging")  # filter by category
+Call get_architecture_pattern(name="event-driven")   # full pattern JSON
+```
+
+### Async job pattern: `start_design_architecture` + `get_design_status`
+
+For long-running pipelines (5–10 minutes) or clients with short idle timeouts, use the async job trio. `start_design_architecture` returns a `job_id` immediately; poll `get_design_status` until done:
+
+```
+# Step 1: start the job
+Call start_design_architecture with:
+  requirements: "ETL pipeline for IoT: Kafka → JSON → Redis geo-enrich → InfluxDB + S3"
+  domain: "data-processing"
+
+# Step 2: poll every 10-30 seconds
+Call get_design_status with:
+  job_id: "<job_id from step 1>"
+
+# → status is "pending" | "running" | "completed" | "failed" | "cancelled"
+# When status is "completed", the full design is in result.design
+# When status is "failed", the error is in result.error
+```
+
+In Python (via the MCP HTTP API directly — see `examples/architecture_client_async.py`):
+
+```python
+import asyncio, aiohttp
+
+SERVER = "http://localhost:8060/mcp"
+POLL_EVERY = 15  # seconds
+
+async def main():
+    async with aiohttp.ClientSession() as sess:
+        # Start
+        async with sess.post(SERVER, json={
+            "jsonrpc": "2.0",
+            "method": "tools/call",
+            "params": {
+                "name": "start_design_architecture",
+                "arguments": {
+                    "requirements": "ETL pipeline for IoT: Kafka → JSON → Redis → InfluxDB + S3",
+                    "domain": "data-processing",
+                }
+            },
+            "id": 1
+        }) as resp:
+            job_id = (await resp.json())["result"]["content"][0]["data"]["job_id"]
+
+        print(f"Job started: {job_id}")
+
+        # Poll
+        while True:
+            await asyncio.sleep(POLL_EVERY)
+            async with sess.post(SERVER, json={
+                "jsonrpc": "2.0",
+                "method": "tools/call",
+                "params": {"name": "get_design_status", "arguments": {"job_id": job_id}},
+                "id": 2
+            }) as resp:
+                result = (await resp.json())["result"]["content"][0]["data"]
+                print(f"  status={result['status']}")
+                if result["status"] in ("completed", "failed", "cancelled"):
+                    break
+
+        print(result.get("result", result))  # full design when completed
+```
+
+See `examples/architecture_client_async.py` for the complete runnable example. Run it with:
+
+```bash
+docker compose -f docker/docker-compose.yml up --build   # Terminal 1
+make client-async                                      # Terminal 2
+```
 
 ### Explore the pattern catalog
-
-Ask your agent to list all available patterns:
 
 ```
 Call list_architecture_patterns() with no filters to see all patterns.
@@ -164,7 +251,7 @@ Call list_architecture_patterns() with no filters to see all patterns.
 Or get details on a specific pattern:
 
 ```
-Show me detailed information to the event-driven architecture pattern.
+Show me details about the event-driven architecture pattern.
 ```
 
 ---
@@ -177,9 +264,9 @@ Show me detailed information to the event-driven architecture pattern.
 | `generate_architecture` | Generate an architecture design from requirements and selected patterns. *Long-running (LLM call). Not idempotent.* |
 | `evaluate_architecture` | Score an existing design against quality attributes. *Long-running (LLM call). Not idempotent.* |
 | `design_architecture` | Full pipeline: analyse → generate → evaluate → refine (up to 3 attempts). *Long-running (often > 5 minutes). Not idempotent.* |
-| `start_design_architecture` | Start a design_architecture job and return a job_id immediately. Poll `get_design_status` until done. |
-| `get_design_status` | Poll job status. |
-| `cancel_design` | Cancel a running job. |
+| `start_design_architecture` | Start a design_architecture job and return a job_id immediately. Poll `get_design_status` every 10–30 s until status is `completed`, `failed`, or `cancelled`. Long-running jobs take 1–5 minutes. |
+| `get_design_status` | Poll job status. Returns the current status, progress message, and the full design output when `completed`. |
+| `cancel_design` | Cancel a running job (best-effort; takes effect at the next pipeline stage boundary; may take up to one LLM call). |
 | `list_architecture_patterns` | List all 36 patterns; filter by `category` and/or `domain` |
 | `get_architecture_pattern` | Get full JSON for a specific pattern by name |
 
@@ -372,6 +459,7 @@ The server reads `~/.config/architecture-pattern-mcp/config.json` (override with
 | `PATTERN_DIRECTORY` | `~/.config/architecture-pattern-mcp/pattern` | Pattern files directory |
 | `VALIDATION_MAX_RETRIES` | `2` | Max self-healing retry attempts |
 | `VALIDATION_RETRY_ON_FAIL` | `true` | Retry on validation failure |
+| `ARCHITECTURE_PATTERN_JOBS_DB` | `~/.config/architecture-pattern-mcp/jobs.db` | SQLite path for async job trio. Override for test isolation |
 | `TASKS_HEARTBEAT_ENABLED` | `true` | Emit progress notifications during long tool calls |
 | `TASKS_HEARTBEAT_INTERVAL_SECONDS` | `30` | Heartbeat interval in seconds (keep below client idle timeout) |
 | `TRANSPORT` | `streamable-http` | Transport mode: `stdio`, `streamable-http` |
@@ -427,15 +515,44 @@ Full JSON Schema with all enums: `docs/pattern-schema.json`
 
 ## Long-running tools & timeouts
 
-`design_architecture` (and to a lesser extent `analyze_architecture`, `generate_architecture`, `evaluate_architecture`) run multi-stage LLM pipelines that **can take more than 5 minutes per call**. This is inherent to the workload, not a bug: the generator LLM must **process** a large input payload — the selected pattern definitions from the 36-pattern catalog, your requirements, and the full output of every previous stage — and **generate** a large, strictly structured JSON document (components, relationships, API contracts, data models, event contracts, quality scores) one token at a time. The `design_architecture` pipeline repeats generate → evaluate up to three times (plus self-healing validation retries), so a single call can comprise 9+ LLM round trips. Depending on your agent and transport, this can hit client-side idle timers.
+`design_architecture` (and to a lesser extent `analyze_architecture`, `generate_architecture`, `evaluate_architecture`) run multi-stage LLM pipelines that **can take 5–10 minutes per call**. This is inherent to the workload, not a bug: the generator LLM must process a large input payload — the selected pattern definitions from the 36-pattern catalog, your requirements, and the full output of every previous stage — and produce a large, strictly structured JSON document (components, relationships, API contracts, data models, event contracts, quality scores) one token at a time. The `design_architecture` pipeline repeats generate → evaluate up to three times, so a single call can comprise 9+ LLM round trips.
 
-### The heartbeat defence (Fix 2 — applied by default)
+### The timeout problem
 
-Every pipeline tool emits `progress` notifications from a parallel coroutine every 30 seconds, keeping client HTTP/stdio idle timers alive. This covers Claude Code and OpenCode without any configuration.
+MCP clients (AI coding agents, MCP SDKs) sit between the server and the LLM. Many of them implement a **client-side idle timeout**: if no data is received on the HTTP connection for some period (typically 30–120 seconds), the client aborts the request. The server is still working — the LLM is still generating — but the client closes the connection and reports a timeout error to the agent.
 
-### The async job trio (Fix 4 — always available)
+This is a client-side behaviour, not a server-side one. The server processes the full request correctly; the client simply gives up before the response arrives.
 
-For full control, three tools provide a job handle:
+**Affected clients (hardcoded short timeouts):**
+
+| Client | Timeout | Notes |
+|---|---|---|
+| Claude Desktop (TS-SDK) | 60 s | Hardcoded; does not reset on progress notifications |
+| Cursor (TS-SDK) | 60 s | Same as Claude Desktop |
+| Other TS-SDK based agents | varies | Most cap at 60–120 s |
+
+These clients cannot be reconfigured to accept longer timeouts — the timeout is baked into the SDK.
+
+**Clients covered by the heartbeat defence:**
+
+| Client | Timeout | Defence |
+|---|---|---|
+| Claude Code | ~300 s | Heartbeat every 30 s resets idle timer |
+| OpenCode | ~300 s | Heartbeat every 30 s resets idle timer |
+| Codex CLI | ~300 s | Heartbeat every 30 s resets idle timer |
+| Other HTTP-transport agents | varies | Most reset on any received data |
+
+Works for these because their idle timers are reset by any incoming data — the heartbeat `progress` notifications sent from a parallel async task on the server are received by the client, resetting its clock.
+
+### The heartbeat defence (applied by default)
+
+Every long-running tool emits `progress` notifications from a parallel coroutine every 30 seconds (configurable via `TASKS_HEARTBEAT_INTERVAL_SECONDS`). As long as the client resets its idle timer on any received data, the request stays alive for the full duration of the pipeline.
+
+> **TS-SDK clients (Claude Desktop, Cursor, etc.) do not reset their timeout on progress notifications.**
+
+### The async job trio
+
+For full control and compatibility with every client, three tools provide a durable job handle:
 
 ```
 start_design_architecture(requirements, domain, override_style)  → job_id
@@ -443,11 +560,25 @@ get_design_status(job_id)                                  → {status, result, 
 cancel_design(job_id)                                      → {cancelled, status}
 ```
 
-Use these when you need durable job state or cancellation support. The job store is SQLite at `~/.config/architecture-pattern-mcp/jobs.db`.
+`start_design_architecture` returns a `job_id` in milliseconds. The pipeline runs in a background task. Poll `get_design_status(job_id)` every 10–30 seconds. When status is `completed`, the full design is in the `result` field. Cancellation is best-effort — the job exits at the next pipeline stage boundary.
 
-### What this server does NOT solve
+**This is the only fix that works for TS-SDK clients (Claude Desktop, Cursor).**
 
-- **TS-SDK clients (Cursor, Claude Desktop)** hardcode a 60-second request timeout and do not reset the clock on progress notifications. Only the async job trio (`start_`/`get_status`/`cancel_`) works for those clients.
+The job store is SQLite at `~/.config/architecture-pattern-mcp/jobs.db` (configurable via `ARCHITECTURE_PATTERN_JOBS_DB`).
+
+### Bypassing client timeouts entirely: `make client`
+
+The example client in `examples/architecture_client.py` is a **direct Python HTTP client** — it is not an MCP agent. It calls the server over HTTP without any MCP SDK, and therefore has **no client-side idle timeout**. It makes a single blocking request and waits for the full response, regardless of how long it takes.
+
+```bash
+# Start the server (from project root)
+docker compose -f docker/docker-compose.yml up --build
+
+# In another terminal, run the example client
+make client
+```
+
+`make client` is a development/demo tool. It demonstrates that the server **correctly completes** long requests — the timeout issue is purely a client-side problem. For production use with MCP agents, covers the majority of clients; async job trio is the universal fallback.
 
 ## Troubleshooting
 

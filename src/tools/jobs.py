@@ -22,7 +22,7 @@
 """
 Async SQLite job store for the manual start/get_status/cancel tool trio.
 
-Fix 4: provides durable job state so that long-running design_architecture calls
+provides durable job state so that long-running design_architecture calls
 can be polled via get_design_status and cancelled via cancel_design.
 
 The store is a singleton — a single aiosqlite connection is shared across all calls.
@@ -38,7 +38,18 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-_DB_PATH = os.path.expanduser("~/.config/architecture-pattern-mcp/jobs.db")
+_DB_PATH = os.environ.get(
+    "ARCHITECTURE_PATTERN_JOBS_DB",
+    os.path.expanduser("~/.config/architecture-pattern-mcp/jobs.db"),
+)
+
+
+def _get_db_path() -> str:
+    """Return the effective DB path, re-evaluated on every call for test isolation."""
+    return os.environ.get(
+        "ARCHITECTURE_PATTERN_JOBS_DB",
+        os.path.expanduser("~/.config/architecture-pattern-mcp/jobs.db"),
+    )
 
 
 class JobStatus:
@@ -74,9 +85,25 @@ class JobsStore:
                     await cls._instance._init()
         return cls._instance
 
+    @classmethod
+    async def reset_for_test(cls) -> None:
+        """Test helper: close current connection, delete the DB file, and drop singleton.
+
+        Use this with a temporarily overridden ``ARCHITECTURE_PATTERN_JOBS_DB``
+        env-var to point at a per-test temporary directory.
+        """
+        if cls._instance is not None and cls._db is not None:
+            await cls._db.close()
+        cls._instance = None
+        cls._db = None
+        db_path = _get_db_path()
+        if os.path.exists(db_path):
+            os.unlink(db_path)
+
     async def _init(self) -> None:
-        os.makedirs(os.path.dirname(_DB_PATH), exist_ok=True)
-        self._db = await aiosqlite.connect(_DB_PATH)
+        db_path = _get_db_path()
+        os.makedirs(os.path.dirname(db_path), exist_ok=True)
+        self._db = await aiosqlite.connect(db_path)
         self._db.row_factory = aiosqlite.Row
         await self._db.execute(
             "CREATE TABLE IF NOT EXISTS jobs ("
@@ -92,7 +119,7 @@ class JobsStore:
             ")"
         )
         await self._db.commit()
-        logger.debug("JobsStore initialised", extra={"db_path": _DB_PATH})
+        logger.debug("JobsStore initialised", extra={"db_path": db_path})
 
     async def close(self) -> None:
         if self._db is not None:
