@@ -20,7 +20,8 @@
 # SOFTWARE.
 
 """
-cancel_design tool — cancel a running start_design_architecture job.
+cancel_architecture_design tool — cancel a background architecture-design job
+created by submit_architecture_design_job.
 
 Sets the job status to 'cancelled'. The background asyncio task checks
 is_cancelled() before each stage and exits promptly when it sees the flag.
@@ -41,18 +42,18 @@ from src.tools.jobs import JobStatus, JobsStore
 logger = logging.getLogger(__name__)
 
 
-class CancelDesignTool:
+class CancelArchitectureDesignTool:
     def __init__(self) -> None:
         pass
 
     @tool(
-        name="cancel_design",
+        name="cancel_architecture_design",
         description=(
-            "Cancel a running background design job started via submit_design_job. "
+            "Cancel a running background design job started via submit_architecture_design_job. "
             "The background task checks the cancellation flag between pipeline stages "
             "and exits at the next stage boundary. Cancellation is best-effort and may "
             "take up to one LLM call to take effect. Only use with a job_id from "
-            "submit_design_job; jobs already completed, failed, or cancelled cannot be cancelled again."
+            "submit_architecture_design_job; jobs already completed, failed, or cancelled cannot be cancelled again."
         ),
         tags={"architecture", "design"},
         annotations=ToolAnnotations(
@@ -65,7 +66,7 @@ class CancelDesignTool:
     )
     async def cancel(
         self,
-        job_id: Annotated[str, Field(description="Job ID returned by submit_design_job")],
+        job_id: Annotated[str, Field(description="Job ID returned by submit_architecture_design_job")],
         ctx: Context | None = None,
     ) -> dict:
         store = await JobsStore.get_instance()
@@ -95,5 +96,5 @@ class CancelDesignTool:
         }
 
 
-def cancel_design_tool() -> CancelDesignTool:
-    return CancelDesignTool()
+def cancel_architecture_design_tool() -> CancelArchitectureDesignTool:
+    return CancelArchitectureDesignTool()

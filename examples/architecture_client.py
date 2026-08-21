@@ -26,6 +26,9 @@ Connects to a running MCP server over HTTP, calls design_architecture
 with a pipes-and-filters requirements string, and pretty-prints the
 returned JSON to stdout.
 
+For clients with short request timeouts see examples/architecture_client_async.py
+which uses submit_architecture_design_job + get_architecture_design_status + cancel_architecture_design.
+
 Usage:
     # Terminal 1: start the server
     $ python -m src.main

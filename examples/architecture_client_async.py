@@ -22,7 +22,7 @@
 """
 Architecture Pattern MCP — Async Job Trio Demo
 
-Demonstrates the submit_design_job + get_design_status + cancel_design
+Demonstrates the submit_architecture_design_job + get_architecture_design_status + cancel_architecture_design
 async job pattern. Unlike the synchronous `design_architecture` tool (which
 blocks for 5-10 minutes), the async trio returns a job_id immediately and
 lets you poll for the result.
@@ -82,12 +82,12 @@ async def _call_mcp(session: aiohttp.ClientSession, method: str, params: dict[st
         return data["result"]
 
 
-async def submit_job(session: aiohttp.ClientSession) -> str:
+async def submit_architecture_design_job(session: aiohttp.ClientSession) -> str:
     result = await _call_mcp(
         session,
         "tools/call",
         {
-            "name": "submit_design_job",
+            "name": "submit_architecture_design_job",
             "arguments": {"requirements": REQUIREMENTS, "domain": DOMAIN},
         },
     )
@@ -98,11 +98,11 @@ async def submit_job(session: aiohttp.ClientSession) -> str:
     return job_id
 
 
-async def poll_status(session: aiohttp.ClientSession, job_id: str) -> dict[str, Any]:
+async def get_architecture_design_status(session: aiohttp.ClientSession, job_id: str) -> dict[str, Any]:
     result = await _call_mcp(
         session,
         "tools/call",
-        {"name": "get_design_status", "arguments": {"job_id": job_id}},
+        {"name": "get_architecture_design_status", "arguments": {"job_id": job_id}},
     )
     content = result["content"]
     if isinstance(content, list):
@@ -110,11 +110,11 @@ async def poll_status(session: aiohttp.ClientSession, job_id: str) -> dict[str, 
     return content["data"]
 
 
-async def cancel_design(session: aiohttp.ClientSession, job_id: str) -> dict[str, Any]:
+async def cancel_architecture_design(session: aiohttp.ClientSession, job_id: str) -> dict[str, Any]:
     result = await _call_mcp(
         session,
         "tools/call",
-        {"name": "cancel_design", "arguments": {"job_id": job_id}},
+        {"name": "cancel_architecture_design", "arguments": {"job_id": job_id}},
     )
     content = result["content"]
     if isinstance(content, list):
@@ -133,7 +133,7 @@ async def amain() -> int:
         try:
             # Step 1: start the job
             print("Starting design job...", file=sys.stderr)
-            job_id = await submit_job(session)
+            job_id = await submit_architecture_design_job(session)
             print(f"Job ID: {job_id}", file=sys.stderr)
             print(f"Polling every {POLL_EVERY} seconds. Press Ctrl+C to cancel.\n", file=sys.stderr)
 
@@ -141,7 +141,7 @@ async def amain() -> int:
             start_time = time.monotonic()
             while True:
                 await asyncio.sleep(POLL_EVERY)
-                status_data = await poll_status(session, job_id)
+                status_data = await get_architecture_design_status(session, job_id)
                 elapsed = time.monotonic() - start_time
 
                 status = status_data["status"]

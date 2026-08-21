@@ -20,10 +20,10 @@
 # SOFTWARE.
 
 """
-get_design_status tool — poll job state.
+get_architecture_design_status tool — poll job state.
 
 Returns the current status, progress message, and result/error of a
-start_design_architecture job.
+submit_architecture_design_job background job.
 """
 
 import json
@@ -46,21 +46,21 @@ _STATUS_MESSAGES = {
     JobStatus.RUNNING: "Job is actively running the design pipeline.",
     JobStatus.COMPLETED: "Job completed successfully.",
     JobStatus.FAILED: "Job failed — see the error field.",
-    JobStatus.CANCELLED: "Job was cancelled by a cancel_design call.",
+    JobStatus.CANCELLED: "Job was cancelled by a cancel_architecture_design call.",
 }
 
 
-class GetDesignStatusTool:
+class GetArchitectureDesignStatusTool:
     def __init__(self) -> None:
         pass
 
     @tool(
-        name="get_design_status",
+        name="get_architecture_design_status",
         description=(
-            "Poll the status of a submit_design_job background job. "
+            "Poll the status of a submit_architecture_design_job background job. "
             "Call repeatedly (every 10-30 s) until status is 'completed', 'failed', or 'cancelled'; "
             "when completed, the result field contains the full design output. "
-            "Only use this with a job_id previously returned by submit_design_job — "
+            "Only use this with a job_id previously returned by submit_architecture_design_job — "
             "do not use it to request a new design."
         ),
         tags={"architecture", "design"},
@@ -74,7 +74,7 @@ class GetDesignStatusTool:
     )
     async def get_status(
         self,
-        job_id: Annotated[str, Field(description="Job ID returned by submit_design_job")],
+        job_id: Annotated[str, Field(description="Job ID returned by submit_architecture_design_job")],
         ctx: Context | None = None,
     ) -> dict[str, Any]:
         store = await JobsStore.get_instance()
@@ -105,5 +105,5 @@ class GetDesignStatusTool:
         return response
 
 
-def get_design_status_tool() -> GetDesignStatusTool:
-    return GetDesignStatusTool()
+def get_architecture_design_status_tool() -> GetArchitectureDesignStatusTool:
+    return GetArchitectureDesignStatusTool()

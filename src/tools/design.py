@@ -186,7 +186,7 @@ class DesignArchitectureTool:
             "evaluation, and quality scores in a single response. Takes 5-10 minutes; emits progress "
             "notifications every 30 s so clients stay connected. Use this whenever the user wants an "
             "architecture design, including when they explicitly request design_architecture. "
-            "Do NOT use submit_design_job for ordinary design requests — that tool is only for clients "
+            "Do NOT use submit_architecture_design_job for ordinary design requests — that tool is only for clients "
             "with short request timeouts (Cursor, Claude Desktop) and returns only a job_id."
         ),
         tags={"architecture", "design"},

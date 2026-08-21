@@ -40,7 +40,6 @@ from collections import Counter
 import pytest
 
 from src.server import MCPArchitectServer
-from src.tools.jobs import JobsStore
 
 
 def _tokenize(text: str) -> set[str]:
@@ -111,16 +110,14 @@ class TestToolSelectionEval:
     async def test_prompt_naming_tool_routes_to_that_tool(self, catalog: list[dict]) -> None:
         unambiguous = {
             "design_architecture",
-            "submit_design_job",
-            "get_design_status",
-            "cancel_design",
+            "submit_architecture_design_job",
+            "get_architecture_design_status",
+            "cancel_architecture_design",
             "analyze_architecture",
         }
         for tool in catalog:
             if tool["name"] not in unambiguous:
                 continue
-            if tool["name"] == "start_design_architecture":
-                continue  # deprecated alias — tested separately
             prompt = _prompt_for(tool["name"])
             prompt_tokens = _tokenize(prompt)
             winner = _argmax(prompt_tokens, catalog)
@@ -141,41 +138,23 @@ class TestToolSelectionEval:
             for b in names[i + 1:]:
                 if a in b or b in a:
                     colliding.append((a, b))
-        assert colliding == [
-            ("design_architecture", "start_design_architecture")
-        ], f"Unexpected collisions: {colliding}"
+        assert colliding == [], f"Unexpected collisions: {colliding}"
 
     @pytest.mark.asyncio
     async def test_design_family_has_negative_constraints(self, catalog: list[dict]) -> None:
         for t in catalog:
-            if t["name"] in ("submit_design_job", "design_architecture"):
+            if t["name"] in ("submit_architecture_design_job", "design_architecture"):
                 assert re.search(
                     r"\bdo\s*not\b", t["description"], re.IGNORECASE
                 ), f"{t['name']!r} description lacks a 'do not' exclusion clause"
 
     @pytest.mark.asyncio
     async def test_sibling_reference_only_in_exclusion(self, catalog: list[dict]) -> None:
-        t = next(t for t in catalog if t["name"] == "submit_design_job")
+        t = next(t for t in catalog if t["name"] == "submit_architecture_design_job")
         head = _head(t["description"])
         assert "design_architecture" not in _tokenize(head), (
-            f"submit_design_job head contains 'design_architecture' outside exclusion clause: {head!r}"
+            f"submit_architecture_design_job head contains 'design_architecture' outside exclusion clause: {head!r}"
         )
-
-    @pytest.mark.asyncio
-    async def test_deprecated_alias_never_wins_argmax(self, catalog: list[dict]) -> None:
-        DEPRECATED = "start_design_architecture"
-        for tool in catalog:
-            if tool["name"] == DEPRECATED:
-                continue
-            prompt_tokens = _tokenize(_prompt_for(tool["name"]))
-            winner = _argmax(prompt_tokens, catalog)
-            scores = [
-                (t["name"], _score(prompt_tokens, t["name_tokens"], t["head_tokens"]))
-                for t in catalog
-            ]
-            assert winner != DEPRECATED, (
-                f"Deprecated alias won argmax for prompt {tool['name']!r}. Scores: {scores}"
-            )
 
     @pytest.mark.asyncio
     async def test_descriptions_pairwise_distinct(self, catalog: list[dict]) -> None:
@@ -183,42 +162,3 @@ class TestToolSelectionEval:
         for i, a in enumerate(heads):
             for b in heads[i + 1:]:
                 assert a != b, f"Duplicate description head: {a!r}"
-
-    @pytest.mark.asyncio
-    async def test_deprecated_alias_returns_rename_notice(
-        self, tmp_path, monkeypatch
-    ) -> None:
-        db = tmp_path / "jobs.db"
-        monkeypatch.setenv("ARCHITECTURE_PATTERN_JOBS_DB", str(db))
-        await JobsStore.reset_for_test()
-
-        from src.tools.start_design import _deprecated_start_design_alias
-
-        result = await _deprecated_start_design_alias(
-            requirements="x",
-            domain="y",
-            override_style=None,
-            ctx=None,
-        )
-        assert result["deprecated"] is True
-        assert result["renamed_to"] == "submit_design_job"
-        assert "start_design_architecture" in result["message"]
-        assert "submit_design_job" in result["message"]
-
-    @pytest.mark.asyncio
-    async def test_deprecated_alias_accepts_invalid_input(
-        self, tmp_path, monkeypatch
-    ) -> None:
-        db = tmp_path / "jobs.db"
-        monkeypatch.setenv("ARCHITECTURE_PATTERN_JOBS_DB", str(db))
-        await JobsStore.reset_for_test()
-
-        from src.tools.start_design import _deprecated_start_design_alias
-
-        result = await _deprecated_start_design_alias(
-            requirements="",
-            domain="",
-            override_style=None,
-            ctx=None,
-        )
-        assert result["deprecated"] is True

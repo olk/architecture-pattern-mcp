@@ -20,10 +20,10 @@
 # SOFTWARE.
 
 """
-Async SQLite job store for the manual start/get_status/cancel tool trio.
+Async SQLite job store for the manual submit/get_status/cancel tool trio.
 
-provides durable job state so that long-running design_architecture calls
-can be polled via get_design_status and cancelled via cancel_design.
+Provides durable job state so that long-running design_architecture calls
+can be polled via get_architecture_design_status and cancelled via cancel_architecture_design.
 
 The store is a singleton — a single aiosqlite connection is shared across all calls.
 """

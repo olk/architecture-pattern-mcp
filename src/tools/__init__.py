@@ -29,43 +29,41 @@ Each factory function creates a tool instance with the appropriate dependencies.
 """
 
 from src.tools.analyze import AnalyzeArchitectureTool, analyze_architecture_tool
-from src.tools.cancel_design import CancelDesignTool, cancel_design_tool
+from src.tools.cancel_architecture_design import CancelArchitectureDesignTool, cancel_architecture_design_tool
 from src.tools.design import DesignArchitectureTool, design_architecture_tool
 from src.tools.evaluate import EvaluateArchitectureTool, evaluate_architecture_tool
 from src.tools.generate import GenerateArchitectureTool, generate_architecture_tool
-from src.tools.get_design_status import GetDesignStatusTool, get_design_status_tool
+from src.tools.get_architecture_design_status import GetArchitectureDesignStatusTool, get_architecture_design_status_tool
 from src.tools.patterns import (
     GetArchitecturePatternTool,
     ListArchitecturePatternsTool,
     get_architecture_pattern_tool,
     list_architecture_patterns_tool,
 )
-from src.tools.start_design import (
-    SubmitDesignJobTool,
-    submit_design_job_tool,
-    _deprecated_start_design_alias,
+from src.tools.submit_architecture_design import (
+    SubmitArchitectureDesignJobTool,
+    submit_architecture_design_job_tool,
 )
 
 __all__ = [
     "AnalyzeArchitectureTool",
-    "CancelDesignTool",
+    "CancelArchitectureDesignTool",
     "DesignArchitectureTool",
     "EvaluateArchitectureTool",
     "GenerateArchitectureTool",
-    "GetDesignStatusTool",
+    "GetArchitectureDesignStatusTool",
     "GetArchitecturePatternTool",
     "ListArchitecturePatternsTool",
-    "SubmitDesignJobTool",
+    "SubmitArchitectureDesignJobTool",
     "analyze_architecture_tool",
-    "cancel_design_tool",
+    "cancel_architecture_design_tool",
     "design_architecture_tool",
     "evaluate_architecture_tool",
     "generate_architecture_tool",
-    "get_design_status_tool",
+    "get_architecture_design_status_tool",
     "get_architecture_pattern_tool",
     "list_architecture_patterns_tool",
-    "submit_design_job_tool",
-    "_deprecated_start_design_alias",
+    "submit_architecture_design_job_tool",
 ]
 
 
@@ -91,8 +89,7 @@ def create_all_tools(agent, pipeline, pattern_loader, tasks_config=None):
         "evaluate_architecture": evaluate_architecture_tool(agent, pipeline, tasks_config=tasks_config),
         "list_architecture_patterns": list_architecture_patterns_tool(pattern_loader),
         "get_architecture_pattern": get_architecture_pattern_tool(pattern_loader),
-        "submit_design_job": submit_design_job_tool(agent, pipeline),
-        "start_design_architecture": _deprecated_start_design_alias,
-        "get_design_status": get_design_status_tool(),
-        "cancel_design": cancel_design_tool(),
+        "submit_architecture_design_job": submit_architecture_design_job_tool(agent, pipeline),
+        "get_architecture_design_status": get_architecture_design_status_tool(),
+        "cancel_architecture_design": cancel_architecture_design_tool(),
     }

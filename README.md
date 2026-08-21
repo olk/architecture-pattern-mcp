@@ -172,18 +172,18 @@ Call list_architecture_patterns(category="messaging")  # filter by category
 Call get_architecture_pattern(name="event-driven")   # full pattern JSON
 ```
 
-### Async job pattern: `submit_design_job` + `get_design_status`
+### Async job pattern: `submit_architecture_design_job` + `get_architecture_design_status`
 
-ONLY for clients with short request timeouts (Cursor, Claude Desktop, TS-SDK). The default is `design_architecture` with heartbeat defence. `submit_design_job` returns a `job_id` immediately; poll `get_design_status` until done:
+ONLY for clients with short request timeouts (Cursor, Claude Desktop, TS-SDK). The default is `design_architecture` with heartbeat defence. `submit_architecture_design_job` returns a `job_id` immediately; poll `get_architecture_design_status` until done:
 
 ```
 # Step 1: start the job
-Call submit_design_job with:
+Call submit_architecture_design_job with:
   requirements: "ETL pipeline for IoT: Kafka → JSON → Redis geo-enrich → InfluxDB + S3"
   domain: "data-processing"
 
 # Step 2: poll every 10-30 seconds
-Call get_design_status with:
+Call get_architecture_design_status with:
   job_id: "<job_id from step 1>"
 
 # → status is "pending" | "running" | "completed" | "failed" | "cancelled"
@@ -206,7 +206,7 @@ async def main():
             "jsonrpc": "2.0",
             "method": "tools/call",
             "params": {
-                "name": "submit_design_job",
+                "name": "submit_architecture_design_job",
                 "arguments": {
                     "requirements": "ETL pipeline for IoT: Kafka → JSON → Redis → InfluxDB + S3",
                     "domain": "data-processing",
@@ -224,7 +224,7 @@ async def main():
             async with sess.post(SERVER, json={
                 "jsonrpc": "2.0",
                 "method": "tools/call",
-                "params": {"name": "get_design_status", "arguments": {"job_id": job_id}},
+                "params": {"name": "get_architecture_design_status", "arguments": {"job_id": job_id}},
                 "id": 2
             }) as resp:
                 result = (await resp.json())["result"]["content"][0]["data"]
@@ -264,9 +264,9 @@ Show me details about the event-driven architecture pattern.
 | `generate_architecture` | Generate an architecture design from requirements and selected patterns. *Long-running (LLM call). Not idempotent.* |
 | `evaluate_architecture` | Score an existing design against quality attributes. *Long-running (LLM call). Not idempotent.* |
 | `design_architecture` | Default tool for full architecture design (analyse → generate → evaluate → refine, up to 3 attempts). *Long-running (5–10 min); use this unless your client has a short request timeout.* |
-| `submit_design_job` | Start a background design job and return a `job_id` immediately. **ONLY for clients with short request timeouts** (Cursor, Claude Desktop, TS-SDK). For other clients use `design_architecture`. Poll `get_design_status` every 10–30 s. |
-| `get_design_status` | Poll job status. Returns the current status, progress message, and the full design output when `completed`. |
-| `cancel_design` | Cancel a running job (best-effort; takes effect at the next pipeline stage boundary; may take up to one LLM call). |
+| `submit_architecture_design_job` | Start a background design job and return a `job_id` immediately. **ONLY for clients with short request timeouts** (Cursor, Claude Desktop, TS-SDK). For other clients use `design_architecture`. Poll `get_architecture_design_status` every 10–30 s. |
+| `get_architecture_design_status` | Poll job status. Returns the current status, progress message, and the full design output when `completed`. |
+| `cancel_architecture_design` | Cancel a running job (best-effort; takes effect at the next pipeline stage boundary; may take up to one LLM call). |
 | `list_architecture_patterns` | List all 36 patterns; filter by `category` and/or `domain` |
 | `get_architecture_pattern` | Get full JSON for a specific pattern by name |
 
@@ -562,12 +562,12 @@ Every long-running tool emits `progress` notifications from a parallel coroutine
 For full control and compatibility with timeout-limited clients, three tools provide a durable job handle:
 
 ```
-submit_design_job(requirements, domain, override_style)  → job_id
-get_design_status(job_id)                                  → {status, result, error}
-cancel_design(job_id)                                      → {cancelled, status}
+submit_architecture_design_job(requirements, domain, override_style)  → job_id
+get_architecture_design_status(job_id)                                  → {status, result, error}
+cancel_architecture_design(job_id)                                      → {cancelled, status}
 ```
 
-`submit_design_job` returns a `job_id` in milliseconds. The pipeline runs in a background task. Poll `get_design_status(job_id)` every 10–30 seconds. When status is `completed`, the full design is in the `result` field. Cancellation is best-effort — the job exits at the next pipeline stage boundary.
+`submit_architecture_design_job` returns a `job_id` in milliseconds. The pipeline runs in a background task. Poll `get_architecture_design_status(job_id)` every 10–30 seconds. When status is `completed`, the full design is in the `result` field. Cancellation is best-effort — the job exits at the next pipeline stage boundary.
 
 **This is the only fix that works for TS-SDK clients (Claude Desktop, Cursor).**
 

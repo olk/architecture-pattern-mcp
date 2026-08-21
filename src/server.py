@@ -244,7 +244,7 @@ class MCPArchitectServer:
     FR-240: MCPArchitectServer class implemented with FastMCP
     AC-240: Verify MCPArchitectServer class exists, accepts optional config_path parameter
 
-    This server exposes ten MCP tools (nine + one deprecated alias):
+    This server exposes nine MCP tools:
 
     Synchronous (may take minutes):
       - design_architecture: Full pipeline: analyse → generate → evaluate → refine (up to 3 attempts)
@@ -253,10 +253,9 @@ class MCPArchitectServer:
       - evaluate_architecture: Evaluates an architecture design against quality attributes
 
     Manual async job pattern (submit/get_status/cancel — for timeout-constrained clients):
-      - submit_design_job: Starts a design job and returns a job_id immediately
-      - get_design_status: Polls job status; returns full design output when completed
-      - cancel_design: Cancels a running job (best-effort; exits at next stage boundary)
-      - start_design_architecture: DEPRECATED alias — renamed to submit_design_job; returns a rename notice
+      - submit_architecture_design_job: Starts a design job and returns a job_id immediately
+      - get_architecture_design_status: Polls job status; returns full design output when completed
+      - cancel_architecture_design: Cancels a running job (best-effort; exits at next stage boundary)
 
     Read-only pattern catalogue:
       - list_architecture_patterns: Lists all 36 patterns; filter by category and/or domain
@@ -451,9 +450,9 @@ class MCPArchitectServer:
             if self._pipeline:
                 logger.debug("Cleaning up ArchitecturePipeline")
 
-            # Cancel in-flight submit_design_job background tasks
-            if "submit_design_job" in self._tools:
-                instance = self._tools["submit_design_job"]
+            # Cancel in-flight submit_architecture_design_job background tasks
+            if "submit_architecture_design_job" in self._tools:
+                instance = self._tools["submit_architecture_design_job"]
                 tasks = list(instance._running_tasks)
                 for task in tasks:
                     task.cancel()
@@ -591,25 +590,20 @@ class MCPArchitectServer:
             self._tools_registered.add("get_architecture_pattern")
             logger.debug("Registered tool: get_architecture_pattern")
 
-        if "submit_design_job" not in self._tools_registered:
-            server.add_tool(self._tools["submit_design_job"].submit_job)
-            self._tools_registered.add("submit_design_job")
-            logger.debug("Registered tool: submit_design_job")
+        if "submit_architecture_design_job" not in self._tools_registered:
+            server.add_tool(self._tools["submit_architecture_design_job"].submit_job)
+            self._tools_registered.add("submit_architecture_design_job")
+            logger.debug("Registered tool: submit_architecture_design_job")
 
-        if "start_design_architecture" not in self._tools_registered:
-            server.add_tool(self._tools["start_design_architecture"])
-            self._tools_registered.add("start_design_architecture")
-            logger.debug("Registered tool: start_design_architecture (deprecated alias)")
+        if "get_architecture_design_status" not in self._tools_registered:
+            server.add_tool(self._tools["get_architecture_design_status"].get_status)
+            self._tools_registered.add("get_architecture_design_status")
+            logger.debug("Registered tool: get_architecture_design_status")
 
-        if "get_design_status" not in self._tools_registered:
-            server.add_tool(self._tools["get_design_status"].get_status)
-            self._tools_registered.add("get_design_status")
-            logger.debug("Registered tool: get_design_status")
-
-        if "cancel_design" not in self._tools_registered:
-            server.add_tool(self._tools["cancel_design"].cancel)
-            self._tools_registered.add("cancel_design")
-            logger.debug("Registered tool: cancel_design")
+        if "cancel_architecture_design" not in self._tools_registered:
+            server.add_tool(self._tools["cancel_architecture_design"].cancel)
+            self._tools_registered.add("cancel_architecture_design")
+            logger.debug("Registered tool: cancel_architecture_design")
 
     def _register_resources(self, server: FastMCP) -> None:
         """
