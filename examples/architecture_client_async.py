@@ -22,14 +22,14 @@
 """
 Architecture Pattern MCP — Async Job Trio Demo
 
-Demonstrates the start_design_architecture + get_design_status + cancel_design
+Demonstrates the submit_design_job + get_design_status + cancel_design
 async job pattern. Unlike the synchronous `design_architecture` tool (which
 blocks for 5-10 minutes), the async trio returns a job_id immediately and
 lets you poll for the result.
 
 This pattern works with ALL MCP clients, including those with hardcoded
-short idle timeouts (Claude Desktop, Cursor, etc.) where the synchronous
-tool would fail.
+short request timeouts (Claude Desktop, Cursor, TS-SDK, etc.) where the
+synchronous tool would fail.
 
 Usage:
     # Terminal 1: start the server
@@ -82,12 +82,12 @@ async def _call_mcp(session: aiohttp.ClientSession, method: str, params: dict[st
         return data["result"]
 
 
-async def start_design(session: aiohttp.ClientSession) -> str:
+async def submit_job(session: aiohttp.ClientSession) -> str:
     result = await _call_mcp(
         session,
         "tools/call",
         {
-            "name": "start_design_architecture",
+            "name": "submit_design_job",
             "arguments": {"requirements": REQUIREMENTS, "domain": DOMAIN},
         },
     )
@@ -133,7 +133,7 @@ async def amain() -> int:
         try:
             # Step 1: start the job
             print("Starting design job...", file=sys.stderr)
-            job_id = await start_design(session)
+            job_id = await submit_job(session)
             print(f"Job ID: {job_id}", file=sys.stderr)
             print(f"Polling every {POLL_EVERY} seconds. Press Ctrl+C to cancel.\n", file=sys.stderr)
 

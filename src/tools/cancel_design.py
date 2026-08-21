@@ -48,11 +48,11 @@ class CancelDesignTool:
     @tool(
         name="cancel_design",
         description=(
-            "Cancel a running start_design_architecture job. "
+            "Cancel a running background design job started via submit_design_job. "
             "The background task checks the cancellation flag between pipeline stages "
             "and exits at the next stage boundary. Cancellation is best-effort and may "
-            "take up to one LLM call to take effect. A job that has already completed, "
-            "failed, or been cancelled cannot be cancelled again."
+            "take up to one LLM call to take effect. Only use with a job_id from "
+            "submit_design_job; jobs already completed, failed, or cancelled cannot be cancelled again."
         ),
         tags={"architecture", "design"},
         annotations=ToolAnnotations(
@@ -65,7 +65,7 @@ class CancelDesignTool:
     )
     async def cancel(
         self,
-        job_id: Annotated[str, Field(description="Job ID returned by start_design_architecture")],
+        job_id: Annotated[str, Field(description="Job ID returned by submit_design_job")],
         ctx: Context | None = None,
     ) -> dict:
         store = await JobsStore.get_instance()

@@ -57,9 +57,11 @@ class GetDesignStatusTool:
     @tool(
         name="get_design_status",
         description=(
-            "Poll the status of a start_design_architecture job. "
-            "Call repeatedly (every 10-30 s) until status is 'completed', 'failed', or 'cancelled'. "
-            "When status is 'completed', the result field contains the full design output."
+            "Poll the status of a submit_design_job background job. "
+            "Call repeatedly (every 10-30 s) until status is 'completed', 'failed', or 'cancelled'; "
+            "when completed, the result field contains the full design output. "
+            "Only use this with a job_id previously returned by submit_design_job — "
+            "do not use it to request a new design."
         ),
         tags={"architecture", "design"},
         annotations=ToolAnnotations(
@@ -72,7 +74,7 @@ class GetDesignStatusTool:
     )
     async def get_status(
         self,
-        job_id: Annotated[str, Field(description="Job ID returned by start_design_architecture")],
+        job_id: Annotated[str, Field(description="Job ID returned by submit_design_job")],
         ctx: Context | None = None,
     ) -> dict[str, Any]:
         store = await JobsStore.get_instance()

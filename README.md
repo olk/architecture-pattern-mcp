@@ -172,13 +172,13 @@ Call list_architecture_patterns(category="messaging")  # filter by category
 Call get_architecture_pattern(name="event-driven")   # full pattern JSON
 ```
 
-### Async job pattern: `start_design_architecture` + `get_design_status`
+### Async job pattern: `submit_design_job` + `get_design_status`
 
-For long-running pipelines (5–10 minutes) or clients with short idle timeouts, use the async job trio. `start_design_architecture` returns a `job_id` immediately; poll `get_design_status` until done:
+ONLY for clients with short request timeouts (Cursor, Claude Desktop, TS-SDK). The default is `design_architecture` with heartbeat defence. `submit_design_job` returns a `job_id` immediately; poll `get_design_status` until done:
 
 ```
 # Step 1: start the job
-Call start_design_architecture with:
+Call submit_design_job with:
   requirements: "ETL pipeline for IoT: Kafka → JSON → Redis geo-enrich → InfluxDB + S3"
   domain: "data-processing"
 
@@ -206,7 +206,7 @@ async def main():
             "jsonrpc": "2.0",
             "method": "tools/call",
             "params": {
-                "name": "start_design_architecture",
+                "name": "submit_design_job",
                 "arguments": {
                     "requirements": "ETL pipeline for IoT: Kafka → JSON → Redis → InfluxDB + S3",
                     "domain": "data-processing",
@@ -263,12 +263,14 @@ Show me details about the event-driven architecture pattern.
 | `analyze_architecture` | Analyse requirements and domain → recommended style, patterns, quality metrics. *Long-running (LLM call). Not idempotent.* |
 | `generate_architecture` | Generate an architecture design from requirements and selected patterns. *Long-running (LLM call). Not idempotent.* |
 | `evaluate_architecture` | Score an existing design against quality attributes. *Long-running (LLM call). Not idempotent.* |
-| `design_architecture` | Full pipeline: analyse → generate → evaluate → refine (up to 3 attempts). *Long-running (often > 5 minutes). Not idempotent.* |
-| `start_design_architecture` | Start a design_architecture job and return a job_id immediately. Poll `get_design_status` every 10–30 s until status is `completed`, `failed`, or `cancelled`. Long-running jobs take 1–5 minutes. |
+| `design_architecture` | Default tool for full architecture design (analyse → generate → evaluate → refine, up to 3 attempts). *Long-running (5–10 min); use this unless your client has a short request timeout.* |
+| `submit_design_job` | Start a background design job and return a `job_id` immediately. **ONLY for clients with short request timeouts** (Cursor, Claude Desktop, TS-SDK). For other clients use `design_architecture`. Poll `get_design_status` every 10–30 s. |
 | `get_design_status` | Poll job status. Returns the current status, progress message, and the full design output when `completed`. |
 | `cancel_design` | Cancel a running job (best-effort; takes effect at the next pipeline stage boundary; may take up to one LLM call). |
 | `list_architecture_patterns` | List all 36 patterns; filter by `category` and/or `domain` |
 | `get_architecture_pattern` | Get full JSON for a specific pattern by name |
+
+> **Note:** `start_design_architecture` is a deprecated alias for `submit_design_job` — it returns a rename notice instead of executing. It will be removed in the next minor version.
 
 **Domain and Style are structured parameters** — pass them as separate tool arguments, not embedded in the requirements text.
 
@@ -550,17 +552,17 @@ Every long-running tool emits `progress` notifications from a parallel coroutine
 
 > **TS-SDK clients (Claude Desktop, Cursor, etc.) do not reset their timeout on progress notifications.**
 
-### The async job trio
+### The async job trio (for timeout-constrained clients)
 
-For full control and compatibility with every client, three tools provide a durable job handle:
+For full control and compatibility with timeout-limited clients, three tools provide a durable job handle:
 
 ```
-start_design_architecture(requirements, domain, override_style)  → job_id
+submit_design_job(requirements, domain, override_style)  → job_id
 get_design_status(job_id)                                  → {status, result, error}
 cancel_design(job_id)                                      → {cancelled, status}
 ```
 
-`start_design_architecture` returns a `job_id` in milliseconds. The pipeline runs in a background task. Poll `get_design_status(job_id)` every 10–30 seconds. When status is `completed`, the full design is in the `result` field. Cancellation is best-effort — the job exits at the next pipeline stage boundary.
+`submit_design_job` returns a `job_id` in milliseconds. The pipeline runs in a background task. Poll `get_design_status(job_id)` every 10–30 seconds. When status is `completed`, the full design is in the `result` field. Cancellation is best-effort — the job exits at the next pipeline stage boundary.
 
 **This is the only fix that works for TS-SDK clients (Claude Desktop, Cursor).**
 

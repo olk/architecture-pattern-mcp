@@ -180,12 +180,18 @@ class DesignArchitectureTool:
 
     @tool(
         name="design_architecture",
-        description="Generate a complete architecture design with evaluation by running the full pipeline (analyze → generate → evaluate → refine).",
+        description=(
+            "Default tool for creating an architecture design. Runs the full pipeline "
+            "(analyze → generate → evaluate → refine, up to 3 attempts) and returns the complete design, "
+            "evaluation, and quality scores in a single response. Takes 5-10 minutes; emits progress "
+            "notifications every 30 s so clients stay connected. Use this whenever the user wants an "
+            "architecture design, including when they explicitly request design_architecture. "
+            "Do NOT use submit_design_job for ordinary design requests — that tool is only for clients "
+            "with short request timeouts (Cursor, Claude Desktop) and returns only a job_id."
+        ),
         tags={"architecture", "design"},
         annotations=ToolAnnotations(
-            title="Design Architecture",
-            # readOnlyHint=True: this tool computes an architecture design via LLM
-            # and changes no server state.
+            title="Design Architecture (default)",
             readOnlyHint=True,
             destructiveHint=False,
             idempotentHint=False,  # non-idempotent: each run creates a new LLM pipeline

@@ -20,14 +20,15 @@
 # SOFTWARE.
 
 """
-start_design_architecture tool — manual async job pattern.
+submit_design_job tool — manual async job pattern (renamed from start_design_architecture).
 
 Creates a pending job and returns immediately with a job_id.
 The actual pipeline runs in a background asyncio task; poll get_design_status
 to observe progress, and cancel_design to abort.
 
-This tool is the only Fix-4 primitive that requires no special client support —
-every MCP client can call it and read the job_id from the response.
+This tool is the Fix-4 primitive for clients with short request timeouts
+(Cursor, Claude Desktop, TS-SDK). The blocking design_architecture tool
+is the default for all other clients.
 """
 
 import asyncio
@@ -48,7 +49,44 @@ from src.tools.jobs import JobStatus, JobsStore
 logger = logging.getLogger(__name__)
 
 
-class StartDesignArchitectureTool:
+# Deprecated alias — registered as a separate tool so old-name callers receive
+# a rename notice instead of a protocol error.  Will be removed in the next
+# minor version.
+@tool(
+    name="start_design_architecture",
+    description=(
+        "DEPRECATED alias. Do not select this tool; it never starts a job. "
+        "Renamed to submit_design_job; calling it returns a rename notice "
+        "and will be removed in the next minor version."
+    ),
+    tags={"architecture", "design", "deprecated"},
+    annotations=ToolAnnotations(
+        title="DEPRECATED: start_design_architecture",
+        readOnlyHint=True,
+        destructiveHint=False,
+        idempotentHint=True,
+        openWorldHint=False,
+    ),
+)
+async def _deprecated_start_design_alias(
+    requirements: str,
+    domain: str,
+    override_style: str | None = None,
+    ctx: Context | None = None,
+) -> dict[str, Any]:
+    """Never executes a job. Returns a rename notice for backward compatibility."""
+    return {
+        "deprecated": True,
+        "renamed_to": "submit_design_job",
+        "message": (
+            "start_design_architecture was renamed to submit_design_job. "
+            "Call submit_design_job with the same arguments "
+            "(requirements, domain, override_style)."
+        ),
+    }
+
+
+class SubmitDesignJobTool:
     def __init__(
         self,
         agent: SoftwareArchitectAgent,
@@ -59,22 +97,26 @@ class StartDesignArchitectureTool:
         self._running_tasks: set[asyncio.Task[None]] = set()
 
     @tool(
-        name="start_design_architecture",
+        name="submit_design_job",
         description=(
-            "Start a background design_architecture job and return a job_id immediately. "
-            "Poll get_design_status(job_id) until status is 'completed', 'failed', or 'cancelled'. "
-            "Long-running (minutes); returns in <100 ms regardless of job duration."
+            "Start a background design job and return a job_id immediately (returns in <100 ms; "
+            "the job itself takes minutes). ONLY use this when the calling client cannot wait "
+            "for a long response — e.g. Cursor, Claude Desktop, or any client with a 60-120 s "
+            "request timeout. Do NOT use when the user wants the design itself or explicitly "
+            "names a design tool — the blocking design_architecture tool returns the full design "
+            "directly. After starting, poll get_design_status(job_id) every 10-30 s until "
+            "status is 'completed', 'failed', or 'cancelled'."
         ),
         tags={"architecture", "design"},
         annotations=ToolAnnotations(
-            title="Start Design Architecture (async)",
+            title="Submit Design Job (async)",
             readOnlyHint=False,
             destructiveHint=False,
             idempotentHint=False,
             openWorldHint=False,
         ),
     )
-    async def start_design(
+    async def submit_job(
         self,
         requirements: Annotated[str, Field(description="Architecture requirements description", min_length=1)],
         domain: Annotated[str, Field(description="Target architecture domain", min_length=1)],
@@ -181,8 +223,9 @@ class StartDesignArchitectureTool:
                 await ctx.info(f"Job {job_id}: failed — {error_text}")
 
 
-def start_design_architecture_tool(
+def submit_design_job_tool(
     agent: SoftwareArchitectAgent,
     pipeline: ArchitecturePipeline,
-) -> StartDesignArchitectureTool:
-    return StartDesignArchitectureTool(agent=agent, pipeline=pipeline)
+) -> SubmitDesignJobTool:
+    return SubmitDesignJobTool(agent=agent, pipeline=pipeline)
+

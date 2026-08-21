@@ -149,8 +149,8 @@ class TestMCPArchitectServerToolRegistration:
     """
 
     @pytest.mark.asyncio
-    async def test_lifespan_registers_nine_tools(self):
-        """FR-241: Verify lifespan registers 9 tools with correct names"""
+    async def test_lifespan_registers_ten_tools(self):
+        """FR-241: Verify lifespan registers 10 tools (9 + deprecated alias) with correct names"""
         server = MCPArchitectServer()
         async with server._mcp.lifespan():
             await server._initialize()
@@ -158,7 +158,7 @@ class TestMCPArchitectServerToolRegistration:
 
             tool_components = server._mcp.local_provider._components
             tool_keys = [k for k in tool_components.keys() if k.startswith('tool:')]
-            assert len(tool_keys) == 9
+            assert len(tool_keys) == 10
 
             expected_tools = {
                 "design_architecture",
@@ -167,6 +167,7 @@ class TestMCPArchitectServerToolRegistration:
                 "evaluate_architecture",
                 "list_architecture_patterns",
                 "get_architecture_pattern",
+                "submit_design_job",
                 "start_design_architecture",
                 "get_design_status",
                 "cancel_design",
@@ -176,7 +177,7 @@ class TestMCPArchitectServerToolRegistration:
 
     @pytest.mark.asyncio
     async def test_registered_tools_have_correct_names(self):
-        """FR-241: Verify registered tool names match expected MCP tool names (nine tools)"""
+        """FR-241: Verify registered tool names match expected MCP tool names (ten tools)"""
         server = MCPArchitectServer()
         async with server._mcp.lifespan():
             await server._initialize()
@@ -204,7 +205,7 @@ class TestMCPArchitectServerToolRegistration:
             server._register_prompts(server._mcp)
             async with Client(server._mcp) as client:
                 tools = await client.list_tools()
-                assert len(tools) == 11, f"Expected 11 tools (9 + 2 prompt-tools), got {len(tools)}"
+                assert len(tools) == 12, f"Expected 12 tools (10 + 2 prompt-tools), got {len(tools)}"
                 for t in tools:
                     ann = t.annotations
                     assert ann is not None, f"{t.name} missing annotations"
