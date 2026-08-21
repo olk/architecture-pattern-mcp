@@ -70,7 +70,7 @@ docker-build: ## Build MCP server Docker image with dev dependencies
 	docker build --target production -f docker/Dockerfile -t $(DOCKER_IMAGE):latest .
 
 docker-build-tei: ## Build both TEI images (embedder + reranker)
-	docker build -f docker/Dockerfile.tei \
+	docker build -f docker/Dockerfile.tei-embed \
 		-t $(TEI_EMBED_IMAGE):$(DOCKER_TAG) \
 		-t $(TEI_EMBED_IMAGE):latest .
 	docker build -f docker/Dockerfile.tei-rerank \
