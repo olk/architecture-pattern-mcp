@@ -101,16 +101,16 @@
   ],
   "migration_from": [
     "monolithic-architecture",
-    "layered-architecture",
+    "layered-monolith",
     "blocking-mvc",
     "synchronous-rest"
   ],
   "migration_to": [
     "event-sourcing",
-    "cqrs",
+    "command-query-responsibility-segregation",
     "service-mesh",
     "edge-computing",
-    "actor-model-architecture"
+    "actor-based"
   ],
   "design_principles": [
     "Message-Driven Communication: Components communicate via asynchronous messages, creating temporal and spatial decoupling",

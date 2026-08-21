@@ -100,7 +100,7 @@
     "tight-coupling-with-hardcoded-addresses"
   ],
   "migration_to": [
-    "event-driven-architecture",
+    "event-driven",
     "service-mesh",
     "api-gateway-with-service-discovery"
   ],

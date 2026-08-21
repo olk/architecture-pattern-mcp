@@ -65,7 +65,7 @@
     "DataSource: Input origin (file, stream, API, event)",
     "DataSink: Output destination (file, database, API)",
     "Pipeline: Composed sequence of filters",
-    "MessageBroker: Optional intermediate buffer for distributed部署"
+    "MessageBroker: Optional intermediate buffer for distributed\u90e8\u7f72"
   ],
   "technology_stack": [
     "Unix pipes",
@@ -90,7 +90,7 @@
     "custom-pipeline-implementations"
   ],
   "migration_to": [
-    "event-driven-architecture",
+    "event-driven",
     "microservices-orchestration",
     "serverless-workflows",
     "state-machine-workflows"

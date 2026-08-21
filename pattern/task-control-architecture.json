@@ -79,16 +79,16 @@
     "Ignoring temporal constraints (over-sequential execution prevents parallel optimization)"
   ],
   "migration_from": [
-    "Sequential task control architectures",
-    "Ad-hoc task management without formal decomposition",
-    "Direct procedure call coordination between modules",
-    "Single-threaded robot control loops"
+    "sequential-task-control-architectures",
+    "ad-hoc-task-management-without-formal-decomposition",
+    "direct-procedure-call-coordination-between-modules",
+    "single-threaded-robot-control-loops"
   ],
   "migration_to": [
-    "TDL (Task Description Language) with C++ syntax",
-    "TCM (Task Control Management) library for C++ implementations",
-    "IPC (Inter-Process Communication) for flexible message passing",
-    "Modern agentic loops: hierarchical planning -> execution monitoring -> exception handling"
+    "tdl-(task-description-language)-with-c++-syntax",
+    "tcm-(task-control-management)-library-for-c++-implementations",
+    "ipc-(inter-process-communication)-for-flexible-message-passing",
+    "modern-agentic-loops:-hierarchical-planning->-execution-monitoring->-exception-handling"
   ],
   "design_principles": [
     "Hierarchical Task Design: Break complex goals into clear subtask hierarchies with well-defined temporal constraints",

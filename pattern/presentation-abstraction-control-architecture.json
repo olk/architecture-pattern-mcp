@@ -97,7 +97,7 @@
   ],
   "migration_from": [
     "model-view-controller",
-    "layered-architecture",
+    "layered-monolith",
     "monolithic-ui",
     "client-server-architecture"
   ],
@@ -106,7 +106,7 @@
     "pac-amodeus",
     "pac-star",
     "microservices",
-    "actor-model"
+    "actor-based"
   ],
   "design_principles": [
     "Complete Decoupling: Presentation and Abstraction never communicate directly; all communication is mediated by Control",

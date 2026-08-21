@@ -94,15 +94,15 @@
     "Package-by-Layer: Organizing by architectural layer instead of feature/bounded context"
   ],
   "migration_from": [
-    "layered-architecture",
+    "layered-monolith",
     "monolithic-architecture",
     "framework-coupled-architecture",
     "big-ball-of-mud"
   ],
   "migration_to": [
     "microservices",
-    "event-driven-architecture",
-    "cqrs",
+    "event-driven",
+    "command-query-responsibility-segregation",
     "service-mesh"
   ],
   "design_principles": [

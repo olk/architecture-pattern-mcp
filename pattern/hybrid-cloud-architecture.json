@@ -43,7 +43,7 @@
     "greenfield-projects-with-no-legacy-constraints",
     "cloud-native",
     "cloud-first-mandate-with-no-regulatory-barriers",
-    "steady,-predictable-loads-with-no-need-for-bursting",
+    "steady-predictable-loads",
     "high-scaling-needs",
     "small-teams-with-low-operational-maturity",
     "sub-millisecond-response-requirements"
@@ -107,9 +107,9 @@
     "all-on-premises-datacenter"
   ],
   "migration_to": [
-    "microservices-architecture",
+    "microservices",
     "serverless-architecture",
-    "event-driven-architecture",
+    "event-driven",
     "multi-cloud-architecture"
   ],
   "design_principles": [

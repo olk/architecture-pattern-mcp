@@ -98,14 +98,14 @@
     "Hardcoded Configuration: embedding environment-specific values instead of using parameter stores"
   ],
   "migration_from": [
-    "monolith",
+    "monolithic",
     "layered-monolith",
-    "microservices (partial migration of specific endpoints)"
+    "microservices"
   ],
   "migration_to": [
-    "event-driven-architecture",
-    "service-mesh (hybrid with containerized services)",
-    "CQRS (for complex domain patterns)"
+    "event-driven",
+    "service-mesh",
+    "command-query-responsibility-segregation"
   ],
   "design_principles": [
     "Single Responsibility: Each function performs one well-defined task triggered by a specific event type",

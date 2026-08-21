@@ -98,7 +98,7 @@
   ],
   "migration_to": [
     "microservices",
-    "event-driven-architecture",
+    "event-driven",
     "api-gateway",
     "strangler-fig-pattern",
     "micro-integration-platforms"

@@ -6,7 +6,7 @@
     "Protocol bridging: Connect systems using different protocols (HTTP, JMS, SOAP, REST, FTP)",
     "Loose coupling: Producers and consumers are decoupled through the bus",
     "Centralized routing: Change routing rules without modifying producer systems",
-    "Data transformation: Automatic format conversion (XML ↔ JSON, CSV ↔ XML)",
+    "Data transformation: Automatic format conversion (XML \u2194 JSON, CSV \u2194 XML)",
     "Audit trail: All messages logged for compliance and debugging",
     "Message buffering: Resilience during temporary downtime of downstream systems",
     "Service reuse: Shared services available to multiple consumers"
@@ -46,7 +46,7 @@
   ],
   "use_cases": [
     "Integrating three or more heterogeneous applications with different protocols",
-    "Need for protocol translation (SOAP ↔ REST, XML ↔ JSON) between systems",
+    "Need for protocol translation (SOAP \u2194 REST, XML \u2194 JSON) between systems",
     "Regulatory requirement for message audit logging and compliance",
     "Legacy system integration where direct connectivity is impractical",
     "Enterprise-wide service reuse and standardization",
@@ -66,7 +66,7 @@
     "Message Listener/Adapter: Connects to external systems (JMS, file, email, database) and converts to messages",
     "Content-Based Router: Examines message content and routes to appropriate destination",
     "Message Filter: Filters messages based on criteria before routing",
-    "Data Transformer: Converts message formats (XML ↔ JSON, XSLT transformations)",
+    "Data Transformer: Converts message formats (XML \u2194 JSON, XSLT transformations)",
     "Message Validator: Validates message structure and content against schema",
     "Message Repository: Stores messages/events for audit, replay, correlation",
     "Mediation Pipeline: Chains multiple mediators for complex processing",
@@ -99,7 +99,7 @@
   ],
   "migration_to": [
     "api-gateway",
-    "event-driven-architecture",
+    "event-driven",
     "microservices",
     "ipaas"
   ],

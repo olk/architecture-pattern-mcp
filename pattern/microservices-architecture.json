@@ -119,8 +119,8 @@
     "legacy-esb-systems"
   ],
   "migration_to": [
-    "service-mesh-architecture",
-    "event-driven-architecture",
+    "service-mesh",
+    "event-driven",
     "serverless-functions",
     "edge-computing"
   ],

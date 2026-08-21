@@ -1,0 +1,129 @@
+{
+  "name": "client-server",
+  "category": "structural",
+  "context": "Distributed systems where clients initiate requests and servers provide responses over a network. The client-server pattern is the foundational architecture for networked applications: a client sends requests to a server, which processes those requests and returns results. The server is a resource provider; the client is a resource consumer. This pattern underlies virtually all web applications, APIs, and networked services. Its enduring dominance stems from its simplicity,scalability through stateless server design, and broad tooling ecosystem. While often considered 'basic', the decisions made within a client-server architecture \u2014 around state management, authentication, caching, and error handling \u2014 determine the reliability and performance of the entire system.",
+  "benefits": [
+    "Centralized resource management: shared data and business logic live on the server, ensuring consistency",
+    "Scalability: servers can be replicated and load-balanced; clients are lightweight and stateless",
+    "Security: sensitive business logic and data remain on the server, not distributed to client devices",
+    "Heterogeneous clients: a single server can serve many different client types (web, mobile, API)",
+    "Ease of update: server-side changes take effect immediately without needing to deploy client updates",
+    "Simple conceptual model: developers immediately understand request-response semantics",
+    "Broad tooling and protocol ecosystem: HTTP, REST, gRPC, WebSocket all implement this pattern"
+  ],
+  "tradeoffs": [
+    "Network dependency: both client and server must be available; network partitions cause failures",
+    "Latency: every operation incurs at minimum one network round-trip",
+    "Server as single point of failure: without replication, server outages take down all clients",
+    "Stateful server complexity: maintaining session state on the server creates memory pressure and replication challenges",
+    "Overfetching and underfetching: REST endpoints often return too much or too little data for the client's needs",
+    "Synchronous request-response: not suited for real-time, push-based, or event-driven interactions without additional mechanisms",
+    "Client device limitations: clients on constrained devices may not handle large payloads or complex response parsing efficiently"
+  ],
+  "quality_attributes": {
+    "scalability": 7,
+    "maintainability": 6,
+    "reliability": 6,
+    "security": 7,
+    "performance": 6,
+    "simplicity": 8
+  },
+  "suitable_domains": [
+    "web-applications",
+    "mobile-applications",
+    "enterprise-applications",
+    "api-gateways",
+    "request-response-apis",
+    "restful-apis",
+    "single-organization",
+    "internal-tools",
+    "traditional-web"
+  ],
+  "unsuitable_domains": [
+    "real-time-systems",
+    "high-frequency-trading",
+    "iot-sensor-data",
+    "collaborative-applications",
+    "edge-computing-bandwidth",
+    "high-concurrency",
+    "low-latency-required",
+    "event-driven-workflows"
+  ],
+  "use_cases": [
+    "A web application where browsers request HTML pages and API data from a central server",
+    "A mobile banking app where the client communicates with backend financial services via REST or gRPC",
+    "An internal tool where a lightweight client connects to a centralized server providing business logic",
+    "A third-party integration where partners consume a company's data through a versioned REST API"
+  ],
+  "avoid_when": [
+    "Sub-millisecond latency is required and caching cannot adequately mask network round-trips",
+    "The system must operate offline or with intermittent connectivity",
+    "Real-time updates need to be pushed from server to client without polling",
+    "Highly concurrent, stateful workloads where the overhead of request-response per operation is prohibitive",
+    "Collaborative editing where optimistic UI with local state conflicts with a server-centric model"
+  ],
+  "component_types": [
+    "Client: Initiates requests to the server; handles user interface, local state, and result presentation",
+    "Server: Receives requests, applies business logic, manages data, and returns responses",
+    "Network: The transport medium (HTTP, TLS, WebSocket); its characteristics constrain the interaction patterns available",
+    "Load Balancer: Distributes client requests across multiple server instances for scalability and availability",
+    "Cache: Optional intermediate store between client and server, reducing repeated requests for unchanged data",
+    "API Gateway: Entry point on the server side that handles authentication, rate limiting, and request routing",
+    "Session Store: Optional server-side state repository for maintaining user sessions across requests"
+  ],
+  "technology_stack": [
+    "HTTP/1.1",
+    "HTTP/2",
+    "HTTP/3 (QUIC)",
+    "TLS 1.3",
+    "REST",
+    "gRPC",
+    "GraphQL",
+    "WebSocket",
+    "Nginx",
+    "HAProxy",
+    "AWS ALB",
+    "Azure Application Gateway",
+    "PostgreSQL",
+    "Redis",
+    "MongoDB",
+    "Elasticsearch",
+    "CDN (CloudFront, Fastly)"
+  ],
+  "anti_patterns": [
+    "Stovepipe Integration: each client creates its own server protocol, leading to N\u00d7M integration complexity",
+    "Chatty API: client makes many small requests instead of batching, causing excessive network round-trips",
+    "God Server: the server becomes a monolithic application handling every concern from business logic to email delivery to report generation",
+    "Credential Leakage: sensitive credentials embedded in client code or logged on the server",
+    "Stateless Protocol, Stateful Application Done Wrong: treating HTTP as if it maintains session state without proper session management",
+    "Missing Caching: every request hits the server even for data that rarely changes, causing unnecessary load"
+  ],
+  "migration_from": [
+    "monolithic",
+    "layered-monolith"
+  ],
+  "migration_to": [
+    "microservices",
+    "event-driven",
+    "api-gateway",
+    "service-oriented-architecture"
+  ],
+  "design_principles": [
+    "Stateless Server: each request contains all information needed to process it; servers hold no client context between requests",
+    "Layered Server Internals: server-side code follows its own internal layering (presentation, business logic, data access)",
+    "Cache Wisely: identify which responses are cacheable and at what granularity; leverage CDN and browser caching",
+    "Fail Fast on Invalid Input: validate client input at the server boundary before processing; never trust the client",
+    "Separate Concerns at the API Layer: authentication, authorization, rate limiting, and business logic are handled at distinct layers",
+    "Version APIs from Day One: even internal APIs benefit from versioning from initial release to prevent breaking changes",
+    "Design for Evolution: prefer hypermedia and well-documented contracts over rigid point-to-point integrations"
+  ],
+  "best_practices": [
+    "Use Stateless Authentication: JWTs or signed tokens rather than server-side sessions to avoid memory pressure and replication complexity",
+    "Implement Proper Error Handling: machine-readable error codes plus human-readable messages; distinguish client errors (4xx) from server errors (5xx)",
+    "Apply Rate Limiting: protect the server from abuse; use standard headers like X-RateLimit-Remaining",
+    "Log at the Right Level: log request IDs consistently across client and server to enable distributed tracing",
+    "Choose the Right Protocol: HTTP/REST for request-response; WebSocket for real-time bidirectional; gRPC for high-performance internal communication",
+    "Cache Aggressively at Appropriate Layers: CDN for static assets, Redis for frequently read data, HTTP cache headers for client-side caching",
+    "Design for Backward Compatibility: add fields to responses rather than removing them; version before breaking changes"
+  ]
+}

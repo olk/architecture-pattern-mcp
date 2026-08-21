@@ -87,10 +87,10 @@ class TestArchitectureStyle:
     Distinct from ArchitectureDomain which describes the problem space.
     """
 
-    def test_has_36_values(self):
-        """Verify ArchitectureStyle enum contains exactly 36 values (matching pattern JSON files)."""
+    def test_has_40_values(self):
+        """Verify ArchitectureStyle enum contains exactly 40 values (matching pattern JSON files)."""
         actual_values = len(ArchitectureStyle)
-        assert actual_values == 36, f"Expected 36 values, got {actual_values}"
+        assert actual_values == 40, f"Expected 40 values, got {actual_values}"
 
     def test_pattern_names_from_json_files(self):
         """Verify ArchitectureStyle values match Pattern.name from all 36 JSON files."""

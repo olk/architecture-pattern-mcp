@@ -1,0 +1,127 @@
+{
+  "name": "clean-architecture",
+  "category": "structural",
+  "context": "Software systems requiring strong separation between business logic and external frameworks, databases, and UI layers. Clean Architecture, defined by Robert C. Martin, organizes a system into concentric layers with a strict dependency rule: dependencies point inward only. The outermost layer (Frameworks & Drivers) contains details like databases and web frameworks; the innermost layer (Entities) contains enterprise business rules that are framework-agnostic and maximally reusable. This pattern is for teams building long-lived, maintainable applications where the domain logic must remain testable, portable, and independent of infrastructure choices. It complements hexagonal architecture's ports-and-adapters concept but adds explicit layer naming and the dependency rule as a first-class constraint.",
+  "benefits": [
+    "Framework independence: business logic never imports from UI, database, or web framework packages",
+    "Testability: enterprise rules can be tested with nothing more than in-memory data structures",
+    "Independence of delivery mechanism: the same business logic runs as a CLI tool, a REST API, or a background job",
+    "Database independence: business logic has no knowledge of how data is persisted; repositories are an interface, not an implementation",
+    "Clear dependency structure: new developers immediately understand what can import what",
+    "Portable business rules: entities and use cases can be reused across multiple applications",
+    "Reduced technical debt: explicit interfaces prevent framework coupling from accumulating silently"
+  ],
+  "tradeoffs": [
+    "Initial boilerplate: establishing the layer structure and dependency rules requires upfront investment",
+    "Indirection overhead: every business operation passes through multiple abstraction layers",
+    "Learning curve: developers accustomed to framework-centric layouts need time to understand the inward-dependency rule",
+    " Ceremony for simple operations: CRUD operations that are trivial in Rails/Django require more structure",
+    "Interface proliferation: each use case typically defines its own input/output models, leading to many small classes",
+    "Dual persistence concerns: reconciling clean architecture's preference for domain purity with ORM expectations can be complex",
+    "Over-engineering risk for small projects: the layer count and interface discipline is heavyweight for simple applications"
+  ],
+  "quality_attributes": {
+    "scalability": 6,
+    "maintainability": 9,
+    "reliability": 7,
+    "security": 7,
+    "performance": 5,
+    "simplicity": 4
+  },
+  "suitable_domains": [
+    "enterprise-applications",
+    "complex-business-logic",
+    "long-lived-applications",
+    "saas-applications-with-multi-tenant-requirements",
+    "financial-systems",
+    "healthcare-medical",
+    "erp-crm",
+    "e-commerce-platforms",
+    "supply-chain"
+  ],
+  "unsuitable_domains": [
+    "simple-crud-applications",
+    "low-complexity-projects",
+    "prototypes",
+    "startup-pocs",
+    "simple-single-task-automation",
+    "low-budget"
+  ],
+  "use_cases": [
+    "A financial trading platform where the order validation rules must work identically whether the input comes from a web UI, a mobile app, or an API",
+    "A healthcare system where patient record logic must remain portable across different database technologies as regulatory requirements evolve",
+    "An e-commerce platform where domain logic is tested in isolation without needing a running database or web server",
+    "A SaaS multi-tenant application where tenant-specific customizations must not pollute the core domain model"
+  ],
+  "avoid_when": [
+    "The application is simple CRUD where a framework's defaults already provide adequate structure",
+    "The team is new to layered architecture and the learning curve would delay delivery",
+    "Strict latency requirements make the additional indirection of multiple layers unacceptable",
+    "The project is a prototype that will be discarded after validation",
+    "The organization has standardized on a framework-centric architecture and would resist the cleaner-dependency approach"
+  ],
+  "component_types": [
+    "Entities: Enterprise business rules that are framework-agnostic and contain the core of the domain model",
+    "Use Cases (Interactors): Application-specific business rules that orchestrate entities to accomplish a user goal",
+    "Interface Adapters: Converters that translate between data formats convenient for use cases/entities and those convenient for external agents",
+    "Controllers and Presenters: Interface adapter implementations that handle user input and presentation logic",
+    "Repository Interfaces: Port definitions in the use case layer that data access must fulfill, decoupling from any specific ORM",
+    "External Interfaces: Database implementations, web framework glue code, UI components — the outermost layer that depends inward",
+    "DTOs (Data Transfer Objects): Simple data structures crossing layer boundaries, holding no business logic"
+  ],
+  "technology_stack": [
+    "Python",
+    "Java",
+    "TypeScript",
+    "C#",
+    "Go",
+    "Django",
+    "FastAPI",
+    "Spring Boot",
+    "NestJS",
+    "Next.js",
+    "SQLAlchemy",
+    "TypeORM",
+    "PostgreSQL",
+    "Redis",
+    "Docker",
+    "Kubernetes"
+  ],
+  "anti_patterns": [
+    "The Lonely Use Case: use cases that are thin wrappers around repository calls, providing no real business logic but adding indirection",
+    "Anemic Entities: entities that are pure data classes with no behavior, defeating the purpose of having business rules at the innermost layer",
+    "Framework-in-the-Core: importing Django models or Spring components into the domain layer, breaking the dependency rule",
+    "God Objects at the Use Case Layer: use cases that know too much and orchestrate too many entities, becoming a maintenance bottleneck",
+    "Repository Implementations Leaking Upward: concrete database types appearing in use case signatures instead of interface abstractions",
+    "Skipped Layers: collapsing the interface adapter layer, causing framework code to appear directly in use cases"
+  ],
+  "migration_from": [
+    "monolithic",
+    "layered-monolith",
+    "model-view-controller",
+    "hexagonal"
+  ],
+  "migration_to": [
+    "hexagonal",
+    "event-driven",
+    "microservices"
+  ],
+  "design_principles": [
+    "Dependency Rule: source code dependencies must point only inward, toward higher-level policies; no inner-layer module may mention anything from an outer layer",
+    "Entities First: start by modeling the domain's business rules as plain objects with no framework dependencies",
+    "Use Cases as Application Scripts: each use case is a single-responsibility class with one public method, orchestrating entities and repositories",
+    "Repository Ports, Not Implementations: data access is always an interface in the use case layer; the implementation is injected from the outer layer",
+    "Frameworks Are Plugins: treat web frameworks, ORMs, and UI components as external plugins; keep their imports at the outer layer boundary",
+    "Test the Inner Layers First: entities and use cases are tested without any external infrastructure; database and UI tests come last",
+    "One Data Structure Per Layer Boundary: DTOs crossing layer boundaries are simple, structure-only objects; no behavior, no framework types"
+  ],
+  "best_practices": [
+    "Enforce the Dependency Rule with Static Analysis: use tools like SonarQube or ArchUnit to fail builds when inward dependencies are violated",
+    "Name Layers by What They Contain: Entities (domain model), Use Cases (application logic), Adapters (interface converters), Frameworks (infrastructure)",
+    "Keep Entities Rich: business rule methods belong in entities; do not strip entities to pure getters/setters",
+    "Separate Input and Output Models: use case input and output are different classes; this prevents caller changes from propagating inward",
+    "Repository Interfaces Live Close to Use Cases: define the port where it is used, not in a separate infrastructure package",
+    "Rotate Frameworks Without Touching Domain: verify that swapping from Django to FastAPI requires changes only in the outermost layer",
+    "Structure Tests by Layer: entity tests are fastest and have no mocks; use case tests use in-memory repositories; adapter tests are integration tests"
+  ]
+}

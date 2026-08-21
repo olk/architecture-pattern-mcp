@@ -99,10 +99,10 @@
     "journaled_database"
   ],
   "migration_to": [
-    "cqrs",
-    "event_streaming",
-    "saga_pattern",
-    "event_store_clustering"
+    "command-query-responsibility-segregation",
+    "event-sourcing",
+    "saga",
+    "event-sourcing"
   ],
   "design_principles": [
     "Immutability: Events are never modified after creation; only new events can compensate for old ones",

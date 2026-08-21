@@ -39,6 +39,7 @@ Error Handling:
 
 import json
 import logging
+import re
 from pathlib import Path
 
 # Quality attribute names (6 keys — must be present in every pattern's
@@ -51,6 +52,37 @@ QUALITY_ATTRIBUTES = [
     "security",
     "simplicity",
 ]
+
+# Domain alias map: legacy/variant slug -> canonical slug.
+# Applied during filter_by_domain (query side) and load_all (data side) to ensure
+# both old and new slugs resolve correctly. Canonical values live in ArchitectureDomain.
+DOMAIN_ALIASES: dict[str, str] = {
+    "cloud-native-applications": "cloud-native",
+    "enterprise-applications": "enterprise",
+    "enterprise-scale": "enterprise",
+    "event-driven-architectures": "event-driven",
+    "event-driven-systems": "event-driven",
+    "financial-systems": "financial",
+    "government-systems": "government",
+    "high-traffic-systems": "high-traffic",
+    "low-latency-requirements": "low-latency",
+    "low-traffic-applications": "low-traffic",
+    "messaging-systems": "messaging",
+    "microservices-architecture": "microservices",
+    "microservices-architectures": "microservices",
+    "microservices-ready": "microservices",
+    "microservices-scale": "microservices",
+    "rule-based-systems": "rule-based-system",
+    "simple-crud-applications": "simple-crud",
+}
+
+
+def _normalize_domain_slug(slug: str) -> str:
+    """Normalize a domain slug: apply aliases, then lowercase + spaces-to-hyphens."""
+    result = slug.lower()
+    result = re.sub(r"\s+", "-", result)
+    result = re.sub(r"-+", "-", result).strip("-")
+    return DOMAIN_ALIASES.get(result, result)
 
 logger = logging.getLogger(__name__)
 
@@ -183,15 +215,15 @@ class PatternLoader:
         Returns:
             Filtered list of patterns matching the domain criteria
         """
-        normalized_domain = domain.lower().replace(" ", "-")
+        normalized_domain = _normalize_domain_slug(domain)
 
         if not self._loaded:
             self.load_all()
 
         filtered = []
         for pattern in self._patterns_cache:
-            suitable_domains = [d.lower().replace(" ", "-") for d in pattern.get("suitable_domains", [])]
-            unsuitable_domains = [d.lower().replace(" ", "-") for d in pattern.get("unsuitable_domains", [])]
+            suitable_domains = [_normalize_domain_slug(d) for d in pattern.get("suitable_domains", [])]
+            unsuitable_domains = [_normalize_domain_slug(d) for d in pattern.get("unsuitable_domains", [])]
 
             if normalized_domain in unsuitable_domains:
                 continue

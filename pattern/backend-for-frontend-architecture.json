@@ -91,12 +91,12 @@
   "migration_to": [
     "graphql-federation",
     "service-mesh",
-    "stranger-fig-pattern",
-    "event-driven-architecture"
+    "strangler-fig",
+    "event-driven"
   ],
   "design_principles": [
     "Client-Specific Optimization: Each BFF should be tailored to its specific client's needs, optimizing data shape, payload size, and delivery mechanism",
-    "Thin Orchestration Layer: BFFs should only aggregate, transform, and normalize—no business logic that belongs in domain services",
+    "Thin Orchestration Layer: BFFs should only aggregate, transform, and normalize\u2014no business logic that belongs in domain services",
     "Stateless Design: BFFs should be stateless to enable horizontal scaling behind load balancers without complex session management",
     "Clear Ownership Boundaries: Frontend teams should own their respective BFFs end-to-end: code, deployment, monitoring, and on-call",
     "Explicit API Versioning: BFF APIs must be versioned to support multiple client versions simultaneously, especially for mobile apps with long update tails",

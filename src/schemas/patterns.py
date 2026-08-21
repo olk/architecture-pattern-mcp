@@ -25,9 +25,16 @@ Architecture pattern schema.
 Defines the structure of a single architecture pattern (e.g. microservices, hexagonal).
 """
 
-from pydantic import BaseModel, Field
+import logging
+from typing import Any
 
-from src.schemas.enums import ArchitectureDomain, PatternCategory
+from pydantic import BaseModel, Field, model_validator
+
+from src.schemas.enums import ArchitectureDomain, ArchitectureStyle, PatternCategory
+
+logger = logging.getLogger(__name__)
+
+_WARNED_MIGRATION_REFS: set[str] = set()
 
 
 class Pattern(BaseModel):
@@ -108,6 +115,50 @@ class Pattern(BaseModel):
         default_factory=list,
         description="Best practices (e.g. ['Service Decomposition: Design services around business capabilities'])"
     )
+    version: str | None = Field(
+        default=None,
+        description="Pattern catalog version, e.g. '1.0.14'"
+    )
+    sources: list[str] = Field(
+        default_factory=list,
+        description="Reference sources (book chapters, articles, POSA patterns)"
+    )
+
+    @model_validator(mode="after")
+    def _warn_on_external_migration_refs(self) -> "Pattern":
+        """
+        Warn (but don't fail) when migration refs look malformed.
+
+        Warns for any ref that is:
+        - not a canonical catalog name (ArchitectureStyle), AND
+        - looks like a malformed slug (contains spaces, uppercase letters, or special chars)
+
+        This catches typos and inconsistent formatting without maintaining a large allowlist.
+        Well-formed hyphenated-lowercase external refs (e.g. 'big-ball-of-mud',
+        'two-phase-commit') are silently allowed — they are intentional non-pattern
+        descriptors.
+        """
+        import re
+
+        catalog = {item.value for item in ArchitectureStyle}
+
+        for field in ("migration_from", "migration_to"):
+            values: list[str] = getattr(self, field, []) or []
+            for ref in values:
+                key = f"{field}:{ref}"
+                if ref not in catalog and key not in _WARNED_MIGRATION_REFS:
+                    # Malformed slug indicator: has spaces, uppercase, or commas
+                    is_malformed = bool(
+                        re.search(r"[\sA-Z,]", ref)
+                    )
+                    if is_malformed:
+                        _WARNED_MIGRATION_REFS.add(key)
+                        logger.warning(
+                            f"Pattern '{self.name}' has {field} entry '{ref}' "
+                            f"that is not a canonical catalog name and looks malformed "
+                            f"(contains spaces, uppercase, or commas)."
+                        )
+        return self
 
 
 class ScoredPattern(Pattern):

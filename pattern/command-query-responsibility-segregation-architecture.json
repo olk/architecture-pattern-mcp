@@ -106,7 +106,7 @@
   ],
   "migration_from": [
     "monolithic-crud-architecture",
-    "layered-architecture",
+    "layered-monolith",
     "shared-database-per-service",
     "anemic-domain-model"
   ],

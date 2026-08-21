@@ -100,14 +100,14 @@
   ],
   "migration_to": [
     "event-driven",
-    "actor-model",
+    "actor-based",
     "agent-based",
     "service-mesh"
   ],
   "design_principles": [
-    "Knowledge Source Isolation: KSs must not communicate directly with each other—only through the blackboard. This ensures independent evolution and testing of each specialist.",
+    "Knowledge Source Isolation: KSs must not communicate directly with each other\u2014only through the blackboard. This ensures independent evolution and testing of each specialist.",
     "Opportunistic Problem Solving: The control strategy should prioritize based on current blackboard state, not predetermined sequences. Let the data drive the solution direction.",
-    "Abstraction Hierarchy: Organize the blackboard into levels (raw data → features → hypotheses → solutions). Each level represents increasing abstraction of the problem domain.",
+    "Abstraction Hierarchy: Organize the blackboard into levels (raw data \u2192 features \u2192 hypotheses \u2192 solutions). Each level represents increasing abstraction of the problem domain.",
     "Condition-Action Separation: Each KS should clearly separate its applicability condition (when it can contribute) from its action (what it contributes). This enables flexible control strategies.",
     "Non-Deterministic Execution Acceptance: Embrace the fact that different runs may produce different paths to solutions. Design for convergence, not reproducibility.",
     "Hypothesis Validation: Implement explicit mechanisms for hypothesis strengthening and weakening based on evidence. This provides fault tolerance and progressive refinement."

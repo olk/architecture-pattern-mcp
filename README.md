@@ -5,7 +5,7 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![M8ven Score](https://m8ven.ai/badge/mcp/olk-architecture-pattern-mcp-1x6yt9)](https://m8ven.ai/mcp/olk-architecture-pattern-mcp-1x6yt9)
 
-An MCP (Model Context Protocol) server that provides architecture design expertise to AI coding agents. Given a requirements string and a domain, it analyses the problem, selects matching architecture patterns (from 36 built-in patterns), generates a concrete architecture design with components, relationships, API contracts, data models, and event contracts, and evaluates it against quality attributes (maintainability, scalability, reliability, security, performance).
+An MCP (Model Context Protocol) server that provides architecture design expertise to AI coding agents. Given a requirements string and a domain, it analyses the problem, selects matching architecture patterns (from 40 built-in patterns), generates a concrete architecture design with components, relationships, API contracts, data models, and event contracts, and evaluates it against quality attributes (maintainability, scalability, reliability, security, performance).
 
 ---
 
@@ -167,7 +167,7 @@ Call evaluate_architecture with:
   architecture: { ... paste a design dict here ... }
   criteria: "scalability, reliability"
 
-Call list_architecture_patterns()  # all 36 patterns
+Call list_architecture_patterns()  # all 40 patterns
 Call list_architecture_patterns(category="messaging")  # filter by category
 Call get_architecture_pattern(name="event-driven")   # full pattern JSON
 ```
@@ -267,7 +267,7 @@ Show me details about the event-driven architecture pattern.
 | `submit_architecture_design_job` | Start a background design job and return a `job_id` immediately. **ONLY for clients with short request timeouts** (Cursor, Claude Desktop, TS-SDK). For other clients use `design_architecture`. Poll `get_architecture_design_status` every 10–30 s. |
 | `get_architecture_design_status` | Poll job status. Returns the current status, progress message, and the full design output when `completed`. |
 | `cancel_architecture_design` | Cancel a running job (best-effort; takes effect at the next pipeline stage boundary; may take up to one LLM call). |
-| `list_architecture_patterns` | List all 36 patterns; filter by `category` and/or `domain` |
+| `list_architecture_patterns` | List all 40 patterns; filter by `category` and/or `domain` |
 | `get_architecture_pattern` | Get full JSON for a specific pattern by name |
 
 
@@ -324,7 +324,7 @@ Clients that only support the tools protocol (no native `prompts/list` or `promp
 ### Via MCP tools (recommended — works in all clients)
 
 ```
-list_architecture_patterns()                                  # all 36 patterns
+list_architecture_patterns()                                  # all 40 patterns
 list_architecture_patterns(category="messaging")               # filter by category
 list_architecture_patterns(domain="microservices")            # filter by domain
 get_architecture_pattern(name="event-driven")                 # full pattern JSON
@@ -490,7 +490,7 @@ The server reads `~/.config/architecture-pattern-mcp/config.json` (override with
 
 ## Extending with Custom Patterns
 
-Pattern files are loaded from `~/.config/architecture-pattern-mcp/pattern/` (configurable via `PATTERN_DIRECTORY`). Drop a JSON file alongside the 36 built-in patterns.
+Pattern files are loaded from `~/.config/architecture-pattern-mcp/pattern/` (configurable via `PATTERN_DIRECTORY`). Drop a JSON file alongside the 40 built-in patterns.
 
 **Minimal pattern structure:**
 

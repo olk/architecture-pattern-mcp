@@ -91,7 +91,7 @@
   ],
   "migration_to": [
     "event-sourcing",
-    "CQRS",
+    "command-query-responsibility-segregation",
     "service-mesh"
   ],
   "design_principles": [

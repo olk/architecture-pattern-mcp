@@ -95,14 +95,14 @@
     "Chatty modules: Modules that are too interdependent, indicating incorrect boundaries"
   ],
   "migration_from": [
-    "monolithic (traditional big ball of mud)",
-    "layered-monolith (technical layering without domain boundaries)",
-    "big-ball-of-mud architecture"
+    "monolithic",
+    "layered-monolith",
+    "big-ball-of-mud-architecture"
   ],
   "migration_to": [
-    "microservices (via strangler fig pattern or branch by abstraction)",
-    "microkernel (plugin-based architecture via plugin extraction)",
-    "event-driven architecture (via event broker introduction)"
+    "microservices",
+    "microkernel",
+    "event-driven"
   ],
   "design_principles": [
     "Domain Module Isolation: Each module encapsulates its own domain logic, entities, and services. Independent module directories with clear ownership ensure that changes to one domain don't ripple through others.",

@@ -36,7 +36,7 @@
   ],
   "unsuitable_domains": [
     "monolith-or-fewer-than-3-services",
-    "single-client,-single-service",
+    "single-client-single-service",
     "low-latency-requirements-that-cannot-tolerate-additional-hop",
     "small-teams-without-dedicated-infrastructure-ops",
     "internal-services-where-direct-communication-suffices"
@@ -87,20 +87,20 @@
     "Monolithic Gateway Config: one giant gateway handling everything instead of BFF split"
   ],
   "migration_from": [
-    "direct client-to-service communication",
-    "per-service authentication libraries",
-    "scattered logging without centralized access logs",
-    "monolith with embedded routing logic"
+    "direct-client-to-service-communication",
+    "per-service-authentication-libraries",
+    "scattered-logging-without-centralized-access-logs",
+    "monolith-with-embedded-routing-logic"
   ],
   "migration_to": [
-    "service mesh (Istio, Linkerd) for east-west traffic management",
-    "BFF pattern for complex client-specific aggregation",
-    "GraphQL federation for API composition",
-    "Serverless functions behind gateway for specific use cases"
+    "service-mesh-(istio--linkerd)-for-east-west-traffic-management",
+    "bff-pattern-for-complex-client-specific-aggregation",
+    "graphql-federation-for-api-composition",
+    "serverless-functions-behind-gateway-for-specific-use-cases"
   ],
   "design_principles": [
     "Single Responsibility: Gateway handles cross-cutting concerns only; business logic belongs in services",
-    "Keep It Thin: Authentication, rate limiting, routing, observability — no business logic",
+    "Keep It Thin: Authentication, rate limiting, routing, observability \u2014 no business logic",
     "Validate JWTs Once: Pass verified identity downstream via headers; services trust gateway authentication",
     "Design for Failure: Implement circuit breakers, timeouts, and fallbacks; deploy in active-active clusters",
     "High Availability: Deploy multiple gateway instances with health checks and auto-scaling",

@@ -89,13 +89,13 @@
     "Neglecting observability and monitoring setup"
   ],
   "migration_from": [
-    "monolith",
-    "layered-architecture",
+    "monolithic",
+    "layered-monolith",
     "traditional-caching-layers"
   ],
   "migration_to": [
     "event-driven",
-    "cqrs",
+    "command-query-responsibility-segregation",
     "microservices"
   ],
   "design_principles": [

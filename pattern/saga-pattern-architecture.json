@@ -91,7 +91,7 @@
     "distributed-transaction"
   ],
   "migration_to": [
-    "event-driven-architecture",
+    "event-driven",
     "workflow-engine",
     "service-mesh"
   ],

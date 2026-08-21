@@ -1,0 +1,131 @@
+{
+  "name": "master-slave",
+  "category": "coordination",
+  "context": "Distributed computing systems where a designated master node coordinates work distribution, task scheduling, and result aggregation across a pool of worker slave nodes. The master owns the global state and decision-making; slaves execute tasks delegated to them and report results. This pattern is particularly suited to batch processing, parallel computation, and compute-intensive workloads where the work can be cleanly partitioned. While the terminology is contested in modern systems (leader-follower, primary-replica are common alternatives), the architectural shape \u2014 a coordinator plus workers \u2014 remains a fundamental tool for distributing computational work. The pattern scales horizontally by adding slave nodes, and the master can itself be replicated for high availability.",
+  "benefits": [
+    "Simple coordination model: a single decision-maker eliminates conflicts and inconsistent scheduling choices",
+    "Horizontal scalability: adding slaves linearly increases throughput for partitionable workloads",
+    "Clear separation of concerns: master handles scheduling and fault management; slaves focus purely on task execution",
+    "Load balancing: master can route tasks to the least-loaded or most-capable slave",
+    "Fault tolerance through master replication: the master role can be replicated using consensus protocols for HA",
+    "Work isolation: slave failures are contained; the master reassigns a failed slave's work without disrupting other tasks",
+    "Deterministic task routing: tasks are processed in known order, simplifying debugging and reproducibility"
+  ],
+  "tradeoffs": [
+    "Master as bottleneck: a single master serializes scheduling decisions; at extreme scale, this becomes a throughput ceiling",
+    "Single point of failure: without master replication, master failure halts all processing",
+    "Network dependency for coordination: every task passes through the master for assignment and result collection",
+    "Slave resource heterogeneity: if slaves have different capabilities, naive load balancing leads to inefficiencies",
+    "Batch-oriented by nature: not well-suited to fine-grained, low-latency request-response workloads",
+    "Master knowledge of overall state: master must maintain sufficient state to make scheduling decisions, consuming memory",
+    "Network latency in task distribution: slaves may sit idle while waiting for the next task assignment over the network"
+  ],
+  "quality_attributes": {
+    "scalability": 8,
+    "maintainability": 5,
+    "reliability": 7,
+    "security": 5,
+    "performance": 8,
+    "simplicity": 5
+  },
+  "suitable_domains": [
+    "batch-processing",
+    "data-pipelines",
+    "cpu-bound-computation",
+    "distributed-data-pipelines",
+    "high-throughput-streaming",
+    "cpu-bound-computation",
+    "media-processing",
+    "image-processing",
+    "gaming-servers",
+    "compiler-toolchains",
+    "big-data-analytics"
+  ],
+  "unsuitable_domains": [
+    "low-latency-required",
+    "sub-millisecond-response-requirements",
+    "real-time-deterministic",
+    "low-concurrency-systems",
+    "simple-crud",
+    "event-driven-workflows",
+    "collaborative-applications",
+    "iot-sensor-data"
+  ],
+  "use_cases": [
+    "A distributed map-reduce job where a master node partitions a large dataset and assigns map tasks to worker nodes",
+    "A video encoding cluster where a master distributes encoding tasks to available slave nodes and aggregates completed files",
+    "A parallel database query engine where the coordinator parses queries and distributes execution fragments to worker processes",
+    "A build farm where a master node distributes compilation tasks across a pool of build agents"
+  ],
+  "avoid_when": [
+    "Sub-millisecond response times are required and task distribution latency is unacceptable",
+    "The workload is request-response rather than batch-oriented; the coordination overhead is disproportionate",
+    "Slaves are geographically distributed with high network latency between master and workers",
+    "The problem has no natural decomposition into independent tasks; subtasks have tight data dependencies",
+    "Maximum fault tolerance is required \u2014 master replication adds complexity that may exceed the SLA requirements"
+  ],
+  "component_types": [
+    "Master (Coordinator): Owns global task queue, scheduling policy, and result aggregation; makes all routing decisions",
+    "Slave (Worker): Executes assigned tasks; reports results or heartbeats back to the master; operates autonomously between assignments",
+    "Task Queue: The master draws from a queue of work units to distribute to slaves; can be centralized or partitioned",
+    "Heartbeat Monitor: Master tracks slave health through periodic heartbeats; detects failures and reassigns orphaned tasks",
+    "Result Aggregator: Collects and combines partial results from slaves into a final output",
+    "Scheduler: Policy engine deciding which slave receives which task; supports strategies like round-robin, least-loaded, or data-locality-aware",
+    "Failover Controller: Manages master replication and election when using consensus-based HA"
+  ],
+  "technology_stack": [
+    "Hadoop YARN",
+    "Apache Spark",
+    "Kubernetes Jobs",
+    "Ray",
+    "Celery",
+    "Gearman",
+    "DRBD",
+    "Corosync",
+    "Pacemaker",
+    "ZooKeeper",
+    "etcd",
+    "Consul",
+    "Redis (for distributed queues)",
+    "Beanstalkd",
+    "NATS",
+    "MPICH",
+    "OpenMPI"
+  ],
+  "anti_patterns": [
+    "Master as Data Router: the master not only schedules but also passes large data through itself, becoming a bandwidth bottleneck",
+    "Stateless Slaves That Are Not: slaves maintaining hidden shared state, causing non-deterministic results when tasks collide",
+    "Fire-and-Forget Tasks: assigning tasks without result acknowledgment, leading to silent failures and incomplete computation",
+    "Unbounded Task Queues: task queue grows faster than slaves can consume it, leading to memory exhaustion and missed deadlines",
+    "Coarse-Grained Decomposition: defining too few large tasks that leave most slaves idle while a few slaves do all the work",
+    "Master Heartbeat as Single Point of Contention: excessive heartbeat frequency creates network overhead that degrades task throughput"
+  ],
+  "migration_from": [
+    "monolithic",
+    "layered-monolith",
+    "pipe-and-filter"
+  ],
+  "migration_to": [
+    "actor-based",
+    "event-driven",
+    "space-based"
+  ],
+  "design_principles": [
+    "Idempotent Task Execution: tasks can be safely retried if a slave fails mid-execution; results are reproducible",
+    "Data Locality Awareness: schedule tasks on slaves that already hold the data they need, minimizing network transfer",
+    "Heartbeat-Based Failure Detection: detect slave failures within a bounded time window; too-aggressive heartbeats waste bandwidth",
+    "Master Replication for HA: use a consensus protocol so that master failure triggers automatic election of a new master without human intervention",
+    "Backpressure at the Task Queue: when all slaves are busy, the task queue must exert backpressure on producers to prevent unbounded growth",
+    "Task Result Durability: results should be written durably before the master is notified; slave crashes after computation but before reporting require recomputation handling",
+    "Graceful Degradation: when some slaves are slow or failed, return partial results if possible rather than failing the entire job"
+  ],
+  "best_practices": [
+    "Partition Work Evenly: measure task execution times and rebalance if variance is high; stragglers (slow slaves) can bottleneck the entire job",
+    "Separate Data from Computation: store data in a distributed filesystem (HDFS, S3) and schedule tasks where the data lives",
+    "Implement Speculative Execution: when a slave appears to be straggling, duplicate its task on another slave and take the first result",
+    "Make Tasks Coarse-Grained: amortize the coordination overhead of task assignment over meaningful computation; thousands of tiny tasks create coordination overhead",
+    "Persist Task State Outside the Master: store work queue and results in a durable external store so that master restart does not lose in-flight work",
+    "Use Leader Election for Master HA: ZooKeeper, etcd, or Consul can provide distributed consensus for master failover",
+    "Monitor Slave Utilization: track CPU, memory, and task completion rates per slave; an idle slave indicates a scheduling or data locality problem"
+  ]
+}

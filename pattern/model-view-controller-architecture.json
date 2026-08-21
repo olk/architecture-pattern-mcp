@@ -97,7 +97,7 @@
     "microservices",
     "event-driven",
     "clean-architecture",
-    "layered-architecture"
+    "layered-monolith"
   ],
   "design_principles": [
     "Separation of Concerns: Model handles business logic, View handles presentation, Controller handles coordination",
@@ -111,7 +111,7 @@
   "best_practices": [
     "Keep Controllers Lean: Controller should handle request routing, not business logic",
     "Single Entity Per Repository: Maintain cohesion by isolating data access per entity",
-    "Limit Controller Dependencies: Aim for ≤3 service dependencies per controller",
+    "Limit Controller Dependencies: Aim for \u22643 service dependencies per controller",
     "Use Passive Model: Let Controller update Model rather than Model notifying View",
     "Apply RESTful Routing: Map URLs cleanly to Controller actions",
     "Validate Early: Implement server-side validation in Controller before Model updates",

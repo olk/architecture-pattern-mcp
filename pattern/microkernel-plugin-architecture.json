@@ -92,9 +92,9 @@
     "modular-monolith"
   ],
   "migration_to": [
-    "microservices (when plugins need independent scaling)",
-    "event-driven (when plugin communication via events)",
-    "modular-monolith (if plugin interdependencies emerge)"
+    "microservices",
+    "event-driven",
+    "modular-monolith"
   ],
   "design_principles": [
     "Keep the core minimal: Core should be < 500 LOC ideally; any logic that could be plugin-specific should be in a plugin",

@@ -1,0 +1,121 @@
+{
+  "name": "strangler-fig",
+  "category": "specialized",
+  "context": "Evolving large monolithic systems where incremental migration to a modern architecture is required without risking big-bang rewrites. The pattern enables gradual, low-risk replacement of specific modules or capabilities of a monolithic application by incrementally routing traffic to new services, validating behavior, and ultimately decommissioning the old implementation. It is particularly valuable when the monolith cannot be taken offline, when business functionality must remain continuously available, and when the team needs to gain confidence in the new approach before expanding its scope. The core idea is to place a facade (the strangler fig vine) between the legacy monolith and its consumers, intercepting requests and routing them to either the old or new implementation based on which functionality has been migrated.",
+  "benefits": [
+    "Risk mitigation through incremental delivery: each migration step is small, reversible, and independently testable",
+    "Continuous availability: the monolith stays live throughout the migration; no big-bang cutover risk",
+    "Business continuity: existing users are never forced onto an all-or-nothing new system",
+    "Learning and validation: real traffic validates new implementations before full commitment",
+    "Team upskilling: teams learn microservices patterns and operational concerns gradually",
+    "Flexible scope management: pause, accelerate, or extend migration based on business conditions",
+    "Reduced integration risk: new services are production-tested in shadow mode before taking over"
+  ],
+  "tradeoffs": [
+    "Temporary dual maintenance: both old and new code run simultaneously during migration, doubling operational surface",
+    "Increased complexity: the strangler facade must correctly route traffic and handle protocol translation between old and new",
+    "Long-lived migration projects: without discipline, strangler migrations become permanent infrastructure debt",
+    "Facade coupling: the strangler gateway can become a bottleneck or single point of failure if not designed carefully",
+    "Performance overhead: routing through a facade adds latency to every intercepted request",
+    "Inconsistent user experience: users may interact with both old and new systems during migration, requiring careful UX consistency management",
+    "Testing complexity: must validate that old and new produce identical results for migrated functionality"
+  ],
+  "quality_attributes": {
+    "scalability": 7,
+    "maintainability": 8,
+    "reliability": 7,
+    "security": 6,
+    "performance": 5,
+    "simplicity": 5
+  },
+  "suitable_domains": [
+    "legacy-modernization",
+    "startups-early-stage",
+    "enterprise-applications",
+    "e-commerce-platforms",
+    "banking-and-finance",
+    "long-lived-applications",
+    "organizations-with-separate-client-teams"
+  ],
+  "unsuitable_domains": [
+    "greenfield-projects-with-no-legacy-constraints",
+    "simple-crud-applications",
+    "small-teams",
+    "low-budget",
+    "startup-pocs",
+    "fixed-predictable-volumes"
+  ],
+  "use_cases": [
+    "Decomposing a decade-old e-commerce monolith into domain-aligned microservices over 18-24 months without service interruption",
+    "Migrating a core banking system's calculation engine to a cloud-native service while maintaining 24/7 availability",
+    "Replacing a monolithic ERP module with a modern SaaS equivalent, with the strangler gateway managing the transition period",
+    "Gradually adopting event-driven patterns in a legacy order management system, routing traffic feature by feature"
+  ],
+  "avoid_when": [
+    "The monolith is tightly coupled at the data layer and cannot be decomposed without rewriting shared databases",
+    "The legacy system uses obsolete protocols (COBOL, mainframe-specific) that are difficult to proxy",
+    "The migration must be completed in a single release window for regulatory reasons",
+    "The team lacks any operational maturity for running dual systems",
+    "The monolith is small enough that a full rewrite would be faster and cheaper than incremental migration"
+  ],
+  "component_types": [
+    "Strangler Gateway: Facade intercepting all requests, routing to old or new based on migration state",
+    "Legacy Monolith: The existing application being gradually replaced; remains fully functional throughout migration",
+    "New Service: Modern implementation replacing a specific capability of the monolith",
+    "Migration Registry: Tracking which features have been migrated and their target service endpoints",
+    "Traffic Splitter: Configuration-driven component that determines routing rules for each request",
+    "Dual-Write Handler: Ensures both old and new systems stay consistent during parallel operation",
+    "Decommission Checklist: Documented steps for removing old capability once new is validated in production"
+  ],
+  "technology_stack": [
+    "Nginx",
+    "Kong",
+    "Envoy",
+    "Apache APISIX",
+    "AWS API Gateway",
+    "Azure API Management",
+    "Zuul",
+    "Spring Cloud Gateway",
+    "Express Gateway",
+    "HAProxy",
+    "Kubernetes Ingress",
+    "Service Mesh (Istio, Linkerd)"
+  ],
+  "anti_patterns": [
+    "Big-bang rewrite disguised as strangler fig: calling incremental work a strangler migration but rewriting everything at once",
+    "Forever-strangler: leaving the facade in place indefinitely, accumulating routing logic that becomes a maintenance burden",
+    "Silent degradation: new service takes over a capability but returns subtly different results; users notice before monitoring does",
+    "Database coupling through the facade: routing requests but sharing the same database, creating tight coupling that defeats decomposition benefits",
+    "Skipping the decommission step: never removing the old capability from the monolith, doubling maintenance burden permanently",
+    "Migrating the wrong things first: prioritizing technically interesting rather than high-value capabilities, wasting early momentum"
+  ],
+  "migration_from": [
+    "monolithic",
+    "modular-monolith",
+    "layered-monolith",
+    "service-oriented-architecture"
+  ],
+  "migration_to": [
+    "microservices",
+    "event-driven",
+    "modular-monolith"
+  ],
+  "design_principles": [
+    "Increment Over Perfection: Migrate capability by capability; each step is independently deployable and reversible",
+    "Behavioral Equivalence: New implementation must produce behavior indistinguishable from old for existing users",
+    "Facade Isolation: The strangler gateway knows nothing about internal logic; it only routes based on migration state",
+    "Database Divorce First: Each migrated capability should own its data; shared databases are the primary obstacle to successful strangler migrations",
+    "Observability Everywhere: Both old and new must emit comparable metrics so comparison and validation are possible",
+    "Commissioning and Decommissioning Are Formal Steps: Migrating a capability includes a documented go/no-go checklist before removing old code",
+    "Traffic Shadowing Before Switch: Run new implementation in shadow mode with real traffic before fully routing to it"
+  ],
+  "best_practices": [
+    "Start with a High-Value, Low-Risk Capability: Choose a module that is well-understood, has clear boundaries, and matters to the business",
+    "Instrument Both Systems Identically: Before starting, ensure metrics and logging from old and new are directly comparable",
+    "Use Feature Flags for Granular Control: Each migration unit is controllable via configuration, enabling instant rollback",
+    "Implement Synthetic Traffic Validation: Automated tests that replay production requests against both old and new, asserting equivalence",
+    "Set Migration Timeboxes: A capability migration that takes longer than a quarter loses momentum and becomes technical debt",
+    "Budget for Dual Operational Costs: Running two systems simultaneously has real cost; factor it into the business case",
+    "Document the Decommission Checklist Before Starting: Know what 'done' looks like for each migrated capability before you begin"
+  ]
+}

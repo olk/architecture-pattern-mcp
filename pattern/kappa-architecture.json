@@ -91,19 +91,19 @@
     "Shared database across stream processing jobs (distributed monolith)"
   ],
   "migration_from": [
-    "Lambda Architecture"
+    "lambda-architecture"
   ],
   "migration_to": [
-    "Event-driven microservices",
-    "CQRS (Command Query Responsibility Segregation)",
-    "Event Sourcing"
+    "event-driven",
+    "command-query-responsibility-segregation",
+    "event-sourcing"
   ],
   "design_principles": [
     "Log as Source of Truth: Treat the immutable event log (Kafka/Pulsar) as the single source of truth. All historical data resides in the log; there is no separate batch store.",
     "Unified Processing Paradigm: Express all processing logic as streaming operations. If batch and streaming logic are fundamentally different, consider Lambda instead.",
-    "Replayability First: Size log retention to cover your worst-case reprocessing window. Calculate max(replay time) × safety_factor (2x) before setting retention policies.",
+    "Replayability First: Size log retention to cover your worst-case reprocessing window. Calculate max(replay time) \u00d7 safety_factor (2x) before setting retention policies.",
     "Semantic Preservation: Processing logic must produce identical results whether processing live events or replaying historical data. Preserve event-time semantics, watermarks, and windowing.",
-    "Atomic Cutover: When deploying new processing logic, run新旧 versions in parallel until new version catches up, then atomically switch serving layer.",
+    "Atomic Cutover: When deploying new processing logic, run\u65b0\u65e7 versions in parallel until new version catches up, then atomically switch serving layer.",
     "Schema Evolution: Use Schema Registry with backward/forward compatibility rules. Historical events must deserialize correctly in future job versions.",
     "Separation of Concerns: Keep reprocessing jobs on separate cluster resources from live processing to prevent resource starvation."
   ],

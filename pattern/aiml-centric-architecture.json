@@ -55,7 +55,7 @@
   "component_types": [
     "Feature Store: Centralized feature repository for training and serving with offline (batch) and online (real-time) stores. Solves training-serving skew by providing consistent feature computation.",
     "Model Registry: Versioned model artifacts with metadata, lineage tracking, and lifecycle stage management. Acts as single source of truth for all production models.",
-    "Training Pipeline: Automated ML workflow orchestrating data ingestion → feature extraction → training → evaluation → registration with CI/CD integration.",
+    "Training Pipeline: Automated ML workflow orchestrating data ingestion \u2192 feature extraction \u2192 training \u2192 evaluation \u2192 registration with CI/CD integration.",
     "Model Serving: Infrastructure for real-time and batch inference with monitoring, auto-scaling, and rollback capabilities.",
     "ML Platform: Self-serve infrastructure providing data scientists with experiment tracking, compute resources, and deployment tools.",
     "Experiment Tracking: System for logging training runs, parameters, metrics, and artifacts for reproducibility and comparison.",
@@ -123,12 +123,12 @@
     "Feature Engineering Debt: duplicating feature logic across training and serving codebases"
   ],
   "migration_from": [
-    "monolith",
+    "monolithic",
     "layered-monolith"
   ],
   "migration_to": [
     "compound-ai-systems",
-    "event-driven-architecture",
+    "event-driven",
     "serverless-ml",
     "microservices-orchestration"
   ],

@@ -109,7 +109,7 @@
     "hybrid-cloud"
   ],
   "migration_to": [
-    "hybrid-multi-cloud",
+    "multi-cloud",
     "unified-platform",
     "event-driven",
     "service-mesh"
