@@ -270,7 +270,6 @@ Show me details about the event-driven architecture pattern.
 | `list_architecture_patterns` | List all 36 patterns; filter by `category` and/or `domain` |
 | `get_architecture_pattern` | Get full JSON for a specific pattern by name |
 
-> **Note:** `start_design_architecture` is a deprecated alias for `submit_design_job` — it returns a rename notice instead of executing. It will be removed in the next minor version.
 
 **Domain and Style are structured parameters** — pass them as separate tool arguments, not embedded in the requirements text.
 
@@ -288,6 +287,12 @@ Domain: e-commerce. Style: microservices.
 
 ```
 Show me details about the blackboard pattern.
+```
+
+```
+Call design_architecture with:
+  requirements: "ETL pipeline for IoT: Kafka → JSON → Redis geo-enrich → InfluxDB + S3"
+  domain: "data-processing"
 ```
 
 ---
