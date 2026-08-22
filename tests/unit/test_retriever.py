@@ -183,6 +183,7 @@ class TestRetrieveFallbackMissing:
             bm25_index=MockBM25Index(),
             vector_index=MockVectorIndex(),
             pattern_loader=loader,
+            reranker_config=MagicMock(base_url="http://localhost:8080", timeout=30.0),
         )
         retriever._dense_retriever = MagicMock()
         retriever._bm25_retriever = MagicMock()
@@ -193,10 +194,20 @@ class TestRetrieveFallbackMissing:
         ]
         retriever._bm25_retriever.retrieve.return_value = []
 
-        result = retriever.retrieve(
-            user_domain="nonexistent-domain",
-            normalized_domain="nonexistent-domain",
-        )
+        class _DummyReranker:
+            top_n = 1
+
+            def postprocess_nodes(self, nodes, query_bundle=None):
+                return nodes
+
+        with patch(
+            "src.patterns.retriever.TextEmbeddingInference",
+            return_value=_DummyReranker(),
+        ):
+            result = retriever.retrieve(
+                user_domain="nonexistent-domain",
+                normalized_domain="nonexistent-domain",
+            )
 
         assert result.patterns == []
         assert result.matched_domains == []
@@ -323,7 +334,14 @@ class TestRetrievalLogging:
         ]
         retriever._bm25_retriever.retrieve.return_value = []
 
-        with caplog.at_level(logging.INFO, logger="src.patterns.retriever"):
+        class _DummyReranker:
+            top_n = 1
+
+            def postprocess_nodes(self, nodes, query_bundle=None):
+                return nodes
+
+        with caplog.at_level(logging.INFO, logger="src.patterns.retriever"), \
+             patch("src.patterns.retriever.TextEmbeddingInference", return_value=_DummyReranker()):
             retriever.retrieve(user_domain="microservices", normalized_domain="microservices")
 
         dense_logs = [r for r in caplog.records if r.levelno == logging.INFO and getattr(r, "stage", None) == "dense"]
@@ -344,7 +362,14 @@ class TestRetrievalLogging:
             NodeWithScore(node=TextNode(text="y", metadata={"slug": "event-driven"}), score=0.65),
         ]
 
-        with caplog.at_level(logging.INFO, logger="src.patterns.retriever"):
+        class _DummyReranker:
+            top_n = 1
+
+            def postprocess_nodes(self, nodes, query_bundle=None):
+                return nodes
+
+        with caplog.at_level(logging.INFO, logger="src.patterns.retriever"), \
+             patch("src.patterns.retriever.TextEmbeddingInference", return_value=_DummyReranker()):
             retriever.retrieve(user_domain="microservices", normalized_domain="microservices")
 
         bm25_logs = [r for r in caplog.records if r.levelno == logging.INFO and getattr(r, "stage", None) == "bm25"]
@@ -372,11 +397,10 @@ class TestRetrievalLogging:
         assert len(fusion_logs) >= 1
         assert getattr(fusion_logs[0], "mode", None) == "reciprocal_rerank"
 
-    def test_rerank_emits_info_log_when_enabled(
+    def test_rerank_emits_info_log(
         self, retriever_with_mocks: HybridPatternRetriever, caplog: pytest.LogCaptureFixture
     ) -> None:
-        """Stage 4: Reranking emits INFO when enable_reranking=True."""
-        retriever_with_mocks._enable_reranking = True
+        """Stage 4: Reranking emits INFO."""
         retriever = retriever_with_mocks
         retriever._dense_retriever = MagicMock()
         retriever._bm25_retriever = MagicMock()

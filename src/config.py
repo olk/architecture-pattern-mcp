@@ -108,7 +108,6 @@ class RerankerInnerConfig(BaseModel):
 class RerankerConfig(BaseModel):
     """Reranker provider configuration."""
 
-    enabled: bool = False
     config: RerankerInnerConfig | None = None
 
 
@@ -147,6 +146,8 @@ class RetrievalConfig(BaseModel):
             weight_smoothing_alpha=1.0
     """
 
+    model_config = ConfigDict(extra="forbid")
+
     bm25_top_k: int = Field(0, ge=0, le=1000)
     dense_top_k: int = Field(0, ge=0, le=1000)
     top_k_patterns: int = Field(5, ge=1, le=100)
@@ -159,17 +160,19 @@ class RetrievalConfig(BaseModel):
             "downstream via style_score_threshold (0-100 scale)."
         )
     )
-    enable_reranking: bool = False
     rerank_top_n: int = Field(
         10, ge=1, le=100,
         description=(
             "Max candidates kept AFTER cross-encoder reranking. Bounds the slug "
             "pool fed to pattern resolution and matched_domains reporting. "
-            "Reranker scoring itself remains lossless. Ignored when "
-            "enable_reranking=False."
+            "Reranker scoring itself remains lossless."
         ),
     )
-    reranker: RerankerConfig | None = None
+    reranker: RerankerConfig = Field(
+        default_factory=lambda: RerankerConfig(
+            config=RerankerInnerConfig(base_url="http://pattern-tei-rerank:8080")
+        )
+    )
     min_quality_score: float = Field(
         50.0, ge=0.0, le=100.0,
         description=(
@@ -239,17 +242,16 @@ class RetrievalConfig(BaseModel):
         return self
 
     @model_validator(mode="after")
-    def _check_reranker_required_when_enabled(self) -> "RetrievalConfig":
-        if self.enable_reranking and (
+    def _check_reranker_configured(self) -> "RetrievalConfig":
+        if (
             self.reranker is None
             or self.reranker.config is None
-            or not self.reranker.enabled
+            or not self.reranker.config.base_url.strip()
         ):
             raise ValueError(
-                "enable_reranking=True requires retrieval.reranker.enabled=True "
-                "with a non-empty RerankerInnerConfig.base_url. Set "
-                "RERANKER_ENABLED=true and RERANKER_BASE_URL, and ensure the "
-                "deployed config.json contains the retrieval.reranker block "
+                "Reranking is mandatory; `retrieval.reranker.config.base_url` "
+                "must be a non-empty URL. Set RERANKER_BASE_URL and ensure the "
+                "deployed config.json contains the `retrieval.reranker` block "
                 "(an outdated config file copied from an older image may omit it)."
             )
         return self

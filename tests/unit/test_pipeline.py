@@ -474,10 +474,20 @@ class TestPipelinePhases:
         """FR-214: ANALYZE phase filters patterns by domain."""
         pipeline = create_test_pipeline()
 
-        result = await pipeline.analyze(
-            requirements="Need scalable distributed system",
-            domain="microservices"
-        )
+        class _DummyReranker:
+            top_n = 1
+
+            def postprocess_nodes(self, nodes, query_bundle=None):
+                return nodes
+
+        with patch(
+            "src.patterns.retriever.TextEmbeddingInference",
+            return_value=_DummyReranker(),
+        ):
+            result = await pipeline.analyze(
+                requirements="Need scalable distributed system",
+                domain="microservices"
+            )
 
         assert isinstance(result, AnalysisResult)
         assert len(result.selected_patterns) > 0
@@ -719,10 +729,21 @@ class TestAnalyzeScoring:
     async def test_analyze_injects_scores_and_selects_top_k(self):
         """analyze() injects analysis_score, sorts, and truncates to top_k_patterns."""
         pipeline = create_test_pipeline()  # default top_k_patterns=5
-        result = await pipeline.analyze(
-            requirements="Need scalable distributed system",
-            domain="microservices",
-        )
+
+        class _DummyReranker:
+            top_n = 1
+
+            def postprocess_nodes(self, nodes, query_bundle=None):
+                return nodes
+
+        with patch(
+            "src.patterns.retriever.TextEmbeddingInference",
+            return_value=_DummyReranker(),
+        ):
+            result = await pipeline.analyze(
+                requirements="Need scalable distributed system",
+                domain="microservices",
+            )
         assert len(result.selected_patterns) > 0
         for p in result.selected_patterns:
             assert "analysis_score" in p
@@ -736,10 +757,21 @@ class TestAnalyzeScoring:
     async def test_analyze_llm_receives_no_patterns_in_prompt(self):
         """The weight-extraction prompt must NOT contain pattern data (C3)."""
         pipeline = create_test_pipeline()
-        await pipeline.analyze(
-            requirements="Need scalable distributed system",
-            domain="microservices",
-        )
+
+        class _DummyReranker:
+            top_n = 1
+
+            def postprocess_nodes(self, nodes, query_bundle=None):
+                return nodes
+
+        with patch(
+            "src.patterns.retriever.TextEmbeddingInference",
+            return_value=_DummyReranker(),
+        ):
+            await pipeline.analyze(
+                requirements="Need scalable distributed system",
+                domain="microservices",
+            )
         # The first (and only) generate_structured call in analyze is the
         # RequirementWeights extraction. Its user prompt must not embed
         # candidate pattern names / quality_attributes.
@@ -762,10 +794,20 @@ class TestPatternFlow:
         """AC-214: Verify ANALYZE filters patterns correctly."""
         pipeline = create_test_pipeline()
 
-        result = await pipeline.analyze(
-            requirements="Distributed system needed",
-            domain="cloud-native"
-        )
+        class _DummyReranker:
+            top_n = 1
+
+            def postprocess_nodes(self, nodes, query_bundle=None):
+                return nodes
+
+        with patch(
+            "src.patterns.retriever.TextEmbeddingInference",
+            return_value=_DummyReranker(),
+        ):
+            result = await pipeline.analyze(
+                requirements="Distributed system needed",
+                domain="cloud-native"
+            )
 
         assert len(result.selected_patterns) > 0
 
@@ -1146,7 +1188,17 @@ class TestDomainNormalization:
         """IC-31: Verify domain is normalized during ANALYSIS."""
         pipeline = create_test_pipeline()
 
-        await pipeline.analyze("Requirements", "Cloud Native")
+        class _DummyReranker:
+            top_n = 1
+
+            def postprocess_nodes(self, nodes, query_bundle=None):
+                return nodes
+
+        with patch(
+            "src.patterns.retriever.TextEmbeddingInference",
+            return_value=_DummyReranker(),
+        ):
+            await pipeline.analyze("Requirements", "Cloud Native")
 
         all_calls = pipeline._pattern_loader.filter_by_domain_calls
         assert any(
@@ -1163,10 +1215,20 @@ class TestErrorHandling:
         """Verify ANALYZE handles no matching patterns gracefully."""
         pipeline = create_test_pipeline()
 
-        result = await pipeline.analyze(
-            requirements="Requirements",
-            domain="nonexistent-domain-xyz"
-        )
+        class _DummyReranker:
+            top_n = 1
+
+            def postprocess_nodes(self, nodes, query_bundle=None):
+                return nodes
+
+        with patch(
+            "src.patterns.retriever.TextEmbeddingInference",
+            return_value=_DummyReranker(),
+        ):
+            result = await pipeline.analyze(
+                requirements="Requirements",
+                domain="nonexistent-domain-xyz"
+            )
 
         assert isinstance(result, AnalysisResult)
         assert len(result.selected_patterns) >= 0
@@ -1328,10 +1390,20 @@ class TestIntegration:
         """Test run_design() returns PipelineResult."""
         pipeline = create_test_pipeline()
 
-        refined = await pipeline.run_design(
-            requirements="Need scalable distributed system",
-            domain="microservices",
-        )
+        class _DummyReranker:
+            top_n = 1
+
+            def postprocess_nodes(self, nodes, query_bundle=None):
+                return nodes
+
+        with patch(
+            "src.patterns.retriever.TextEmbeddingInference",
+            return_value=_DummyReranker(),
+        ):
+            refined = await pipeline.run_design(
+                requirements="Need scalable distributed system",
+                domain="microservices",
+            )
 
         assert isinstance(refined, PipelineResult)
         assert isinstance(refined.design, ArchitectureDesign)

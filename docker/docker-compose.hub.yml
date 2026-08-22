@@ -40,7 +40,6 @@ services:
       - RETRIEVAL_TOP_K_PATTERNS=5
       - RETRIEVAL_MODE=reciprocal_rerank
       - RETRIEVAL_MIN_FUSION_SCORE=0.015
-      - RETRIEVAL_ENABLE_RERANKING=${RETRIEVAL_ENABLE_RERANKING:-true}
       - RETRIEVAL_RERANK_TOP_N=10
       - RETRIEVAL_USE_LEAN_WIRE_SCHEMA=false
       - RETRIEVAL_STYLE_SCORE_THRESHOLD=50.0
@@ -49,9 +48,7 @@ services:
       - RETRIEVAL_WEIGHT_SMOOTHING_ALPHA=0.7
       - RETRIEVAL_VERBOSE_TIMING=false
 
-      # Reranker — enable RETRIEVAL_ENABLE_RERANKING=true and set RERANKER_BASE_URL
-      # to point at the tei-rerank sidecar when needed.
-      - RERANKER_ENABLED=${RERANKER_ENABLED:-true}
+      # Reranker — set RERANKER_BASE_URL to point at the tei-rerank sidecar.
       - RERANKER_BASE_URL=${RERANKER_BASE_URL:-http://pattern-tei-rerank:8080}
       - RERANKER_TIMEOUT=30
 

@@ -118,7 +118,7 @@ def _summarize_nodes(nodes: list[Any], cap: int) -> dict[str, Any]:
 class HybridPatternRetriever:
     """
     Hybrid retriever using two separate retrieval legs (dense + BM25) with a
-    configurable fusion strategy and optional cross-encoder reranking.
+    configurable fusion strategy and cross-encoder reranking.
 
     The two legs receive different queries:
     - Dense leg:    raw ``user_domain`` (benefits from embedding semantics)
@@ -137,7 +137,6 @@ class HybridPatternRetriever:
         dense_top_k: int = 0,
         mode: FusionMode = "reciprocal_rerank",
         min_fusion_score: float = 0.0,
-        enable_reranking: bool = False,
         rerank_top_n: int = 10,
         reranker_config: Any | None = None,
     ) -> None:
@@ -148,7 +147,6 @@ class HybridPatternRetriever:
         self._dense_top_k = dense_top_k
         self._mode: FusionMode = mode
         self._min_fusion_score = min_fusion_score
-        self._enable_reranking = enable_reranking
         self._rerank_top_n = rerank_top_n
         self._reranker_config = reranker_config
         self._reranker: TextEmbeddingInference | None = None
@@ -183,10 +181,9 @@ class HybridPatternRetriever:
         self._bm25_retriever = self._bm25.as_retriever(top_k=bm25_k)
 
         logger.debug(
-            "Hybrid retriever initialised: mode=%s, reranking=%s, "
+            "Hybrid retriever initialised: mode=%s, "
             "dense_k=%d, bm25_k=%d (corpus=%d)",
             self._mode,
-            self._enable_reranking,
             dense_k,
             bm25_k,
             corpus_n,
@@ -205,7 +202,7 @@ class HybridPatternRetriever:
             return
         if self._reranker_config is None:
             raise RuntimeError(
-                "enable_reranking=True but no reranker_config provided"
+                "Reranking is mandatory but no reranker_config provided"
             )
         self._reranker = TextEmbeddingInference(
             base_url=self._reranker_config.base_url,
@@ -241,11 +238,10 @@ class HybridPatternRetriever:
         Find candidate patterns for user_domain using two-leg hybrid retrieval.
 
         Stage-1 (recall): returns resolved patterns with their fusion scores.
-        When reranking is enabled, the slug pool is bounded by ``rerank_top_n``
-        before pattern resolution (scoring itself is lossless). Requirements-aware
-        selection of ``top_k_patterns`` happens in the analyze phase
-        (ArchitecturePipeline), which scores each candidate against the requirements
-        and only then truncates.
+        The slug pool is bounded by ``rerank_top_n`` before pattern resolution
+        (scoring itself is lossless). Requirements-aware selection of
+        ``top_k_patterns`` happens in the analyze phase (ArchitecturePipeline),
+        which scores each candidate against the requirements and only then truncates.
 
         Args:
             user_domain:      Raw domain string from user (embedding query)
@@ -258,7 +254,7 @@ class HybridPatternRetriever:
               NOT a requirements-fit score.
             - matched_domains: top matched ArchitectureDomain slugs (max 5)
               with their fusion scores, for agent transparency.
-              When reranking is enabled, drawn from the post-cap survivor pool.
+              Drawn from the post-cap survivor pool.
         """
         self._ensure_retrievers()
         assert self._dense_retriever is not None
@@ -317,7 +313,7 @@ class HybridPatternRetriever:
         if not fused:
             return self._fallback(user_domain)
 
-        if self._enable_reranking and len(fused) > 1:
+        if len(fused) > 1:
             self._ensure_reranker()
             assert self._reranker is not None
             # Score every fused node (lossless scoring) but cap the survivor

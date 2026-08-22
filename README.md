@@ -450,7 +450,6 @@ The server reads `~/.config/architecture-pattern-mcp/config.json` (override with
 | `RETRIEVAL_TOP_K_PATTERNS` | `5` | Number of patterns to select |
 | `RETRIEVAL_MODE` | `reciprocal_rerank` | Fusion mode: `simple`, `reciprocal_rerank` |
 | `RETRIEVAL_MIN_FUSION_SCORE` | `0.0` | Minimum RRF fusion score |
-| `RETRIEVAL_ENABLE_RERANKING` | `false` | Enable reranking |
 | `RETRIEVAL_RERANK_TOP_N` | `10` | Rerank top N |
 | `RETRIEVAL_USE_LEAN_WIRE_SCHEMA` | `false` | Use lean response schema |
 | `RETRIEVAL_STYLE_SCORE_THRESHOLD` | `50.0` | Min analysis score for style recommendation |
@@ -460,7 +459,6 @@ The server reads `~/.config/architecture-pattern-mcp/config.json` (override with
 | `RETRIEVAL_VERBOSE_TIMING` | `false` | Log phase timings at INFO level |
 | `RETRIEVAL_MAX_TRIES` | `3` | Max design loop attempts |
 | `RETRIEVAL_MIN_QUALITY_SCORE` | `50.0` | Early-stop quality threshold |
-| `RERANKER_ENABLED` | `false` | Enable reranker |
 | `RERANKER_BASE_URL` | *(default reranker URL)* | TEI reranker endpoint (host:port); model is fixed to `gte-reranker-modernbert-base` |
 | `RERANKER_TIMEOUT` | `30.0` | Reranker timeout (seconds) |
 | `PATTERN_DIRECTORY` | `~/.config/architecture-pattern-mcp/pattern` | Pattern files directory |

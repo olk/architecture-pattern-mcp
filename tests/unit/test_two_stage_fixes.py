@@ -388,12 +388,12 @@ class TestT5CatalogueIntegrity:
 
 
 class TestT6RerankLossless:
-    """T6: rerank_enabled recall is lossless (issue #5: top_n was
+    """T6: rerank recall is lossless (issue #5: top_n was
     pre-truncating before scoring, violating 'select only after scoring').
     """
 
     def test_rerank_scores_all_fused_nodes(self):
-        """When rerank is enabled, the recall set size after rerank == size before."""
+        """The recall set size after rerank == size before."""
         class _MockReranker:
             def __init__(self):
                 self.top_n = 1
@@ -446,7 +446,6 @@ class TestT6RerankLossless:
             bm25_index=_MockBM25(),
             vector_index=_MockVec(),
             pattern_loader=_MockLoader(),
-            enable_reranking=True,
             rerank_top_n=1,
             reranker_config=MagicMock(base_url="http://localhost:8080", timeout=30.0),
         )
@@ -704,10 +703,9 @@ class TestT10AllZeroWeightsRetry:
 
 
 class TestRerankTopNCap:
-    """T11: rerank_top_n bounds the slug pool fed to pattern resolution when
-    reranking is enabled. Scoring itself remains lossless. The cap is only
-    honored inside the reranking branch — non-reranking deployments stay
-    fully lossless regardless of rerank_top_n.
+    """T11: rerank_top_n bounds the slug pool fed to pattern resolution.
+    Scoring itself remains lossless. The cap is always honored inside the
+    reranking branch.
     """
 
     @staticmethod
@@ -715,7 +713,6 @@ class TestRerankTopNCap:
         *,
         fused_nodes: list,
         rerank_top_n: int,
-        enable_reranking: bool,
         loader,
     ):
         """Build a retriever with mocked legs + reranker; rerank_top_n wired."""
@@ -742,7 +739,6 @@ class TestRerankTopNCap:
             bm25_index=_MockBM25(),
             vector_index=_MockVec(),
             pattern_loader=loader,
-            enable_reranking=enable_reranking,
             rerank_top_n=rerank_top_n,
             reranker_config=MagicMock(base_url="http://localhost:8080", timeout=30.0),
         )
@@ -773,7 +769,6 @@ class TestRerankTopNCap:
         retriever = self._build(
             fused_nodes=nodes,
             rerank_top_n=2,
-            enable_reranking=True,
             loader=_Loader(),
         )
 
@@ -793,47 +788,6 @@ class TestRerankTopNCap:
         assert len(result.patterns) == 2
         assert {p["name"] for p, _ in result.patterns} == {"pattern-a", "pattern-b"}
         assert {m.slug for m in result.matched_domains} == {"slug-a", "slug-b"}
-
-    def test_no_cap_when_reranking_disabled(self):
-        """When enable_reranking=False, rerank_top_n is ignored — all fused
-        nodes survive to pattern resolution (cap is rerank-scoped)."""
-
-        class _Loader:
-            _loaded = True
-
-            @staticmethod
-            def filter_by_domain(slug):
-                return [{"name": f"pattern-{slug[-1]}", "suitable_domains": [slug]}]
-
-            @staticmethod
-            def get_by_name(_n):
-                return None
-
-        nodes = [
-            NodeWithScore(node=TextNode(text="a", metadata={"slug": "slug-a"}), score=0.9),
-            NodeWithScore(node=TextNode(text="b", metadata={"slug": "slug-b"}), score=0.8),
-            NodeWithScore(node=TextNode(text="c", metadata={"slug": "slug-c"}), score=0.7),
-        ]
-        retriever = self._build(
-            fused_nodes=nodes,
-            rerank_top_n=1,
-            enable_reranking=False,
-            loader=_Loader(),
-        )
-
-        result = retriever.retrieve(user_domain="test", normalized_domain="test")
-
-        assert len(result.patterns) == 3
-        assert {p["name"] for p, _ in result.patterns} == {
-            "pattern-a",
-            "pattern-b",
-            "pattern-c",
-        }
-        assert {m.slug for m in result.matched_domains} == {
-            "slug-a",
-            "slug-b",
-            "slug-c",
-        }
 
     def test_rerank_top_n_ge_len_is_noop(self):
         """When rerank_top_n >= len(fused), the slice is a no-op."""
@@ -856,7 +810,6 @@ class TestRerankTopNCap:
         retriever = self._build(
             fused_nodes=nodes,
             rerank_top_n=10,
-            enable_reranking=True,
             loader=_Loader(),
         )
 
@@ -915,7 +868,6 @@ class TestRerankTopNCap:
         retriever = self._build(
             fused_nodes=nodes,
             rerank_top_n=1,
-            enable_reranking=True,
             loader=_Loader(),
         )
 
