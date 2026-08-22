@@ -160,7 +160,15 @@ class RetrievalConfig(BaseModel):
         )
     )
     enable_reranking: bool = False
-    rerank_top_n: int = Field(10, ge=1, le=100)
+    rerank_top_n: int = Field(
+        10, ge=1, le=100,
+        description=(
+            "Max candidates kept AFTER cross-encoder reranking. Bounds the slug "
+            "pool fed to pattern resolution and matched_domains reporting. "
+            "Reranker scoring itself remains lossless. Ignored when "
+            "enable_reranking=False."
+        ),
+    )
     reranker: RerankerConfig | None = None
     min_quality_score: float = Field(
         50.0, ge=0.0, le=100.0,

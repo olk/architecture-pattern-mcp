@@ -29,10 +29,12 @@ Stage-1 (recall) retrieval pipeline:
   4. BM25 leg:   tokenize(normalized_domain) → bm25s top-K via DomainBM25Index.as_retriever
      (bm25_top_k / dense_top_k = 0 means "full corpus" — lossless recall)
   5. Apply fusion function: simple | reciprocal_rerank | relative_score | dist_based_score
-  6. Optionally rerank with TextEmbeddingInference (cross-encoder via TEI sidecar)
+  6. Optionally rerank with TextEmbeddingInference (cross-encoder via TEI sidecar);
+     cap survivors to rerank_top_n before pattern resolution (scoring itself is lossless)
   7. Resolve each NodeWithScore.slug → patterns via PatternLoader.filter_by_domain
   8. Aggregate: pattern_score = max(fusion_score) over slugs surfacing it
-  9. Return ALL resolved patterns with fusion scores (NO top-K truncation here).
+  9. Return resolved patterns with fusion scores. When reranking is enabled,
+     the slug pool is bounded by rerank_top_n before pattern resolution.
      Requirements-aware selection of top_k_patterns happens downstream in the
      analyze phase, which scores each candidate against the requirements.
      Fallback to layered-monolith only when retrieval is genuinely empty.
@@ -238,11 +240,12 @@ class HybridPatternRetriever:
         """
         Find candidate patterns for user_domain using two-leg hybrid retrieval.
 
-        Stage-1 (recall): returns ALL resolved patterns with their fusion scores.
-        No top-K truncation is applied here — requirements-aware selection of
-        ``top_k_patterns`` happens in the analyze phase (ArchitecturePipeline),
-        which scores each candidate against the requirements and only then
-        truncates.
+        Stage-1 (recall): returns resolved patterns with their fusion scores.
+        When reranking is enabled, the slug pool is bounded by ``rerank_top_n``
+        before pattern resolution (scoring itself is lossless). Requirements-aware
+        selection of ``top_k_patterns`` happens in the analyze phase
+        (ArchitecturePipeline), which scores each candidate against the requirements
+        and only then truncates.
 
         Args:
             user_domain:      Raw domain string from user (embedding query)
@@ -255,6 +258,7 @@ class HybridPatternRetriever:
               NOT a requirements-fit score.
             - matched_domains: top matched ArchitectureDomain slugs (max 5)
               with their fusion scores, for agent transparency.
+              When reranking is enabled, drawn from the post-cap survivor pool.
         """
         self._ensure_retrievers()
         assert self._dense_retriever is not None
@@ -316,28 +320,36 @@ class HybridPatternRetriever:
         if self._enable_reranking and len(fused) > 1:
             self._ensure_reranker()
             assert self._reranker is not None
-            # Lossless: score every fused node, never truncate before scoring.
-            # Downstream selection (analyze phase) does the top-N cut.
+            # Score every fused node (lossless scoring) but cap the survivor
+            # pool to rerank_top_n before pattern resolution. Requirements-
+            # aware selection still happens downstream in the analyze phase.
             self._reranker.top_n = len(fused)
             fused = self._reranker.postprocess_nodes(
                 fused, query_bundle=QueryBundle(query_str=user_domain)
             )
-            # Restore original RRF scores on NodeWithScore; stash the reranker
+            # Slice BEFORE restoring RRF scores: ranking is by cross-encoder
+            # order (set by postprocess_nodes), not by current nws.score.
+            # Capturing the pre-slice length keeps the debug log honest.
+            pre_slice_len = len(fused)
+            fused = fused[: self._rerank_top_n]
+            # Restore original RRF scores on survivors; stash the reranker
             # logit in node.metadata for observability. The downstream
             # min_fusion_score gate (and the analyze phase) still see RRF.
             for nws in fused:
                 orig = nws.node.metadata.get("retrieval_score")
                 nws.node.metadata["rerank_logit"] = float(nws.score)  # type: ignore[arg-type]
                 nws.score = float(orig) if orig is not None else 0.0
-            logger.debug("Reranking returned %d nodes (lossless)", len(fused))
-            rerank_cap = min(self._rerank_top_n, len(fused))
-            logger.info(
-                "Reranking: %d candidates after rerank (showing top %d)",
+            logger.debug(
+                "Reranking scored %d candidates, kept %d after rerank_top_n cap",
+                pre_slice_len,
                 len(fused),
-                rerank_cap,
+            )
+            logger.info(
+                "Reranking: %d candidates kept after rerank_top_n cap",
+                len(fused),
                 extra={
                     "stage": "rerank",
-                    "summary": _summarize_nodes(fused, rerank_cap),
+                    "summary": _summarize_nodes(fused, len(fused)),
                 },
             )
 

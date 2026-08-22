@@ -461,14 +461,15 @@ class TestT6RerankLossless:
                 normalized_domain="microservices",
             )
 
-        # The mock reranker received all fused nodes (lossless)
+        # Scoring is lossless: reranker received both fused nodes.
         assert mock_reranker.input_count == 2
-        # And the recall set still includes all candidates
-        assert len(result.patterns) == 1  # deduplicated to 1 unique pattern name
+        # rerank_top_n=1 caps survivors to the top cross-encoder candidate,
+        # so only the 'microservices' slug reaches pattern resolution.
+        assert len(result.patterns) == 1
         assert result.patterns[0][0]["name"] == "microservices"
-        # Both slugs appear in matched_domains (mock is lossless: returns all nodes)
-        assert len(result.matched_domains) == 2
-        assert {m.slug for m in result.matched_domains} == {"microservices", "event-driven"}
+        # matched_domains draws from the post-slice survivor pool.
+        assert len(result.matched_domains) == 1
+        assert {m.slug for m in result.matched_domains} == {"microservices"}
 
 
 # ─── T7 ────────────────────────────────────────────────────────────────────────
@@ -697,3 +698,237 @@ class TestT10AllZeroWeightsRetry:
         assert call_count == 1
         # alpha=0.7 smoothing: 0.7*1.0 + 0.3*(1/6) = 0.75
         assert result.scalability == 0.75
+
+
+# ─── T11 ─ Option B: rerank_top_n caps post-rerank survivor pool ─────────────────
+
+
+class TestRerankTopNCap:
+    """T11: rerank_top_n bounds the slug pool fed to pattern resolution when
+    reranking is enabled. Scoring itself remains lossless. The cap is only
+    honored inside the reranking branch — non-reranking deployments stay
+    fully lossless regardless of rerank_top_n.
+    """
+
+    @staticmethod
+    def _build(
+        *,
+        fused_nodes: list,
+        rerank_top_n: int,
+        enable_reranking: bool,
+        loader,
+    ):
+        """Build a retriever with mocked legs + reranker; rerank_top_n wired."""
+
+        class _MockBM25:
+            is_built = True
+
+            def __init__(self):
+                self.domains = [n.node.metadata["slug"] for n in fused_nodes]
+
+            def as_retriever(self, _k):
+                return MagicMock(retrieve=lambda _: [])
+
+        class _MockVec:
+            is_built = True
+
+            def __init__(self):
+                self.domains = [n.node.metadata["slug"] for n in fused_nodes]
+
+            def as_retriever(self, _k):
+                return MagicMock(retrieve=lambda _: list(fused_nodes))
+
+        retriever = HybridPatternRetriever(
+            bm25_index=_MockBM25(),
+            vector_index=_MockVec(),
+            pattern_loader=loader,
+            enable_reranking=enable_reranking,
+            rerank_top_n=rerank_top_n,
+            reranker_config=MagicMock(base_url="http://localhost:8080", timeout=30.0),
+        )
+        retriever._dense_retriever = _MockVec().as_retriever(len(fused_nodes))
+        retriever._bm25_retriever = _MockBM25().as_retriever(len(fused_nodes))
+        return retriever
+
+    def test_rerank_top_n_caps_surviving_candidates(self):
+        """When rerank_top_n < len(fused), only top-N survivors reach pattern
+        resolution. Scoring itself remains lossless (mock sees all input)."""
+
+        class _Loader:
+            _loaded = True
+
+            @staticmethod
+            def filter_by_domain(slug):
+                return [{"name": f"pattern-{slug[-1]}", "suitable_domains": [slug]}]
+
+            @staticmethod
+            def get_by_name(_n):
+                return None
+
+        nodes = [
+            NodeWithScore(node=TextNode(text="a", metadata={"slug": "slug-a"}), score=0.9),
+            NodeWithScore(node=TextNode(text="b", metadata={"slug": "slug-b"}), score=0.8),
+            NodeWithScore(node=TextNode(text="c", metadata={"slug": "slug-c"}), score=0.7),
+        ]
+        retriever = self._build(
+            fused_nodes=nodes,
+            rerank_top_n=2,
+            enable_reranking=True,
+            loader=_Loader(),
+        )
+
+        class _MockReranker:
+            def __init__(self):
+                self.input_count = 0
+
+            def postprocess_nodes(self, ns, query_bundle=None):
+                self.input_count = len(ns)
+                return ns
+
+        with patch("src.patterns.retriever.TextEmbeddingInference") as mock_cls:
+            mock_cls.return_value = _MockReranker()
+            result = retriever.retrieve(user_domain="test", normalized_domain="test")
+
+        assert retriever._reranker.input_count == 3
+        assert len(result.patterns) == 2
+        assert {p["name"] for p, _ in result.patterns} == {"pattern-a", "pattern-b"}
+        assert {m.slug for m in result.matched_domains} == {"slug-a", "slug-b"}
+
+    def test_no_cap_when_reranking_disabled(self):
+        """When enable_reranking=False, rerank_top_n is ignored — all fused
+        nodes survive to pattern resolution (cap is rerank-scoped)."""
+
+        class _Loader:
+            _loaded = True
+
+            @staticmethod
+            def filter_by_domain(slug):
+                return [{"name": f"pattern-{slug[-1]}", "suitable_domains": [slug]}]
+
+            @staticmethod
+            def get_by_name(_n):
+                return None
+
+        nodes = [
+            NodeWithScore(node=TextNode(text="a", metadata={"slug": "slug-a"}), score=0.9),
+            NodeWithScore(node=TextNode(text="b", metadata={"slug": "slug-b"}), score=0.8),
+            NodeWithScore(node=TextNode(text="c", metadata={"slug": "slug-c"}), score=0.7),
+        ]
+        retriever = self._build(
+            fused_nodes=nodes,
+            rerank_top_n=1,
+            enable_reranking=False,
+            loader=_Loader(),
+        )
+
+        result = retriever.retrieve(user_domain="test", normalized_domain="test")
+
+        assert len(result.patterns) == 3
+        assert {p["name"] for p, _ in result.patterns} == {
+            "pattern-a",
+            "pattern-b",
+            "pattern-c",
+        }
+        assert {m.slug for m in result.matched_domains} == {
+            "slug-a",
+            "slug-b",
+            "slug-c",
+        }
+
+    def test_rerank_top_n_ge_len_is_noop(self):
+        """When rerank_top_n >= len(fused), the slice is a no-op."""
+
+        class _Loader:
+            _loaded = True
+
+            @staticmethod
+            def filter_by_domain(slug):
+                return [{"name": f"pattern-{slug[-1]}", "suitable_domains": [slug]}]
+
+            @staticmethod
+            def get_by_name(_n):
+                return None
+
+        nodes = [
+            NodeWithScore(node=TextNode(text="a", metadata={"slug": "slug-a"}), score=0.9),
+            NodeWithScore(node=TextNode(text="b", metadata={"slug": "slug-b"}), score=0.8),
+        ]
+        retriever = self._build(
+            fused_nodes=nodes,
+            rerank_top_n=10,
+            enable_reranking=True,
+            loader=_Loader(),
+        )
+
+        class _MockReranker:
+            def postprocess_nodes(self, ns, query_bundle=None):
+                return ns
+
+        with patch("src.patterns.retriever.TextEmbeddingInference") as mock_cls:
+            mock_cls.return_value = _MockReranker()
+            result = retriever.retrieve(user_domain="test", normalized_domain="test")
+
+        assert len(result.patterns) == 2
+        assert {p["name"] for p, _ in result.patterns} == {"pattern-a", "pattern-b"}
+
+    def test_slice_to_no_resolving_slug_triggers_fallback(self):
+        """When the slice drops all pattern-bearing slugs, the fallback path
+        fires and matched_domains is empty."""
+
+        pattern_b = {
+            "name": "pattern-b",
+            "suitable_domains": ["slug-b"],
+            "quality_attributes": {},
+            "benefits": [],
+            "tradeoffs": [],
+            "best_practices": [],
+            "category": "x",
+            "context": "ctx",
+        }
+
+        class _Loader:
+            _loaded = True
+
+            @staticmethod
+            def filter_by_domain(slug):
+                if slug == "slug-b":
+                    return [pattern_b]
+                return []
+
+            @staticmethod
+            def get_by_name(_n):
+                return {
+                    "name": "layered-monolith",
+                    "suitable_domains": ["fallback"],
+                    "category": "x",
+                    "context": "fallback",
+                    "benefits": [],
+                    "tradeoffs": [],
+                    "best_practices": [],
+                    "quality_attributes": {},
+                }
+
+        nodes = [
+            NodeWithScore(node=TextNode(text="a", metadata={"slug": "slug-a"}), score=0.9),
+            NodeWithScore(node=TextNode(text="b", metadata={"slug": "slug-b"}), score=0.8),
+        ]
+        retriever = self._build(
+            fused_nodes=nodes,
+            rerank_top_n=1,
+            enable_reranking=True,
+            loader=_Loader(),
+        )
+
+        class _MockReranker:
+            def postprocess_nodes(self, ns, query_bundle=None):
+                return ns
+
+        with patch("src.patterns.retriever.TextEmbeddingInference") as mock_cls:
+            mock_cls.return_value = _MockReranker()
+            result = retriever.retrieve(user_domain="test", normalized_domain="test")
+
+        assert len(result.patterns) == 1
+        assert result.patterns[0][0]["name"] == "layered-monolith"
+        assert result.patterns[0][0].get("is_fallback") is True
+        assert result.patterns[0][1] == 0.0
+        assert result.matched_domains == []
