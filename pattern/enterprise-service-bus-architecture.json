@@ -78,10 +78,10 @@
   "technology_stack": [
     "Apache Camel",
     "WSO2 ESB",
-    "MuleSoft",
+    "MuleSoft Anypoint Platform",
     "Spring Integration",
-    "IBM Integration Bus",
-    "Software AG CentraSite",
+    "IBM App Connect (formerly IBM Integration Bus)",
+    "Software AG webMethods",
     "Apache Kafka (for event-driven alternatives)"
   ],
   "anti_patterns": [
@@ -103,17 +103,24 @@
     "microservices",
     "ipaas"
   ],
+  "related_patterns": [
+    "broker",
+    "service-oriented-architecture",
+    "api-gateway",
+    "event-driven",
+    "microservices"
+  ],
   "design_principles": [
-    "Loose Coupling",
-    "Standard Protocols",
-    "Centralized Routing",
-    "Mediation Over Direct Integration",
-    "Audit and Observability",
-    "Intelligent Routing",
-    "Error Resilience",
-    "Service Abstraction",
-    "Security and Governance",
-    "Proportional Governance"
+    "Loose Coupling: Services interact through the bus via contracts, never via direct references to each other",
+    "Standard Protocols: Communicate over open standards (HTTP/SOAP, JMS, REST) rather than proprietary APIs",
+    "Centralized Routing: All message routing decisions live in the bus, not in endpoint applications",
+    "Mediation Over Direct Integration: Transform, enrich, and translate messages in mediation flows instead of point-to-point adapters",
+    "Audit and Observability: Log every message crossing the bus for compliance, tracing, and troubleshooting",
+    "Intelligent Routing: Use content-based routing to direct messages dynamically by payload, headers, or business rules",
+    "Error Resilience: Handle failures with retries, dead-letter queues, and compensating logic at the bus level",
+    "Service Abstraction: Consumers depend on service contracts, not on implementation details or locations",
+    "Security and Governance: Enforce authentication, authorization, encryption, and policy centrally at the bus",
+    "Proportional Governance: Apply oversight appropriate to risk; avoid heavyweight processes for low-impact integrations"
   ],
   "best_practices": [
     "Define Clear Objectives: Establish specific collaboration goals to guide design and implementation",

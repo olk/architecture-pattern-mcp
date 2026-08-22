@@ -116,14 +116,17 @@
     "lakehouse-federation",
     "stream-processing-platform"
   ],
+  "related_patterns": [
+    "aiml-centric"
+  ],
   "design_principles": [
-    "**Domain Ownership**: Teams own data for their domain end-to-end, accountable for quality, availability, and documentation",
-    "**Data as a Product**: Treat data like software product with quality standards, documentation, SLA commitments, and versioning",
-    "**Self-Serve Infrastructure**: Platform provides common capabilities (catalog, lineage, quality monitoring) reducing cognitive load on domain teams",
-    "**Federated Governance**: Global policies defined centrally but executed locally through automated enforcement",
-    "**Product Contracts**: Formal agreements between data producers and consumers specifying schema, quality, and SLA expectations",
-    "**Fault Isolation**: Domain failures don't cascade across organization; each domain operates independently",
-    "**Schema Evolution**: Backward-compatible changes with deprecation notices; schema registry enforces compatibility"
+    "Domain Ownership: Teams own data for their domain end-to-end, accountable for quality, availability, and documentation",
+    "Data as a Product: Treat data like software product with quality standards, documentation, SLA commitments, and versioning",
+    "Self-Serve Infrastructure: Platform provides common capabilities (catalog, lineage, quality monitoring) reducing cognitive load on domain teams",
+    "Federated Governance: Global policies defined centrally but executed locally through automated enforcement",
+    "Product Contracts: Formal agreements between data producers and consumers specifying schema, quality, and SLA expectations",
+    "Fault Isolation: Domain failures don't cascade across organization; each domain operates independently",
+    "Schema Evolution: Backward-compatible changes with deprecation notices; schema registry enforces compatibility"
   ],
   "best_practices": [
     "Start with pilot domain: Prove value before full organization rollout; validate approach with low-risk domain first",

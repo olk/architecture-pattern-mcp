@@ -1,7 +1,7 @@
 {
   "name": "client-server",
   "category": "structural",
-  "context": "Distributed systems where clients initiate requests and servers provide responses over a network. The client-server pattern is the foundational architecture for networked applications: a client sends requests to a server, which processes those requests and returns results. The server is a resource provider; the client is a resource consumer. This pattern underlies virtually all web applications, APIs, and networked services. Its enduring dominance stems from its simplicity,scalability through stateless server design, and broad tooling ecosystem. While often considered 'basic', the decisions made within a client-server architecture \u2014 around state management, authentication, caching, and error handling \u2014 determine the reliability and performance of the entire system.",
+  "context": "Distributed systems where clients initiate requests and servers provide responses over a network. The client-server pattern is the foundational architecture for networked applications: a client sends requests to a server, which processes those requests and returns results. The server is a resource provider; the client is a resource consumer. This pattern underlies virtually all web applications, APIs, and networked services. Its enduring dominance stems from its simplicity, scalability through stateless server design, and broad tooling ecosystem. While often considered 'basic', the decisions made within a client-server architecture \u2014 around state management, authentication, caching, and error handling \u2014 determine the reliability and performance of the entire system.",
   "benefits": [
     "Centralized resource management: shared data and business logic live on the server, ensuring consistency",
     "Scalability: servers can be replicated and load-balanced; clients are lightweight and stateless",
@@ -106,6 +106,16 @@
     "microservices",
     "event-driven",
     "api-gateway",
+    "service-oriented-architecture"
+  ],
+  "related_patterns": [
+    "api-gateway",
+    "edge-computing",
+    "event-driven",
+    "layered-monolith",
+    "microservices",
+    "monolithic",
+    "presentation-abstraction-control",
     "service-oriented-architecture"
   ],
   "design_principles": [

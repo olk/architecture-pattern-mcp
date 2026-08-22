@@ -70,8 +70,8 @@
     "QueryBus: Routes query requests to appropriate query handlers",
     "CommandHandler: Execute business logic for commands, validate rules, persist to write store, emit domain events",
     "QueryHandler: Fetch and transform data from read store into DTOs; no domain logic",
-    "EventHandler: Subscribe to domain events and update read models asynchronously",
-    "Projection: Subscribe to domain events and update read models asynchronously",
+    "EventHandler: Subscribes to domain events emitted by the write side and dispatches them to projections",
+    "Projection: Consumes events to build and incrementally update denormalized read models",
     "ReadStore: Denormalized data optimized for query performance",
     "WriteStore: Normalized data optimized for consistency"
   ],
@@ -112,9 +112,23 @@
   ],
   "migration_to": [
     "event-sourcing",
-    "event-driven-microservices",
+    "event-driven",
+    "microservices",
     "service-mesh",
     "serverless-workflows"
+  ],
+  "related_patterns": [
+    "actor-based",
+    "event-driven",
+    "event-sourcing",
+    "hexagonal",
+    "kappa-architecture",
+    "layered-monolith",
+    "microservices",
+    "reactive-architecture",
+    "serverless",
+    "service-mesh",
+    "space-based"
   ],
   "design_principles": [
     "Command/Query Separation: Commands change state and return nothing (or an ID), Queries read state and return DTOs",

@@ -113,8 +113,14 @@
   "migration_to": [
     "kappa-architecture",
     "medallion-architecture",
-    "event-driven-microservices",
+    "event-driven",
+    "microservices",
     "unified-stream-processing-flink"
+  ],
+  "related_patterns": [
+    "event-driven",
+    "kappa-architecture",
+    "microservices"
   ],
   "design_principles": [
     "Immutable Master Dataset: Store all historical data in append-only storage; never update or delete",

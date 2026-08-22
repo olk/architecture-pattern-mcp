@@ -538,6 +538,13 @@
       },
       "description": "Patterns commonly migrated to"
     },
+    "related_patterns": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Conceptually related patterns in the catalog (canonical names, resolvable via get_architecture_pattern)"
+    },
     "design_principles": {
       "type": "array",
       "items": {

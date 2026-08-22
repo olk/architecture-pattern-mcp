@@ -104,6 +104,17 @@
     "agent-based",
     "service-mesh"
   ],
+  "related_patterns": [
+    "rule-based-system",
+    "reflection-architecture",
+    "actor-based",
+    "event-driven",
+    "layered-monolith",
+    "master-slave",
+    "monolithic",
+    "pipe-and-filter",
+    "service-mesh"
+  ],
   "design_principles": [
     "Knowledge Source Isolation: KSs must not communicate directly with each other\u2014only through the blackboard. This ensures independent evolution and testing of each specialist.",
     "Opportunistic Problem Solving: The control strategy should prioritize based on current blackboard state, not predetermined sequences. Let the data drive the solution direction.",

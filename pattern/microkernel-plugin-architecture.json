@@ -96,6 +96,13 @@
     "event-driven",
     "modular-monolith"
   ],
+  "related_patterns": [
+    "event-driven",
+    "layered-monolith",
+    "microservices",
+    "modular-monolith",
+    "monolithic"
+  ],
   "design_principles": [
     "Keep the core minimal: Core should be < 500 LOC ideally; any logic that could be plugin-specific should be in a plugin",
     "Plugins must be independent: No cross-plugin dependencies; communicate via core events/APIs",

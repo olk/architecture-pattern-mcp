@@ -95,9 +95,15 @@
   ],
   "migration_to": [
     "reactor-proactor-pattern",
-    "event-driven-microservices",
+    "event-driven",
+    "microservices",
     "full-async-await-patterns",
     "service-mesh-with-async-messaging"
+  ],
+  "related_patterns": [
+    "reactive-architecture",
+    "event-driven",
+    "microservices"
   ],
   "design_principles": [
     "Layer Isolation: Synchronous and asynchronous layers must only communicate through the queueing layer",

@@ -113,16 +113,44 @@
     "Observability neglect: Distributed tracing without correlation IDs"
   ],
   "migration_from": [
-    "monolithic-architecture",
+    "monolithic",
     "layered-monolith",
     "modular-monolith",
-    "legacy-esb-systems"
+    "enterprise-service-bus"
   ],
   "migration_to": [
     "service-mesh",
     "event-driven",
-    "serverless-functions",
+    "serverless",
     "edge-computing"
+  ],
+  "related_patterns": [
+    "api-gateway",
+    "backend-for-frontend",
+    "saga",
+    "event-sourcing",
+    "actor-based",
+    "clean-architecture",
+    "client-server",
+    "command-query-responsibility-segregation",
+    "edge-computing",
+    "enterprise-service-bus",
+    "event-driven",
+    "half-sync-half-async",
+    "hexagonal",
+    "hybrid-cloud",
+    "lambda-architecture",
+    "layered-monolith",
+    "microkernel-plugin",
+    "model-view-controller",
+    "modular-monolith",
+    "monolithic",
+    "presentation-abstraction-control",
+    "serverless",
+    "service-mesh",
+    "service-oriented-architecture",
+    "space-based",
+    "strangler-fig"
   ],
   "design_principles": [
     "Single Responsibility: Each service does one thing well, aligned with bounded contexts or business capabilities",

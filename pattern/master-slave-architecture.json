@@ -34,7 +34,6 @@
     "cpu-bound-computation",
     "distributed-data-pipelines",
     "high-throughput-streaming",
-    "cpu-bound-computation",
     "media-processing",
     "image-processing",
     "gaming-servers",
@@ -108,6 +107,15 @@
   "migration_to": [
     "actor-based",
     "event-driven",
+    "space-based"
+  ],
+  "related_patterns": [
+    "actor-based",
+    "blackboard",
+    "event-driven",
+    "layered-monolith",
+    "monolithic",
+    "pipe-and-filter",
     "space-based"
   ],
   "design_principles": [

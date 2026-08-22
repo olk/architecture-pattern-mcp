@@ -99,7 +99,7 @@
     "model-view-controller",
     "layered-monolith",
     "monolithic-ui",
-    "client-server-architecture"
+    "client-server"
   ],
   "migration_to": [
     "hierarchical-mvc",
@@ -107,6 +107,13 @@
     "pac-star",
     "microservices",
     "actor-based"
+  ],
+  "related_patterns": [
+    "actor-based",
+    "client-server",
+    "layered-monolith",
+    "microservices",
+    "model-view-controller"
   ],
   "design_principles": [
     "Complete Decoupling: Presentation and Abstraction never communicate directly; all communication is mediated by Control",

@@ -94,7 +94,8 @@
     "Deploying to production without namespace-level testing"
   ],
   "migration_from": [
-    "monolithic-architecture",
+    "microservices",
+    "monolithic",
     "kubernetes-basic-networking",
     "api-gateway-only",
     "shared-database"
@@ -103,6 +104,23 @@
     "ambient-mesh",
     "service-mesh-lite",
     "gateway-api-native"
+  ],
+  "related_patterns": [
+    "api-gateway",
+    "actor-based",
+    "backend-for-frontend",
+    "blackboard",
+    "blockchain-based",
+    "broker",
+    "command-query-responsibility-segregation",
+    "event-driven",
+    "hexagonal",
+    "microservices",
+    "monolithic",
+    "multi-cloud",
+    "reactive-architecture",
+    "saga",
+    "serverless"
   ],
   "design_principles": [
     "Zero-Trust Security: Never trust, always verify. All service-to-service communication requires authentication and authorization regardless of network location.",

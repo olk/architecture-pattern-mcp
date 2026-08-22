@@ -100,9 +100,17 @@
   ],
   "migration_to": [
     "command-query-responsibility-segregation",
-    "event-sourcing",
-    "saga",
-    "event-sourcing"
+    "saga"
+  ],
+  "related_patterns": [
+    "microservices",
+    "blockchain-based",
+    "actor-based",
+    "command-query-responsibility-segregation",
+    "event-driven",
+    "kappa-architecture",
+    "reactive-architecture",
+    "saga"
   ],
   "design_principles": [
     "Immutability: Events are never modified after creation; only new events can compensate for old ones",

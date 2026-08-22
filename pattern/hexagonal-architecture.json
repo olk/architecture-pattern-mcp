@@ -3,9 +3,7 @@
   "name": "hexagonal",
   "alternative_names": [
     "ports-and-adapters",
-    "ports and adapters",
-    "hexagonal",
-    "onion architecture"
+    "ports and adapters"
   ],
   "context": "Hexagonal Architecture isolates domain logic from external dependencies by structuring applications around inward-pointing dependencies. The core business logic sits at the center, completely independent of databases, web frameworks, or external APIs. External concerns connect through well-defined ports (interfaces) and adapters (implementations).",
   "benefits": [
@@ -95,7 +93,7 @@
   ],
   "migration_from": [
     "layered-monolith",
-    "monolithic-architecture",
+    "monolithic",
     "framework-coupled-architecture",
     "big-ball-of-mud"
   ],
@@ -103,6 +101,16 @@
     "microservices",
     "event-driven",
     "command-query-responsibility-segregation",
+    "service-mesh"
+  ],
+  "related_patterns": [
+    "modular-monolith",
+    "clean-architecture",
+    "command-query-responsibility-segregation",
+    "event-driven",
+    "layered-monolith",
+    "microservices",
+    "monolithic",
     "service-mesh"
   ],
   "design_principles": [

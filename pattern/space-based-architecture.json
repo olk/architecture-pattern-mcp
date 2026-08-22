@@ -98,6 +98,14 @@
     "command-query-responsibility-segregation",
     "microservices"
   ],
+  "related_patterns": [
+    "command-query-responsibility-segregation",
+    "event-driven",
+    "layered-monolith",
+    "master-slave",
+    "microservices",
+    "monolithic"
+  ],
   "design_principles": [
     "Data Locality: Co-locate processing logic with data partitions to minimize network hops",
     "Partitioning for Access Patterns: Select partition keys that maximize data locality and minimize cross-partition operations",

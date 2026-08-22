@@ -86,7 +86,7 @@
     "Fat Repository: repository handles multiple entities losing cohesion"
   ],
   "migration_from": [
-    "monolithic-architecture",
+    "monolithic",
     "page-centric-architecture",
     "three-tier-without-separation",
     "struts-framework",
@@ -98,6 +98,14 @@
     "event-driven",
     "clean-architecture",
     "layered-monolith"
+  ],
+  "related_patterns": [
+    "clean-architecture",
+    "event-driven",
+    "layered-monolith",
+    "microservices",
+    "monolithic",
+    "presentation-abstraction-control"
   ],
   "design_principles": [
     "Separation of Concerns: Model handles business logic, View handles presentation, Controller handles coordination",

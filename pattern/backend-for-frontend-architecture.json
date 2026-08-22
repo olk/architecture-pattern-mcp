@@ -94,6 +94,14 @@
     "strangler-fig",
     "event-driven"
   ],
+  "related_patterns": [
+    "api-gateway",
+    "microservices",
+    "serverless",
+    "event-driven",
+    "service-mesh",
+    "strangler-fig"
+  ],
   "design_principles": [
     "Client-Specific Optimization: Each BFF should be tailored to its specific client's needs, optimizing data shape, payload size, and delivery mechanism",
     "Thin Orchestration Layer: BFFs should only aggregate, transform, and normalize\u2014no business logic that belongs in domain services",
@@ -102,5 +110,14 @@
     "Explicit API Versioning: BFF APIs must be versioned to support multiple client versions simultaneously, especially for mobile apps with long update tails",
     "Cross-Cutting Concerns Separated: Monitoring, logging, rate limiting, and authorization should be abstracted or handled via API Management"
   ],
-  "best_practices": []
+  "best_practices": [
+    "One BFF Per Client Experience: create a separate BFF for mobile, web, and partner APIs rather than one shared gateway with conditionals",
+    "Keep BFFs Thin: aggregate, transform, and normalize only; push business logic down to domain services",
+    "Let Frontend Teams Own Their BFF: the team that builds the UI should also build, deploy, and operate its backend-for-frontend",
+    "Version APIs for Mobile Release Cycles: support multiple client versions simultaneously since mobile apps update slowly",
+    "Cache Client-Appropriately: use aggressive caching for bandwidth-constrained clients, shorter TTLs for fast-moving web data",
+    "Handle Auth Flows Per Client: OAuth/PKCE for mobile, HTTP-only cookie sessions for web, API keys for internal consumers",
+    "Standardize Error Shapes: return consistent, client-friendly error payloads (e.g., RFC 9457 problem details) across all BFFs",
+    "Monitor Each BFF Independently: track per-client latency, error rates, and payload sizes to catch client-specific regressions"
+  ]
 }

@@ -92,7 +92,7 @@
   ],
   "migration_from": [
     "point-to-point-integration",
-    "monolithic-architecture",
+    "monolithic",
     "file-based-integration",
     "shared-database-pattern"
   ],
@@ -100,18 +100,27 @@
     "microservices",
     "event-driven",
     "api-gateway",
-    "strangler-fig-pattern",
+    "strangler-fig",
     "micro-integration-platforms"
   ],
+  "related_patterns": [
+    "enterprise-service-bus",
+    "api-gateway",
+    "client-server",
+    "event-driven",
+    "microservices",
+    "monolithic",
+    "strangler-fig"
+  ],
   "design_principles": [
-    "Standardized Service Contract",
-    "Loose Coupling",
-    "Service Abstraction",
-    "Service Composability",
-    "Service Reusability",
-    "Service Discoverability",
-    "Service Autonomy",
-    "Statelessness"
+    "Standardized Service Contract: Every service publishes a formal contract (WSDL, OpenAPI) that consumers depend on",
+    "Loose Coupling: Services minimize dependencies on each other; contracts change independently of implementations",
+    "Service Abstraction: Contracts hide implementation logic, technology, and location from consumers",
+    "Service Composability: Services are effective participants in larger business process orchestrations",
+    "Service Reusability: Logic is factored into services intended for reuse across multiple business channels",
+    "Service Discoverability: Services are supplemented with metadata so they can be located and evaluated via a registry",
+    "Service Autonomy: Services control their own runtime environment and underlying data",
+    "Statelessness: Services avoid holding session state between invocations to remain scalable and composable"
   ],
   "best_practices": [
     "Establish Governance Early: Create architectural review board and service governance before building services",

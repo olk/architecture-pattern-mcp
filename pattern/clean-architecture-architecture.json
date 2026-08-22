@@ -15,7 +15,7 @@
     "Initial boilerplate: establishing the layer structure and dependency rules requires upfront investment",
     "Indirection overhead: every business operation passes through multiple abstraction layers",
     "Learning curve: developers accustomed to framework-centric layouts need time to understand the inward-dependency rule",
-    " Ceremony for simple operations: CRUD operations that are trivial in Rails/Django require more structure",
+    "Ceremony for simple operations: CRUD operations that are trivial in Rails/Django require more structure",
     "Interface proliferation: each use case typically defines its own input/output models, leading to many small classes",
     "Dual persistence concerns: reconciling clean architecture's preference for domain purity with ORM expectations can be complex",
     "Over-engineering risk for small projects: the layer count and interface discipline is heavyweight for simple applications"
@@ -105,6 +105,14 @@
     "hexagonal",
     "event-driven",
     "microservices"
+  ],
+  "related_patterns": [
+    "event-driven",
+    "hexagonal",
+    "layered-monolith",
+    "microservices",
+    "model-view-controller",
+    "monolithic"
   ],
   "design_principles": [
     "Dependency Rule: source code dependencies must point only inward, toward higher-level policies; no inner-layer module may mention anything from an outer layer",

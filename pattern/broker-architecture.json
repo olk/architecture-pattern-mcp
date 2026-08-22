@@ -102,7 +102,13 @@
   "migration_to": [
     "event-driven",
     "service-mesh",
-    "api-gateway-with-service-discovery"
+    "api-gateway"
+  ],
+  "related_patterns": [
+    "enterprise-service-bus",
+    "api-gateway",
+    "event-driven",
+    "service-mesh"
   ],
   "design_principles": [
     "Location Transparency: Clients reference services by name, not IP address or port",
@@ -113,5 +119,14 @@
     "Schema Governance: Use Avro/Protobuf schemas for message contract evolution",
     "Observability: Correlation IDs and distributed tracing enable debugging across broker hops",
     "Failure Isolation: Circuit breakers prevent cascading failures from slow consumers"
+  ],
+  "best_practices": [
+    "Cluster the Broker: deploy brokers in replicated clusters; a single broker instance is an unacceptable single point of failure",
+    "Define Explicit Message Contracts: version message schemas in a schema registry before adding new producers or consumers",
+    "Use Correlation IDs End-to-End: propagate IDs from producer through broker to consumer for traceable request flows",
+    "Set Delivery Guarantees Deliberately: choose at-least-once with idempotent consumers unless exactly-once is a hard requirement",
+    "Configure Dead Letter Queues: route repeatedly failing messages to DLQs with alerting instead of blocking queues",
+    "Monitor Queue Depth and Consumer Lag: treat growing lag as the primary early-warning signal of downstream trouble",
+    "Keep Messages Small: pass references or compact payloads; large blobs belong in object storage with links in messages"
   ]
 }

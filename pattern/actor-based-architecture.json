@@ -73,7 +73,7 @@
     "Akka/Pekko",
     "Dapr",
     "Orleans",
-    "MicrosoftAirframe",
+    "Proto.Actor",
     "Pykka",
     "Celluloid"
   ],
@@ -93,11 +93,25 @@
     "polling-based-concurrency"
   ],
   "migration_to": [
-    "event-driven-microservices",
+    "event-driven",
+    "microservices",
     "reactive-streams",
-    "cqrs-event-sourcing",
+    "command-query-responsibility-segregation",
+    "event-sourcing",
     "service-mesh",
     "multi-agent-ai-systems"
+  ],
+  "related_patterns": [
+    "task-control-architecture",
+    "blackboard",
+    "command-query-responsibility-segregation",
+    "event-driven",
+    "event-sourcing",
+    "master-slave",
+    "microservices",
+    "presentation-abstraction-control",
+    "reactive-architecture",
+    "service-mesh"
   ],
   "design_principles": [
     "Single Responsibility: Each actor performs one well-defined task or domain function",

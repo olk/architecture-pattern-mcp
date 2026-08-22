@@ -107,6 +107,13 @@ class Pattern(BaseModel):
         default_factory=list,
         description="Patterns commonly migrated to"
     )
+    related_patterns: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Conceptually related patterns in the catalog (canonical "
+            "ArchitectureStyle names, resolvable via get_architecture_pattern)"
+        )
+    )
     design_principles: list[str] = Field(
         default_factory=list,
         description="Core design principles (e.g. ['Single Responsibility: Each service does one thing well'])"

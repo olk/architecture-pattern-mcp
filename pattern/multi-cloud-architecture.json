@@ -109,9 +109,14 @@
     "hybrid-cloud"
   ],
   "migration_to": [
-    "multi-cloud",
     "unified-platform",
     "event-driven",
+    "service-mesh"
+  ],
+  "related_patterns": [
+    "event-driven",
+    "hybrid-cloud",
+    "monolithic",
     "service-mesh"
   ],
   "design_principles": [],

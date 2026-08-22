@@ -102,15 +102,23 @@
     "Ignoring network RTT: Assuming cloud and on-prem are equally fast for all workloads"
   ],
   "migration_from": [
-    "monolithic-architecture",
-    "layered-monolith-architecture",
+    "monolithic",
+    "layered-monolith",
     "all-on-premises-datacenter"
   ],
   "migration_to": [
     "microservices",
-    "serverless-architecture",
+    "serverless",
     "event-driven",
-    "multi-cloud-architecture"
+    "multi-cloud"
+  ],
+  "related_patterns": [
+    "event-driven",
+    "layered-monolith",
+    "microservices",
+    "monolithic",
+    "multi-cloud",
+    "serverless"
   ],
   "design_principles": [
     "Unified Management: Use a single control plane (Azure Arc, AWS Systems Manager) to manage both environments consistently",

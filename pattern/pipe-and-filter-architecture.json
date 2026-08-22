@@ -65,7 +65,7 @@
     "DataSource: Input origin (file, stream, API, event)",
     "DataSink: Output destination (file, database, API)",
     "Pipeline: Composed sequence of filters",
-    "MessageBroker: Optional intermediate buffer for distributed\u90e8\u7f72"
+    "MessageBroker: Optional intermediate buffer for distributed deployments"
   ],
   "technology_stack": [
     "Unix pipes",
@@ -94,6 +94,12 @@
     "microservices-orchestration",
     "serverless-workflows",
     "state-machine-workflows"
+  ],
+  "related_patterns": [
+    "kappa-architecture",
+    "blackboard",
+    "event-driven",
+    "master-slave"
   ],
   "design_principles": [
     "Single Responsibility: Each filter performs one well-defined transformation",

@@ -102,6 +102,10 @@
     "autonomic-computing-platforms",
     "ai-driven-orchestration-systems"
   ],
+  "related_patterns": [
+    "blackboard",
+    "rule-based-system"
+  ],
   "design_principles": [
     "Encapsulation: Meta-level facilities must encapsulate their implementation details from base-level components",
     "Stratification: Meta-level must be cleanly separated from base-level functionality: no leakage of concerns",

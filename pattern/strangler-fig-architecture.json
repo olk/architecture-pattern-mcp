@@ -100,6 +100,16 @@
     "event-driven",
     "modular-monolith"
   ],
+  "related_patterns": [
+    "api-gateway",
+    "backend-for-frontend",
+    "event-driven",
+    "layered-monolith",
+    "microservices",
+    "modular-monolith",
+    "monolithic",
+    "service-oriented-architecture"
+  ],
   "design_principles": [
     "Increment Over Perfection: Migrate capability by capability; each step is independently deployable and reversible",
     "Behavioral Equivalence: New implementation must produce behavior indistinguishable from old for existing users",

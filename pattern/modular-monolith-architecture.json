@@ -101,8 +101,17 @@
   ],
   "migration_to": [
     "microservices",
-    "microkernel",
+    "microkernel-plugin",
     "event-driven"
+  ],
+  "related_patterns": [
+    "hexagonal",
+    "event-driven",
+    "layered-monolith",
+    "microkernel-plugin",
+    "microservices",
+    "monolithic",
+    "strangler-fig"
   ],
   "design_principles": [
     "Domain Module Isolation: Each module encapsulates its own domain logic, entities, and services. Independent module directories with clear ownership ensure that changes to one domain don't ripple through others.",
@@ -113,5 +122,14 @@
     "Event-Driven Communication: Modules communicate through domain events rather than direct dependencies, enabling loose coupling and independent evolution.",
     "Enforced Boundaries: Use tooling (ArchUnit, Spring Modulith) to enforce module boundaries. Automated checks prevent boundary erosion."
   ],
-  "best_practices": []
+  "best_practices": [
+    "Enforce Module Boundaries With Tooling: use ArchUnit or Spring Modulith checks in CI to fail builds on illegal cross-module access",
+    "Give Each Module Its Own Schema: separate database schemas (or table prefixes) per module make future extraction to services dramatically easier",
+    "Communicate Across Modules via Public APIs Only: never reach into another module's internals or tables, even when it seems faster",
+    "Keep the Shared Kernel Tiny: limit shared code to stable primitives; grow it only with explicit team agreement",
+    "Use In-Process Events for Decoupling: publish domain events instead of synchronous calls where eventual consistency is acceptable",
+    "Define Module Ownership Explicitly: one team owns each module end-to-end, including its schema and public contract",
+    "Plan the Extraction Path: identify modules most likely to become services and keep their interfaces deployment-agnostic from day one",
+    "Test Modules in Isolation: each module's test suite must run without starting other modules"
+  ]
 }

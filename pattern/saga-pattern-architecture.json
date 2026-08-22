@@ -95,17 +95,31 @@
     "workflow-engine",
     "service-mesh"
   ],
-  "design_principles": [
-    "Design Compensations Before Happy Paths",
-    "Make Every Operation Idempotent",
-    "Use Transactional Outbox",
-    "Persist Saga State Durably",
-    "Implement Timeouts at Every Level",
-    "Monitor Saga Completion Time Distributions",
-    "Design for Short Sagas",
-    "Handle Compensation Failures Explicitly",
-    "Use Semantic Locks",
-    "Choose Orchestration for Complex Flows"
+  "related_patterns": [
+    "microservices",
+    "event-driven",
+    "event-sourcing",
+    "service-mesh"
   ],
-  "best_practices": []
+  "design_principles": [
+    "Design Compensations Before Happy Paths: define the undo action for every step before implementing the forward action",
+    "Make Every Operation Idempotent: retries and duplicate deliveries are normal; steps must tolerate repeated execution",
+    "Use Transactional Outbox: publish saga events atomically with local state changes to prevent lost updates",
+    "Persist Saga State Durably: orchestrators must recover in-flight sagas after crashes without re-executing completed steps",
+    "Implement Timeouts at Every Level: unresponsive participants must trigger compensation rather than indefinite waits",
+    "Monitor Saga Completion Time Distributions: track p95/p99 saga duration and compensation rates as first-class SLOs",
+    "Design for Short Sagas: keep step counts small (ideally under 5); long sagas multiply failure modes",
+    "Handle Compensation Failures Explicitly: define escalation procedures when an undo action itself fails",
+    "Use Semantic Locks: mark in-progress business objects to prevent concurrent conflicting transactions",
+    "Choose Orchestration for Complex Flows: prefer explicit orchestration over choreography once branching or 4+ steps appear"
+  ],
+  "best_practices": [
+    "Start With a Pilot Saga: prove the pattern on one well-understood multi-service flow before generalizing",
+    "Model Sagas as State Machines: represent steps, retries, and compensations explicitly instead of implicit call chains",
+    "Assign Correlation IDs Per Saga Instance: propagate them through every participant call for end-to-end tracing",
+    "Test Compensation Paths Like Production Code: cover partial failures at every step with automated integration tests",
+    "Cap Retry Budgets: bound retries per step and route exhausted steps to DLQ handling with alerting",
+    "Keep Participants Unaware of the Saga: services expose plain local transactions plus compensations; orchestration logic stays centralized",
+    "Version Step Contracts: changing a step's input/output requires compatibility checks against in-flight saga instances"
+  ]
 }

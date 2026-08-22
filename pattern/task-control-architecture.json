@@ -90,6 +90,9 @@
     "ipc-(inter-process-communication)-for-flexible-message-passing",
     "modern-agentic-loops:-hierarchical-planning->-execution-monitoring->-exception-handling"
   ],
+  "related_patterns": [
+    "actor-based"
+  ],
   "design_principles": [
     "Hierarchical Task Design: Break complex goals into clear subtask hierarchies with well-defined temporal constraints",
     "Redundant Handler Registration: Register multiple handlers for critical signals to ensure fault tolerance",
@@ -101,13 +104,12 @@
     "Human Intervention Points: Designate checkpoints for human oversight and approval in critical workflows"
   ],
   "best_practices": [
-    "Hierarchical Task Design: Break complex goals into clear subtask hierarchies with well-defined temporal constraints",
-    "Redundant Handler Registration: Register multiple handlers for critical signals to ensure fault tolerance",
-    "Monitor Placement: Place monitors strategically to watch key sensors and conditions for early fault detection",
-    "Temporal Constraint Optimization: Leverage concurrent execution opportunities by analyzing temporal constraints",
-    "Resource Queuing: Use Resource Manager for orderly access to prevent conflicts in shared resources",
-    "Checkpoint Progress: Save execution state periodically for recovery from failures",
-    "Cross-Language Communication: Use TCP/IP socket communication for Lisp and C process integration",
-    "Human Intervention Points: Designate checkpoints for human oversight and approval in critical workflows"
+    "Start With a Shallow Hierarchy: Model top-level tasks first and decompose only where temporal constraints genuinely require concurrency",
+    "Register Redundant Handlers for Critical Signals: Attach at least two handlers to failure-sensitive signals so a single handler crash cannot stall the mission",
+    "Tune Monitor Polling Intervals: Balance early fault detection against CPU/network overhead; avoid polling sensors faster than they update",
+    "Test Exception Paths Explicitly: Simulate handler crashes, resource contention, and deadline misses to verify terminate/suspend/patch/retry behavior",
+    "Version Task Trees Alongside Code: Keep task decomposition definitions in version control so mission profiles are reproducible",
+    "Instrument Task Execution Times: Log planned vs actual durations per subtask to refine temporal constraints over successive runs",
+    "Isolate Real-Time Control From Task Control: Run hard real-time loops (e.g., servo control) on dedicated controllers; reserve TCA/TCM/TDL for task-level coordination"
   ]
 }

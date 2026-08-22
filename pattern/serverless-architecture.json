@@ -107,6 +107,17 @@
     "service-mesh",
     "command-query-responsibility-segregation"
   ],
+  "related_patterns": [
+    "backend-for-frontend",
+    "edge-computing",
+    "command-query-responsibility-segregation",
+    "event-driven",
+    "hybrid-cloud",
+    "layered-monolith",
+    "microservices",
+    "monolithic",
+    "service-mesh"
+  ],
   "design_principles": [
     "Single Responsibility: Each function performs one well-defined task triggered by a specific event type",
     "Statelessness: Functions should not rely on internal state; externalize state to managed services (DynamoDB, S3, etc.)",

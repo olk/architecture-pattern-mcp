@@ -85,12 +85,33 @@
   "migration_from": [
     "monolithic-legacy-systems",
     "mainframe-systems",
-    "modular-monoliths"
+    "modular-monolith"
   ],
   "migration_to": [
     "modular-monolith",
     "microservices",
     "event-driven"
+  ],
+  "related_patterns": [
+    "aiml-centric",
+    "blackboard",
+    "clean-architecture",
+    "client-server",
+    "event-driven",
+    "hexagonal",
+    "hybrid-cloud",
+    "master-slave",
+    "microkernel-plugin",
+    "microservices",
+    "model-view-controller",
+    "modular-monolith",
+    "multi-cloud",
+    "reactive-architecture",
+    "serverless",
+    "service-mesh",
+    "service-oriented-architecture",
+    "space-based",
+    "strangler-fig"
   ],
   "design_principles": [
     "Single Responsibility: Each module should have a single, well-defined purpose within the bounded context",

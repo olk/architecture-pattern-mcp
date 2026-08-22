@@ -83,10 +83,30 @@
     "modular-monolith",
     "vertical-slice-monolith",
     "microservices",
-    "hexagonal-architecture"
+    "hexagonal"
+  ],
+  "related_patterns": [
+    "aiml-centric",
+    "blackboard",
+    "clean-architecture",
+    "client-server",
+    "command-query-responsibility-segregation",
+    "event-driven",
+    "hexagonal",
+    "hybrid-cloud",
+    "master-slave",
+    "microkernel-plugin",
+    "microservices",
+    "model-view-controller",
+    "modular-monolith",
+    "presentation-abstraction-control",
+    "reactive-architecture",
+    "serverless",
+    "space-based",
+    "strangler-fig"
   ],
   "design_principles": [
-    "Strict Layer Direction: Dependencies flow downward only; higher layers never call lower layers upward. Presentation → Application → Domain → Infrastructure",
+    "Strict Layer Direction: Dependencies flow downward only; higher layers never call lower layers upward. Presentation \u2192 Application \u2192 Domain \u2192 Infrastructure",
     "Closed Layers by Default: A layer can only be accessed by the layer directly above it. No shortcuts across layers; prevents tight coupling",
     "Layer Interface Isolation: Each layer exposes its own interface; internal details hidden. Public facade per layer, implementation details private",
     "Transaction Boundaries: Place boundaries in Application layer; one use case = one transaction. Ensures consistency within request scope",
@@ -94,13 +114,13 @@
     "Single Responsibility per Layer: Each layer has one primary concern: Presentation handles HTTP, Application orchestrates use cases, Domain contains business logic, Infrastructure manages external concerns"
   ],
   "best_practices": [
-    "**Enforce Layer Discipline**: Use architecture tests (fitness functions) to verify layer boundaries are respected and no upward calls occur",
-    "**Keep Layers Coherent**: Each layer should have a clear, single purpose and not become a catch-all for misplaced logic",
-    "**Use Dependency Inversion**: Define repository interfaces in Domain layer; implement in Infrastructure to maintain clean boundaries",
-    "**Transactional Boundaries**: Place transaction management in Application layer: one use case = one transaction",
-    "**Prefer Events for Cross-Layer Communication**: When Domain needs to notify Application, use domain events rather than direct dependencies",
-    "**Document Layer Exceptions**: When narrow exceptions are needed (e.g., read-only projections bypassing Application), record with ADR and cover with tests",
-    "**Component-Centric Organization**: Each business component contains its own slice of layers (Presentation, Application, Domain, Infrastructure) to keep changes local",
-    "**Schema Evolution**: Favor additive changes; keep migrations backward-compatible for one release to enable safe rollbacks"
+    "Enforce Layer Discipline: Use architecture tests (fitness functions) to verify layer boundaries are respected and no upward calls occur",
+    "Keep Layers Coherent: Each layer should have a clear, single purpose and not become a catch-all for misplaced logic",
+    "Use Dependency Inversion: Define repository interfaces in Domain layer; implement in Infrastructure to maintain clean boundaries",
+    "Transactional Boundaries: Place transaction management in Application layer: one use case = one transaction",
+    "Prefer Events for Cross-Layer Communication: When Domain needs to notify Application, use domain events rather than direct dependencies",
+    "Document Layer Exceptions: When narrow exceptions are needed (e.g., read-only projections bypassing Application), record with ADR and cover with tests",
+    "Component-Centric Organization: Each business component contains its own slice of layers (Presentation, Application, Domain, Infrastructure) to keep changes local",
+    "Schema Evolution: Favor additive changes; keep migrations backward-compatible for one release to enable safe rollbacks"
   ]
 }

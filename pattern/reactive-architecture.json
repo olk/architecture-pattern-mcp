@@ -100,7 +100,7 @@
     "Ignoring failure handling in design"
   ],
   "migration_from": [
-    "monolithic-architecture",
+    "monolithic",
     "layered-monolith",
     "blocking-mvc",
     "synchronous-rest"
@@ -111,6 +111,16 @@
     "service-mesh",
     "edge-computing",
     "actor-based"
+  ],
+  "related_patterns": [
+    "half-sync-half-async",
+    "actor-based",
+    "command-query-responsibility-segregation",
+    "edge-computing",
+    "event-sourcing",
+    "layered-monolith",
+    "monolithic",
+    "service-mesh"
   ],
   "design_principles": [
     "Message-Driven Communication: Components communicate via asynchronous messages, creating temporal and spatial decoupling",

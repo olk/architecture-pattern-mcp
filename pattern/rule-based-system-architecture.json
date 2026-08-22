@@ -81,11 +81,11 @@
     "RuleML"
   ],
   "anti_patterns": [
-    "monolithic-rule-soup",
-    "strongly-coupled-rules",
-    "knowledge-acquisition-bypass",
-    "rule-proliferation",
-    "missing-audit-trail"
+    "Monolithic rule soup: hundreds of unrelated rules in one flat pool with no modular organization",
+    "Strongly coupled rules: rules that depend on each other's firing order, making changes unpredictable",
+    "Knowledge-acquisition bypass: developers writing rules without domain expert review",
+    "Rule proliferation: uncontrolled rule growth without periodic consolidation or retirement",
+    "Missing audit trail: rule firings not logged, breaking explainability and compliance"
   ],
   "migration_from": [
     "procedural-decision-code",
@@ -99,6 +99,11 @@
     "cloud-native-rule-services",
     "event-driven-rules"
   ],
+  "related_patterns": [
+    "blackboard",
+    "reflection-architecture",
+    "aiml-centric"
+  ],
   "design_principles": [
     "Knowledge Separation: Separate domain knowledge (rules) from inference engine logic",
     "Declarative Rules: Express business rules in IF-THEN format without encoding control flow",
@@ -109,5 +114,15 @@
     "Domain Expert Involvement: Knowledge engineering must involve domain experts, not just developers",
     "Rule Authoring Standards: Establish naming conventions, documentation requirements, and style guides",
     "Conflict Detection: Use tooling to detect subsumption, redundancy, and contradictions before deployment"
+  ],
+  "best_practices": [
+    "Start With a Bounded Rule Set: pilot with 50-200 high-value rules before scaling to thousands",
+    "Modularize by Business Function: partition rules into packages (e.g., eligibility, pricing, compliance) with clear owners",
+    "Use a Rule Repository With Version Control: treat rule changes like code changes: review, test, and release them",
+    "Write Rules in Domain Language: author rules so domain experts can read and validate them without developer translation",
+    "Test Rules Against Golden Cases: maintain a regression suite of input/fact scenarios with expected decisions for every release",
+    "Log Every Firing With Context: capture rule version, input facts, and outcome to support audit and dispute resolution",
+    "Plan the RETE Capacity Envelope: benchmark conflict-resolution performance at 2-3x expected fact volumes before go-live",
+    "Retire Rules Deliberately: schedule periodic reviews to remove obsolete rules instead of letting the knowledge base accrete"
   ]
 }

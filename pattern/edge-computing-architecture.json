@@ -98,13 +98,21 @@
     "centralized-cloud-architecture",
     "monolithic-applications",
     "cloud-only-iot",
-    "client-server-architecture"
+    "client-server"
   ],
   "migration_to": [
     "edge-native-serverless",
     "hybrid-edge-cloud",
-    "event-driven-microservices",
+    "event-driven",
+    "microservices",
     "fog-computing"
+  ],
+  "related_patterns": [
+    "serverless",
+    "client-server",
+    "event-driven",
+    "microservices",
+    "reactive-architecture"
   ],
   "design_principles": [
     "Design for Autonomy: Edge nodes must operate independently during cloud outages",
