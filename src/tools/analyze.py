@@ -60,6 +60,7 @@ from src.config import TasksConfig
 from src.errors import ERROR_REQUIREMENTS_VALIDATION
 from src.patterns.retriever import DEFAULT_FALLBACK_PATTERN_NAME
 from src.pipeline import AnalysisResult, ArchitecturePipeline
+from src.schemas.analysis import MatchedDomain
 from src.text_validation import DomainName, PrintableText, ensure_printable_text
 
 logger = logging.getLogger(__name__)
@@ -109,6 +110,14 @@ class AnalyzeArchitectureOutput(BaseModel):
     quality_metrics: dict | None = Field(
         default=None,
         description="Quality assessment metrics"
+    )
+    matched_domains: list[dict] = Field(
+        default_factory=list,
+        description="Top matched ArchitectureDomain slugs from BM25+FAISS retrieval with fusion scores"
+    )
+    is_fallback: bool = Field(
+        default=False,
+        description="True when no real domain match was found and the fallback layered-monolith pattern was used"
     )
 
 
@@ -260,7 +269,9 @@ class AnalyzeArchitectureTool:
                     recommendations=[f"Consider alternative domain or expand pattern database for: {domain}"],
                     recommended_style=DEFAULT_FALLBACK_PATTERN_NAME,
                     selected_patterns=[],
-                    quality_metrics=None
+                    quality_metrics=None,
+                    matched_domains=[],
+                    is_fallback=True,
                 ).model_dump()
 
             if ctx is not None:
@@ -283,6 +294,8 @@ class AnalyzeArchitectureTool:
             recommended_style=pd_result.recommended_style,
             selected_patterns=[p.model_dump() for p in pd_result.selected_patterns],
             quality_metrics=pd_result.quality_metrics.model_dump() if pd_result.quality_metrics else None,
+            matched_domains=[m.model_dump() for m in pd_result.matched_domains],
+            is_fallback=pd_result.is_fallback,
         )
 
     def _start_heartbeat(

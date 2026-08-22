@@ -41,6 +41,7 @@ Stage-1 (recall) retrieval pipeline:
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from llama_index.core.schema import QueryBundle
@@ -68,6 +69,30 @@ DEFAULT_FALLBACK_PATTERN_NAME = "layered-monolith"
 # Fixed cap for INFO-log summaries only; decoupled from retrieval k so that
 # k=0 (full corpus) does not produce "showing top 0" log lines.
 LOG_SUMMARY_CAP = 10
+
+DOMAIN_MATCH_REPORT_LIMIT = 5
+
+
+@dataclass(frozen=True)
+class DomainMatch:
+    """A resolved domain slug with its fusion score, surfaced for agent transparency."""
+
+    slug: str
+    fusion_score: float
+
+
+@dataclass(frozen=True)
+class RetrievalOutcome:
+    """
+    Result of a hybrid retrieval call.
+
+    Attributes:
+        patterns: Resolved patterns with fusion scores (same shape as the old list return).
+        matched_domains: Top matched ArchitectureDomain slugs for transparency.
+    """
+
+    patterns: list[tuple[dict[str, Any], float]]
+    matched_domains: list[DomainMatch]
 
 
 def _summarize_nodes(nodes: list[Any], cap: int) -> dict[str, Any]:
@@ -188,11 +213,28 @@ class HybridPatternRetriever:
         )
         self._reranker.keep_retrieval_score = True
 
+    def _matched_domains_from_nodes(
+        self, nodes: list[Any]
+    ) -> list[DomainMatch]:
+        slug_best: dict[str, float] = {}
+        for nws in nodes:
+            slug = nws.node.metadata.get("slug", "")
+            if not slug:
+                continue
+            score = float(nws.score) if nws.score is not None else 0.0
+            if slug not in slug_best or score > slug_best[slug]:
+                slug_best[slug] = score
+        sorted_slugs = sorted(slug_best.items(), key=lambda x: x[1], reverse=True)
+        return [
+            DomainMatch(slug=s, fusion_score=sc)
+            for s, sc in sorted_slugs[:DOMAIN_MATCH_REPORT_LIMIT]
+        ]
+
     def retrieve(
         self,
         user_domain: str,
         normalized_domain: str,
-    ) -> list[tuple[dict[str, Any], float]]:
+    ) -> RetrievalOutcome:
         """
         Find candidate patterns for user_domain using two-leg hybrid retrieval.
 
@@ -207,9 +249,12 @@ class HybridPatternRetriever:
             normalized_domain: Pre-normalised domain (BM25 lexical query)
 
         Returns:
-            List of (pattern_dict, fusion_score) tuples sorted by score
-            descending. fusion_score is a domain-similarity rank signal (RRF),
-            NOT a requirements-fit score.
+            RetrievalOutcome containing:
+            - patterns: list of (pattern_dict, fusion_score) tuples sorted by score
+              descending. fusion_score is a domain-similarity rank signal (RRF),
+              NOT a requirements-fit score.
+            - matched_domains: top matched ArchitectureDomain slugs (max 5)
+              with their fusion scores, for agent transparency.
         """
         self._ensure_retrievers()
         assert self._dense_retriever is not None
@@ -328,6 +373,8 @@ class HybridPatternRetriever:
             )
             return self._fallback(user_domain)
 
+        matched_domain_list = self._matched_domains_from_nodes(fused)
+
         logger.debug(
             "Hybrid retriever resolved %d patterns",
             len(resolved),
@@ -348,9 +395,9 @@ class HybridPatternRetriever:
                 ],
             },
         )
-        return resolved
+        return RetrievalOutcome(patterns=resolved, matched_domains=matched_domain_list)
 
-    def _fallback(self, user_domain: str) -> list[tuple[dict[str, Any], float]]:
+    def _fallback(self, user_domain: str) -> RetrievalOutcome:
         """Return the fallback pattern (tagged ``is_fallback=True``) or an empty list.
 
         The ``is_fallback`` sentinel lets the analyze phase filter fallback
@@ -365,10 +412,10 @@ class HybridPatternRetriever:
                 user_domain,
                 DEFAULT_FALLBACK_PATTERN_NAME,
             )
-            return [(tagged, 0.0)]
+            return RetrievalOutcome(patterns=[(tagged, 0.0)], matched_domains=[])
         logger.warning(
             "No pattern matched domain '%s' and fallback '%s' not found in catalogue",
             user_domain,
             DEFAULT_FALLBACK_PATTERN_NAME,
         )
-        return []
+        return RetrievalOutcome(patterns=[], matched_domains=[])

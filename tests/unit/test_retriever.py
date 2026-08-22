@@ -153,10 +153,11 @@ class TestRetrieveFallbackWhenNoMatch:
             normalized_domain="nonexistent-domain",
         )
 
-        assert len(result) == 1
-        pattern, score = result[0]
+        assert len(result.patterns) == 1
+        pattern, score = result.patterns[0]
         assert pattern["name"] == "layered-monolith"
         assert score == 0.0
+        assert result.matched_domains == []
         assert "No pattern matched domain" in caplog.text
         assert "layered-monolith" in caplog.text
         assert any(r.levelno == logging.WARNING for r in caplog.records)
@@ -197,7 +198,8 @@ class TestRetrieveFallbackMissing:
             normalized_domain="nonexistent-domain",
         )
 
-        assert result == []
+        assert result.patterns == []
+        assert result.matched_domains == []
         assert "fallback" in caplog.text.lower()
         assert "not found" in caplog.text.lower()
         assert any(r.levelno == logging.WARNING for r in caplog.records)
@@ -255,10 +257,12 @@ class TestRetrieveRealResults:
 
         result = retriever.retrieve(user_domain="microservices", normalized_domain="microservices")
 
-        assert len(result) == 1
-        pattern, score = result[0]
+        assert len(result.patterns) == 1
+        pattern, score = result.patterns[0]
         assert pattern["name"] == "microservices"
         assert score == MOCK_FUSION_SCORE
+        assert len(result.matched_domains) == 1
+        assert result.matched_domains[0].slug == "microservices"
         assert "No pattern matched" not in caplog.text
         assert not any(r.levelno == logging.WARNING for r in caplog.records)
 

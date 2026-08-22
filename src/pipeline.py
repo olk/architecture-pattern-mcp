@@ -143,6 +143,8 @@ class AnalysisResult(BaseModel):
     quality_metrics: QualityMetrics | None = Field(default=None)
     recommended_style: str = Field(default="")
     selected_patterns: list[dict[str, Any]] = Field(default_factory=list)
+    matched_domains: list[dict[str, Any]] = Field(default_factory=list)
+    is_fallback: bool = Field(default=False)
 
 
 # Canonical quality-attribute keys present in every pattern's quality_attributes.
@@ -407,14 +409,14 @@ class ArchitecturePipeline(Workflow):
             # No top-K truncation here; selection happens AFTER scoring.
             # Issue #14: retriever is sync (CPU + HTTP for embedding); running
             # it on the event loop would stall concurrent MCP requests.
-            recalled = await asyncio.to_thread(
+            outcome = await asyncio.to_thread(
                 retriever.retrieve,
                 user_domain=domain,
                 normalized_domain=normalized_domain,
             )
             candidates: list[dict[str, Any]] = []
             has_real_candidate = False
-            for pattern_dict, fusion_score in recalled:
+            for pattern_dict, fusion_score in outcome.patterns:
                 p = dict(pattern_dict)
                 p["fusion_score"] = float(fusion_score)
                 if not p.get("is_fallback"):
@@ -425,6 +427,12 @@ class ArchitecturePipeline(Workflow):
             # issue #3's gate→0.0 fix).
             if has_real_candidate:
                 candidates = [c for c in candidates if not c.get("is_fallback")]
+
+            is_fallback = not has_real_candidate
+            matched_domains = [
+                {"slug": m.slug, "fusion_score": m.fusion_score}
+                for m in outcome.matched_domains
+            ]
 
             # ── Stage 2a (extract priorities): one lightweight LLM call ──
             # The prompt carries ONLY requirements + the 6 attribute names;
@@ -475,6 +483,8 @@ class ArchitecturePipeline(Workflow):
                 strengths=self._analyze_strengths(selected),
                 weaknesses=self._analyze_weaknesses(selected),
                 recommendations=self._generate_recommendations(selected),
+                matched_domains=matched_domains,
+                is_fallback=is_fallback,
             )
 
     async def generate(
@@ -761,6 +771,8 @@ class ArchitecturePipeline(Workflow):
                 final_style=best_design.overview.style.value,
                 quality_metrics=analysis_result.quality_metrics if analysis_result else None,
                 final_quality_score=best_score,  # already 0-100
+                matched_domains=analysis_result.matched_domains if analysis_result else [],
+                is_fallback=analysis_result.is_fallback if analysis_result else False,
             )
 
     # ──────────────────────────────────────────────────────────────────────────

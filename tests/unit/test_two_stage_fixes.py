@@ -464,8 +464,11 @@ class TestT6RerankLossless:
         # The mock reranker received all fused nodes (lossless)
         assert mock_reranker.input_count == 2
         # And the recall set still includes all candidates
-        assert len(result) == 1  # deduplicated to 1 unique pattern name
-        assert result[0][0]["name"] == "microservices"
+        assert len(result.patterns) == 1  # deduplicated to 1 unique pattern name
+        assert result.patterns[0][0]["name"] == "microservices"
+        # Both slugs appear in matched_domains (mock is lossless: returns all nodes)
+        assert len(result.matched_domains) == 2
+        assert {m.slug for m in result.matched_domains} == {"microservices", "event-driven"}
 
 
 # ─── T7 ────────────────────────────────────────────────────────────────────────
@@ -529,10 +532,12 @@ class TestT7MinFusionScoreGateDisabled:
         # Raw dense score was 1/67; after RRF (rank=1, k=60) the fused
         # score becomes 1/(1+60-1) = 1/60 ≈ 0.01667. The key invariant:
         # the recall set is NOT demoted to fallback (was the old 0.015 bug).
-        assert len(result) == 1
-        assert result[0][0]["name"] == "microservices"
-        assert result[0][1] > 0.015  # would have been demoted under old threshold
-        assert result[0][1] == pytest.approx(1/60, abs=1e-4)
+        assert len(result.patterns) == 1
+        assert result.patterns[0][0]["name"] == "microservices"
+        assert result.patterns[0][1] > 0.015  # would have been demoted under old threshold
+        assert result.patterns[0][1] == pytest.approx(1/60, abs=1e-4)
+        assert len(result.matched_domains) == 1
+        assert result.matched_domains[0].slug == "microservices"
 
     def test_genuinely_empty_recall_uses_fallback(self):
         """When recall is genuinely empty (no candidates, score=0.0),
@@ -572,11 +577,13 @@ class TestT7MinFusionScoreGateDisabled:
             user_domain="x",
             normalized_domain="x",
         )
-        assert len(result) == 1
-        assert result[0][0]["name"] == "microservices"
-        assert result[0][1] == 0.0
+        assert len(result.patterns) == 1
+        assert result.patterns[0][0]["name"] == "microservices"
+        assert result.patterns[0][1] == 0.0
         # Tag is set
-        assert result[0][0].get("is_fallback") is True
+        assert result.patterns[0][0].get("is_fallback") is True
+        # Fallback path means no real matched domains
+        assert result.matched_domains == []
 
 
 # ─── T8 ────────────────────────────────────────────────────────────────────────

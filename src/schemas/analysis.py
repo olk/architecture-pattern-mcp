@@ -31,6 +31,18 @@ from src.schemas.patterns import ScoredPattern
 from src.schemas.quality import QualityMetrics
 
 
+class MatchedDomain(BaseModel):
+    """
+    A resolved architecture domain slug from the BM25+FAISS hybrid retriever.
+
+    Returned in tool outputs so calling agents can see which domain slugs
+    were matched and how confidently (fusion score).
+    """
+
+    slug: str = Field(..., description="ArchitectureDomain slug (e.g. 'e-commerce', 'payment-processing')")
+    fusion_score: float = Field(..., description="RRF fusion score for this slug (higher = better match)")
+
+
 class AnalysisResult(BaseModel):
     """
     Result of architecture requirements analysis.
@@ -62,4 +74,12 @@ class AnalysisResult(BaseModel):
     selected_patterns: list[ScoredPattern] = Field(
         default_factory=list,
         description="Patterns selected during analysis, ordered by analysis_score descending",
+    )
+    matched_domains: list[MatchedDomain] = Field(
+        default_factory=list,
+        description="Top matched ArchitectureDomain slugs from BM25+FAISS retrieval (max 5, ordered by fusion score)"
+    )
+    is_fallback: bool = Field(
+        default=False,
+        description="True when no real domain match was found and the fallback 'layered-monolith' pattern was used"
     )

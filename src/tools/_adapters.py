@@ -63,7 +63,7 @@ from src.schemas import (
     Relationship,
     QualityMetrics as QualityMetricsPD,
 )
-from src.schemas.analysis import AnalysisResult
+from src.schemas.analysis import AnalysisResult, MatchedDomain
 from src.schemas.patterns import ScoredPattern
 from src.schemas.contracts import ApiContract, ApiEndpoint
 from src.schemas.quality import QualityMetrics as QualityMetricsDC
@@ -128,6 +128,11 @@ def analysis_to_pydantic(dc: AnalysisResultDC) -> AnalysisResult:
         elif isinstance(p, dict):
             patterns.append(_lint_convert(ScoredPattern, p))
 
+    matched_domains = [
+        MatchedDomain(slug=d["slug"], fusion_score=d["fusion_score"])
+        for d in dc.matched_domains
+    ]
+
     return AnalysisResult(
         strengths=list(dc.strengths),
         weaknesses=list(dc.weaknesses),
@@ -135,6 +140,8 @@ def analysis_to_pydantic(dc: AnalysisResultDC) -> AnalysisResult:
         quality_metrics=qm,
         recommended_style=dc.recommended_style,
         selected_patterns=patterns,
+        matched_domains=matched_domains,
+        is_fallback=bool(dc.is_fallback),
     )
 
 

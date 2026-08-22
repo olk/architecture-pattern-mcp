@@ -117,6 +117,14 @@ class DesignArchitectureOutput(BaseModel):
         default=0.0,
         description="Final quality score after best attempt"
     )
+    matched_domains: list[dict] = Field(
+        default_factory=list,
+        description="Top matched ArchitectureDomain slugs from BM25+FAISS retrieval with fusion scores"
+    )
+    is_fallback: bool = Field(
+        default=False,
+        description="True when no real domain match was found and the fallback layered-monolith pattern was used"
+    )
 
 
 class DesignArchitectureTool:
@@ -339,6 +347,8 @@ class DesignArchitectureTool:
             final_style=refined.final_style,
             quality_metrics=qm_dict,
             final_quality_score=refined.final_quality_score,
+            matched_domains=[m.model_dump() for m in refined.matched_domains],
+            is_fallback=refined.is_fallback,
         )
 
     def _is_llm_error(self, error: Exception) -> bool:
