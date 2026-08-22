@@ -43,7 +43,9 @@ from fastmcp.tools import tool
 from fastmcp.tools.base import ToolAnnotations
 
 from src.agent import ERROR_LLM_PROVIDER, LLMError, SoftwareArchitectAgent
+from src.errors import ERROR_REQUIREMENTS_VALIDATION
 from src.pipeline import ArchitecturePipeline
+from src.text_validation import DomainName, PrintableText, ensure_printable_text
 from src.tools.jobs import JobStatus, JobsStore
 
 logger = logging.getLogger(__name__)
@@ -81,18 +83,23 @@ class SubmitArchitectureDesignJobTool:
     )
     async def submit_job(
         self,
-        requirements: Annotated[str, Field(description="Architecture requirements description", min_length=1)],
-        domain: Annotated[str, Field(description="Target architecture domain", min_length=1)],
-        override_style: Annotated[str | None, Field(description="Override the derived architecture style")] = None,
+        requirements: Annotated[PrintableText, Field(description="Architecture requirements description (1-100000 chars, must contain visible text)")],
+        domain: Annotated[DomainName, Field(description="Target architecture domain (1-200 chars, must contain visible text)")],
+        override_style: Annotated[PrintableText | None, Field(description="Override the derived architecture style")] = None,
         ctx: Context | None = None,
     ) -> dict[str, Any]:
         if ctx is not None:
             await ctx.info(f"submit_architecture_design_job: domain={domain}, req_len={len(requirements)}")
 
-        if not requirements or not requirements.strip():
-            raise ToolError("ERR_001: Requirements validation fails")
-        if not domain or not domain.strip():
-            raise ToolError("ERR_001: Requirements validation fails")
+        try:
+            requirements = ensure_printable_text(requirements, field="requirements")
+        except ValueError as e:
+            raise ToolError(f"{ERROR_REQUIREMENTS_VALIDATION}: {e}") from e
+
+        try:
+            domain = ensure_printable_text(domain, field="domain", allow_line_breaks=False)
+        except ValueError as e:
+            raise ToolError(f"{ERROR_REQUIREMENTS_VALIDATION}: {e}") from e
 
         store = await JobsStore.get_instance()
         job_id = await store.create_job(

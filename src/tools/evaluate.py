@@ -59,8 +59,9 @@ from fastmcp.tools.base import ToolAnnotations
 
 from src.agent import ERROR_LLM_PROVIDER, LLMError, SoftwareArchitectAgent
 from src.config import TasksConfig
-from src.errors import ERROR_INVALID_ARCHITECTURE, MalformedArchitectureOverviewError
+from src.errors import ERROR_INVALID_ARCHITECTURE, ERROR_REQUIREMENTS_VALIDATION, MalformedArchitectureOverviewError
 from src.pipeline import ArchitectureEvaluation, ArchitecturePipeline
+from src.text_validation import DomainName, PrintableText, ensure_printable_text
 
 logger = logging.getLogger(__name__)
 
@@ -165,8 +166,8 @@ class EvaluateArchitectureTool:
     async def evaluate(  # noqa: PLR0912
         self,
         architecture: Annotated[dict[str, Any], Field(description="Architecture design as dictionary")],
-        criteria: Annotated[str, Field(description="Evaluation criteria description", min_length=1)],
-        domain: Annotated[str, Field(description="Target architecture domain", min_length=1)],
+        criteria: Annotated[PrintableText, Field(description="Evaluation criteria description (1-100000 chars, must contain visible text)")],
+        domain: Annotated[DomainName, Field(description="Target architecture domain (1-200 chars, must contain visible text)")],
         ctx: Context | None = None,
     ) -> dict[str, Any]:
         """
@@ -206,6 +207,16 @@ class EvaluateArchitectureTool:
             )
 
         try:
+            try:
+                criteria = ensure_printable_text(criteria, field="criteria")
+            except ValueError as e:
+                raise ToolError(f"{ERROR_REQUIREMENTS_VALIDATION}: {e}") from e
+
+            try:
+                domain = ensure_printable_text(domain, field="domain", allow_line_breaks=False)
+            except ValueError as e:
+                raise ToolError(f"{ERROR_REQUIREMENTS_VALIDATION}: {e}") from e
+
             architecture_design = self._convert_to_architecture_design(architecture)
 
             if not self._check_minimum_requirements(architecture_design):

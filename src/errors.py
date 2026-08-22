@@ -39,6 +39,7 @@ from __future__ import annotations
 from typing import Any
 
 ERROR_INVALID_ARCHITECTURE = "ERR_012"
+ERROR_REQUIREMENTS_VALIDATION = "ERR_001"
 
 
 class MalformedArchitectureOverviewError(ValueError):

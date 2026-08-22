@@ -43,6 +43,7 @@ from fastmcp.tools.base import ToolAnnotations
 from pydantic import Field
 
 from src.resources.patterns import PatternResource
+from src.text_validation import PatternName
 
 logger = logging.getLogger(__name__)
 
@@ -188,13 +189,7 @@ class GetArchitecturePatternTool:
     )
     async def get_architecture_pattern(
         self,
-        name: Annotated[
-            str,
-            Field(
-                description="Pattern name (e.g. 'microservices', 'pipe-and-filter')",
-                min_length=1,
-            ),
-        ],
+        name: Annotated[PatternName, Field(description="Pattern name, e.g. 'microservices', 'pipe-and-filter'")],
         _ctx: Any = None,
     ) -> dict[str, Any]:
         """

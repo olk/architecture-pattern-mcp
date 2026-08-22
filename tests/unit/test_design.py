@@ -48,11 +48,12 @@ from src.schemas.evaluation import ArchitectureEvaluation, EvaluationSummary, Me
 # Import the tool class and related components
 from src.tools.design import (
     ERROR_LLM_PROVIDER,
-    ERROR_REQUIREMENTS_VALIDATION,
     DesignArchitectureOutput,
     DesignArchitectureTool,
     design_architecture_tool,
 )
+
+from src.errors import ERROR_REQUIREMENTS_VALIDATION
 
 # Test fixtures
 
@@ -444,7 +445,7 @@ class TestDesignArchitectureErrorHandling:
     async def test_whitespace_only_requirements_raises_error(self, mock_agent, mock_pipeline):
         """
         E-1: ERR_001 - Requirements validation fails (HTTP 400, severity: warn)
-        
+
         given_precondition: Whitespace-only requirements provided
         when_action: design() is called
         then_outcome: ToolError is raised with ERR_001
@@ -460,6 +461,39 @@ class TestDesignArchitectureErrorHandling:
             )
 
         assert ERROR_REQUIREMENTS_VALIDATION in str(exc_info.value)
+
+    @pytest.mark.parametrize(
+        ("bad_value", "bad_field"),
+        [
+            ("\t\t", "requirements"),
+            (" \t \n ", "requirements"),
+            ("\u200b\u200c", "requirements"),
+            ("\ufeff", "requirements"),
+            ("\x00", "requirements"),
+            ("", "domain"),
+            ("   ", "domain"),
+            ("\t", "domain"),
+            ("\u200b", "domain"),
+        ],
+    )
+    @pytest.mark.asyncio
+    async def test_invalid_text_rejected_before_pipeline(
+        self, mock_agent, mock_pipeline, bad_value: str, bad_field: str
+    ) -> None:
+        """ERR_001 validation fails for tab-only, mixed-whitespace, zero-width, control chars."""
+        from fastmcp.exceptions import ToolError
+
+        tool = DesignArchitectureTool(agent=mock_agent, pipeline=mock_pipeline)
+        mock_pipeline.run_design = AsyncMock()  # ensure not called
+
+        kwargs = {"requirements": "valid architecture requirements", "domain": "microservices"}
+        kwargs[bad_field] = bad_value
+
+        with pytest.raises(ToolError) as exc_info:
+            await tool.design(**kwargs)
+
+        assert ERROR_REQUIREMENTS_VALIDATION in str(exc_info.value)
+        mock_pipeline.run_design.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_llm_error_raises_tool_error(self, mock_agent, mock_pipeline):

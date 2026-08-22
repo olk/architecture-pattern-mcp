@@ -57,8 +57,10 @@ from fastmcp.tools.base import ToolAnnotations
 
 from src.agent import ERROR_LLM_PROVIDER, SoftwareArchitectAgent
 from src.config import TasksConfig
+from src.errors import ERROR_REQUIREMENTS_VALIDATION
 from src.patterns.retriever import DEFAULT_FALLBACK_PATTERN_NAME
 from src.pipeline import AnalysisResult, ArchitecturePipeline
+from src.text_validation import DomainName, PrintableText, ensure_printable_text
 
 logger = logging.getLogger(__name__)
 
@@ -175,8 +177,8 @@ class AnalyzeArchitectureTool:
     )
     async def analyze(  # noqa: PLR0912
         self,
-        requirements: Annotated[str, Field(description="Architecture requirements description", min_length=1)],
-        domain: Annotated[str, Field(description="Target architecture domain", min_length=1)],
+        requirements: Annotated[PrintableText, Field(description="Architecture requirements description (1-100000 chars, must contain visible text)")],
+        domain: Annotated[DomainName, Field(description="Target architecture domain (1-200 chars, must contain visible text)")],
         ctx: Context | None = None,
     ) -> dict[str, Any]:
         """
@@ -211,6 +213,16 @@ class AnalyzeArchitectureTool:
             await ctx.info(f"analyze_architecture: domain={domain}, req_len={len(requirements)}")
 
         try:
+            try:
+                requirements = ensure_printable_text(requirements, field="requirements")
+            except ValueError as e:
+                raise ToolError(f"{ERROR_REQUIREMENTS_VALIDATION}: {e}") from e
+
+            try:
+                domain = ensure_printable_text(domain, field="domain", allow_line_breaks=False)
+            except ValueError as e:
+                raise ToolError(f"{ERROR_REQUIREMENTS_VALIDATION}: {e}") from e
+
             hb = self._start_heartbeat(ctx, "analyze_architecture")
             try:
                 analysis_result = await self._pipeline.analyze(

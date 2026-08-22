@@ -62,17 +62,12 @@ from fastmcp.tools.base import ToolAnnotations
 
 from src.agent import ERROR_LLM_PROVIDER, LLMError, SoftwareArchitectAgent
 from src.config import TasksConfig
-from src.errors import ERROR_INVALID_ARCHITECTURE, MalformedArchitectureOverviewError
+from src.errors import ERROR_INVALID_ARCHITECTURE, ERROR_REQUIREMENTS_VALIDATION, MalformedArchitectureOverviewError
 from src.pipeline import ArchitecturePipeline
 from src.schemas.evaluation import PipelineResult
+from src.text_validation import DomainName, PrintableText, ensure_printable_text
 
 logger = logging.getLogger(__name__)
-
-
-# Error codes for E-1, E-9, and E-12
-# E-1: ERR_001 - Requirements validation fails (HTTP 400, severity: warn)
-# E-9: ERR_009 - LLM provider returned error (HTTP 502, severity: error)
-ERROR_REQUIREMENTS_VALIDATION = "ERR_001"
 
 
 class DesignArchitectureOutput(BaseModel):
@@ -201,9 +196,9 @@ class DesignArchitectureTool:
     async def design(  # noqa: PLR0912
 
         self,
-        requirements: Annotated[str, Field(description="Architecture requirements description", min_length=1)],
-        domain: Annotated[str, Field(description="Target architecture domain", min_length=1)],
-        override_style: Annotated[str | None, Field(description="Override the derived architecture style")] = None,
+        requirements: Annotated[PrintableText, Field(description="Architecture requirements description (1-100000 chars, must contain visible text)")],
+        domain: Annotated[DomainName, Field(description="Target architecture domain (1-200 chars, must contain visible text)")],
+        override_style: Annotated[PrintableText | None, Field(description="Override the derived architecture style")] = None,
         ctx: Context | None = None,
     ) -> dict[str, Any]:
         """
@@ -239,11 +234,15 @@ class DesignArchitectureTool:
             await ctx.info(f"design_architecture: domain={domain}, req_len={len(requirements)}, override_style={override_style}")
 
         try:
-            if not requirements or not requirements.strip():
-                raise ToolError(f"{ERROR_REQUIREMENTS_VALIDATION}: Requirements validation fails")
+            try:
+                requirements = ensure_printable_text(requirements, field="requirements")
+            except ValueError as e:
+                raise ToolError(f"{ERROR_REQUIREMENTS_VALIDATION}: {e}") from e
 
-            if not domain or not domain.strip():
-                raise ToolError(f"{ERROR_REQUIREMENTS_VALIDATION}: Requirements validation fails")
+            try:
+                domain = ensure_printable_text(domain, field="domain", allow_line_breaks=False)
+            except ValueError as e:
+                raise ToolError(f"{ERROR_REQUIREMENTS_VALIDATION}: {e}") from e
 
             hb = self._start_heartbeat(ctx, "design_architecture")
             try:

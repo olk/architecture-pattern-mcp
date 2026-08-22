@@ -59,9 +59,10 @@ from fastmcp.tools.base import ToolAnnotations
 
 from src.agent import ERROR_LLM_PROVIDER, SoftwareArchitectAgent
 from src.config import TasksConfig
-from src.errors import ERROR_INVALID_ARCHITECTURE, MalformedArchitectureOverviewError
+from src.errors import ERROR_INVALID_ARCHITECTURE, ERROR_REQUIREMENTS_VALIDATION, MalformedArchitectureOverviewError
 from src.pipeline import ArchitecturePipeline
 from src.schemas.design import ArchitectureDesign
+from src.text_validation import DomainName, PrintableText, ensure_printable_text
 
 logger = logging.getLogger(__name__)
 
@@ -197,9 +198,9 @@ class GenerateArchitectureTool:
     )
     async def generate(  # noqa: PLR0912
         self,
-        requirements: Annotated[str, Field(description="Architecture requirements description", min_length=1)],
-        style: Annotated[str, Field(description="Architecture style to use", min_length=1)],
-        domain: Annotated[str, Field(description="Target architecture domain", min_length=1)],
+        requirements: Annotated[PrintableText, Field(description="Architecture requirements description (1-100000 chars, must contain visible text)")],
+        style: Annotated[PrintableText, Field(description="Architecture style to use (1-100000 chars, must contain visible text)")],
+        domain: Annotated[DomainName, Field(description="Target architecture domain (1-200 chars, must contain visible text)")],
         selected_patterns: Annotated[list[str], Field(description="Pattern names to incorporate in the architecture")] = None,
         ctx: Context | None = None,
     ) -> dict[str, Any]:
@@ -243,26 +244,22 @@ class GenerateArchitectureTool:
                 f"req_len={len(requirements)}, patterns={len(selected_patterns)}"
             )
 
-        # Resolve pattern names → full pattern dicts expected by the pipeline.
-        # The pipeline calls pattern.get("name"), pattern.get("quality_attributes"),
-        # etc. directly; passing bare strings would AttributeError.
-        resolved: list[dict] = []
-        pattern_loader = getattr(self._pipeline, "_pattern_loader", None)
-        for name in selected_patterns:
-            if pattern_loader is None:
-                logger.warning(
-                    "generate_architecture: pattern_loader unavailable, skipping '%s'",
-                    name,
-                )
-                continue
-            p = pattern_loader.get_by_name(name)
-            if p is None:
-                logger.warning(
-                    "generate_architecture: pattern '%s' not found in catalogue, skipped",
-                    name,
-                )
-                continue
-            resolved.append(p)
+        try:
+            requirements = ensure_printable_text(requirements, field="requirements")
+        except ValueError as e:
+            raise ToolError(f"{ERROR_REQUIREMENTS_VALIDATION}: {e}") from e
+
+        try:
+            style = ensure_printable_text(style, field="style")
+        except ValueError as e:
+            raise ToolError(f"{ERROR_REQUIREMENTS_VALIDATION}: {e}") from e
+
+        try:
+            domain = ensure_printable_text(domain, field="domain", allow_line_breaks=False)
+        except ValueError as e:
+            raise ToolError(f"{ERROR_REQUIREMENTS_VALIDATION}: {e}") from e
+
+        resolved = self._resolve_patterns(selected_patterns)
 
         try:
             hb = self._start_heartbeat(ctx, "generate_architecture")
@@ -309,6 +306,27 @@ class GenerateArchitectureTool:
             raise ToolError(
                 f"{ERROR_GENERATION_FAILED}: Failed to generate architecture design: {error_msg}"
             ) from e
+
+    def _resolve_patterns(self, selected_patterns: list[str]) -> list[dict[str, Any]]:
+        """Resolve pattern names to full pattern dicts expected by the pipeline."""
+        resolved: list[dict[str, Any]] = []
+        pattern_loader = getattr(self._pipeline, "_pattern_loader", None)
+        for name in selected_patterns:
+            if pattern_loader is None:
+                logger.warning(
+                    "generate_architecture: pattern_loader unavailable, skipping '%s'",
+                    name,
+                )
+                continue
+            p = pattern_loader.get_by_name(name)
+            if p is None:
+                logger.warning(
+                    "generate_architecture: pattern '%s' not found in catalogue, skipped",
+                    name,
+                )
+                continue
+            resolved.append(p)
+        return resolved
 
     def _start_heartbeat(
         self, ctx: Context | None, label: str
