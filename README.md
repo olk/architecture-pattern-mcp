@@ -382,6 +382,8 @@ architecture-pattern-mcp --transport stdio
 
 The TEI embedder (Qwen3-Embedding-0.6B) is required for domain-scoped pattern retrieval. Without it, the server falls back to the default pattern. Docker compose starts it automatically; local users must run it separately on port 8080.
 
+The retrieval indexes (FAISS + BM25) are built at server startup so a misconfigured or unreachable TEI sidecar prevents startup (fail-fast) rather than breaking the user's first design request. Docker compose's `service_healthy` dependency ordering guarantees TEI is ready before the app starts.
+
 ---
 
 ## Configuration

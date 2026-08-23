@@ -829,6 +829,36 @@ class ArchitecturePipeline(Workflow):
     # Private helpers (unchanged from original)
     # ──────────────────────────────────────────────────────────────────────────
 
+    def warmup_indexes(self) -> None:
+        """Idempotently build retrieval indexes at server startup.
+
+        Call once from the FastMCP lifespan to fail-fast on a misconfigured
+        TEI sidecar (dense leg cannot run without working embeddings).
+        Skips when both indexes are already built.  Thread-safety:
+        assumed to run before any request arrives (lifespan completes
+        prior to yield), so no lock is held against concurrent
+        ``analyze()`` calls.
+
+        Raises:
+            Whatever ``_build_vector_index`` raises (e.g. TEI HTTP errors,
+            pattern-loader I/O).  The lifespan must let the exception
+            propagate so the server refuses to start.
+        """
+        if self._vector_index.is_built and self._bm25_index.is_built:
+            logger.debug("Retrieval indexes already built; warmup no-op")
+            return
+
+        logger.info("Warming up retrieval indexes...")
+        start = time.perf_counter()
+        self._build_vector_index()
+        duration_ms = (time.perf_counter() - start) * 1000.0
+        domain_count = len(self._vector_index._domains)  # type: ignore[attr-defined]
+        logger.info(
+            "Index warmup complete: %d domains, %.1fms",
+            domain_count,
+            duration_ms,
+        )
+
     def _build_vector_index(self) -> None:
         """Build FAISS and BM25 indexes from pattern suitable_domains."""
         all_patterns = self._pattern_loader.load_all()

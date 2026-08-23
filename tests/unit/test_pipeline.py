@@ -41,7 +41,7 @@ Design Patterns Tested:
 """
 
 import pytest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from src.pipeline import (
     AnalysisResult,
@@ -1917,3 +1917,78 @@ class TestTimedPhaseLogging:
             rec.phase == "generate" and rec.duration_s > 0
             for rec in caplog.records
         )
+
+
+class _FakeIndex:
+    """Mimics DomainVectorIndex / DomainBM25Index is_built contract."""
+
+    def __init__(self, built: bool = False) -> None:
+        self._built = built
+        self._domains: list[str] = []
+        self.build_calls = 0
+
+    @property
+    def is_built(self) -> bool:
+        return self._built
+
+    def build_index(self, domains: list[str]) -> None:
+        self.build_calls += 1
+        self._domains = list(domains)
+        self._built = True
+
+
+class TestWarmupIndexes:
+    """Tests for ArchitecturePipeline.warmup_indexes()."""
+
+    def _make_pipeline(self, vector: _FakeIndex, bm25: _FakeIndex) -> ArchitecturePipeline:
+        """Build a minimal ArchitecturePipeline stub that intercepts warmup_indexes."""
+        from unittest.mock import MagicMock
+
+        agent = MagicMock()
+        loader = MagicMock()
+        loader.load_all.return_value = []
+
+        pipeline = ArchitecturePipeline(
+            agent=agent,
+            pattern_loader=loader,
+            vector_index=MagicMock(),
+            bm25_index=MagicMock(),
+        )
+        pipeline._vector_index = vector
+        pipeline._bm25_index = bm25
+        return pipeline
+
+    def test_warmup_indexes_skips_when_both_built(self) -> None:
+        """No rebuild when both indexes are already built."""
+        vector, bm25 = _FakeIndex(built=True), _FakeIndex(built=True)
+        pipeline = self._make_pipeline(vector, bm25)
+        with patch.object(pipeline, "_build_vector_index") as mock_build:
+            pipeline.warmup_indexes()
+        mock_build.assert_not_called()
+
+    def test_warmup_indexes_builds_when_unbuilt(self) -> None:
+        """Builds both indexes when neither is built."""
+        vector, bm25 = _FakeIndex(built=False), _FakeIndex(built=False)
+        pipeline = self._make_pipeline(vector, bm25)
+        with patch.object(pipeline, "_build_vector_index") as mock_build:
+            pipeline.warmup_indexes()
+        mock_build.assert_called_once()
+
+    def test_warmup_indexes_idempotent(self) -> None:
+        """Second call is a no-op after first build marks indexes as built."""
+        vector, bm25 = _FakeIndex(built=False), _FakeIndex(built=False)
+        pipeline = self._make_pipeline(vector, bm25)
+
+        call_count = 0
+
+        def counting_build() -> None:
+            nonlocal call_count
+            call_count += 1
+            vector._built = True
+            bm25._built = True
+
+        with patch.object(pipeline, "_build_vector_index", counting_build):
+            pipeline.warmup_indexes()
+            pipeline.warmup_indexes()
+
+        assert call_count == 1

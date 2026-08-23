@@ -386,6 +386,14 @@ class MCPArchitectServer:
 
             logger.info("ArchitecturePipeline initialized")
 
+            # Warm retrieval indexes at startup so a misconfigured TEI sidecar
+            # fails fast (orchestrator restart loop) instead of breaking the
+            # user's first design request.  asyncio.to_thread avoids blocking
+            # the event loop while the (sync) build makes its TEI HTTP call.
+            logger.info("Warming up retrieval indexes...")
+            await asyncio.to_thread(self._pipeline.warmup_indexes)
+            logger.info("Retrieval indexes ready")
+
             self._pipeline.validate()
 
             # Create all tool instances using factory pattern
