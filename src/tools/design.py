@@ -326,44 +326,53 @@ class DesignArchitectureTool:
         return asyncio.create_task(_hb())
 
     def _map_to_output(self, refined: PipelineResult) -> DesignArchitectureOutput:
-        """
-        Map PipelineResult from pipeline to DesignArchitectureOutput.
-
-        Args:
-            refined: PipelineResult from ArchitecturePipeline.run_design()
-
-        Returns:
-            DesignArchitectureOutput mapped from refined architecture
-        """
-        from src.tools._adapters import design_to_pydantic
-        pd_design = design_to_pydantic(refined.design)
-        design_dict = pd_design.model_dump()
-        eval_dict = refined.evaluation.model_dump() if hasattr(refined.evaluation, "model_dump") else dict(refined.evaluation)
-        qm_dict = refined.quality_metrics.model_dump() if refined.quality_metrics else None
-        return DesignArchitectureOutput(
-            design=design_dict,
-            evaluation=eval_dict,
-            attempts=refined.attempts,
-            final_style=refined.final_style,
-            quality_metrics=qm_dict,
-            final_quality_score=refined.final_quality_score,
-            matched_domains=[m.model_dump() for m in refined.matched_domains],
-            is_fallback=refined.is_fallback,
-        )
+        """Delegate to the module-level function for shared serialization."""
+        return pipeline_result_to_output(refined)
 
     def _is_llm_error(self, error: Exception) -> bool:
         """
         Check if error is an LLM provider error.
-        
+
         E-9: ERR_009 - LLM provider returned error
-        
+
         Args:
             error: Exception to check
-            
+
         Returns:
-            True if error is LLM-related
+            True if LLM-related
         """
         return isinstance(error, LLMError)
+
+
+def pipeline_result_to_output(refined: PipelineResult) -> DesignArchitectureOutput:
+    """
+    Map PipelineResult from pipeline to DesignArchitectureOutput.
+
+    Single source of truth for the design_architecture output schema.
+    Used by both the blocking DesignArchitectureTool and the async
+    submit_architecture_design_job background task.
+
+    Args:
+        refined: PipelineResult from ArchitecturePipeline.run_design()
+
+    Returns:
+        DesignArchitectureOutput mapped from refined architecture
+    """
+    from src.tools._adapters import design_to_pydantic
+    pd_design = design_to_pydantic(refined.design)
+    design_dict = pd_design.model_dump()
+    eval_dict = refined.evaluation.model_dump() if hasattr(refined.evaluation, "model_dump") else dict(refined.evaluation)
+    qm_dict = refined.quality_metrics.model_dump() if refined.quality_metrics else None
+    return DesignArchitectureOutput(
+        design=design_dict,
+        evaluation=eval_dict,
+        attempts=refined.attempts,
+        final_style=refined.final_style,
+        quality_metrics=qm_dict,
+        final_quality_score=refined.final_quality_score,
+        matched_domains=[m.model_dump() for m in refined.matched_domains],
+        is_fallback=refined.is_fallback,
+    )
 
 
 # MCP Tool definition function

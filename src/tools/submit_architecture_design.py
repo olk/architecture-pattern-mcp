@@ -32,6 +32,7 @@ is the default for all other clients.
 """
 
 import asyncio
+import json
 import logging
 from typing import Annotated, Any
 
@@ -46,6 +47,7 @@ from src.agent import ERROR_LLM_PROVIDER, LLMError, SoftwareArchitectAgent
 from src.errors import ERROR_REQUIREMENTS_VALIDATION
 from src.pipeline import ArchitecturePipeline
 from src.text_validation import DomainName, PrintableText, ensure_printable_text
+from src.tools.design import pipeline_result_to_output
 from src.tools.jobs import JobStatus, JobsStore
 
 logger = logging.getLogger(__name__)
@@ -145,8 +147,6 @@ class SubmitArchitectureDesignJobTool:
                     await ctx.info(f"Job {job_id}: cancelled before pipeline started")
                 return
 
-            from src.tools._adapters import design_to_pydantic
-
             refined = await self._pipeline.run_design(
                 requirements=requirements,
                 domain=domain,
@@ -161,23 +161,7 @@ class SubmitArchitectureDesignJobTool:
             if ctx:
                 await ctx.info(f"Job {job_id}: pipeline finished, storing result (attempts={refined.attempts})")
 
-            output = {
-                "design": design_to_pydantic(refined.design).model_dump(),
-                "evaluation": (
-                    refined.evaluation.model_dump()
-                    if hasattr(refined.evaluation, "model_dump")
-                    else dict(refined.evaluation)
-                ),
-                "attempts": refined.attempts,
-                "final_style": refined.final_style,
-                "quality_metrics": (
-                    refined.quality_metrics.model_dump()
-                    if refined.quality_metrics else None
-                ),
-                "final_quality_score": refined.final_quality_score,
-            }
-
-            import json
+            output = pipeline_result_to_output(refined).model_dump()
             await store.set_completed(job_id, json.dumps(output))
             logger.info("Job completed", extra={"job_id": job_id})
 
