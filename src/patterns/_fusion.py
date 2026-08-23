@@ -49,6 +49,26 @@ if TYPE_CHECKING:
 
 FusionMode = Literal["simple", "reciprocal_rerank"]
 
+RRF_K: float = 60.0
+
+
+def reciprocal_rank_score(rank: int, k: float = RRF_K) -> float:
+    r"""Reciprocal-rank contribution for one ranked list position.
+
+    Implements 1 / (rank + k - 1) — the same arithmetic used by
+    :func:`_fuse_rrf` per leg (rank starts at 1, so the best item
+    scores 1/k).  Shared by stage-1 fusion and the retriever's
+    :paramref:`HybridPatternRetriever.rerank_selection` =\ ``rank_fusion``
+    slug-cut so both use one definition of "reciprocal rank".
+
+    Note: the historical module docstring claimed ``rank=1 -> 1/61``; the
+    code has always computed 1/60 for k=60.  This helper documents the
+    actual behaviour; the stale claim is corrected rather than the formula
+    changed, because altering it would shift every stored fusion score
+    relative to the :paramref:`RetrievalConfig.min_fusion_score` threshold.
+    """
+    return 1.0 / (rank + k - 1)
+
 
 def apply_fusion(
     mode: FusionMode,
@@ -103,23 +123,23 @@ def _fuse_simple(
 def _fuse_rrf(
     dense_nodes: list[NodeWithScore],
     bm25_nodes: list[NodeWithScore],
-    k: float = 60.0,
+    k: float = RRF_K,
 ) -> list[NodeWithScore]:
     """Reciprocal Rank Fusion (Cormack et al. SIGIR'09).
 
     For each retriever, rank starts at 1 (off-by-one fix, issue #23):
-    rank=1 → 1/(1+60) = 1/61; rank=60 → 1/120.
+    rank=1 → 1/(k); rank=60 → 1/(k+59).
     """
     fused_scores: dict[str, float] = {}
     hash_to_node: dict[str, NodeWithScore] = {}
     for rank, node in enumerate(dense_nodes, start=1):
         h = node.node.hash
         hash_to_node[h] = node
-        fused_scores[h] = fused_scores.get(h, 0.0) + 1.0 / (rank + k - 1)
+        fused_scores[h] = fused_scores.get(h, 0.0) + reciprocal_rank_score(rank, k)
     for rank, node in enumerate(bm25_nodes, start=1):
         h = node.node.hash
         hash_to_node[h] = node
-        fused_scores[h] = fused_scores.get(h, 0.0) + 1.0 / (rank + k - 1)
+        fused_scores[h] = fused_scores.get(h, 0.0) + reciprocal_rank_score(rank, k)
     new_nodes = [
         NodeWithScore(node=hash_to_node[h].node, score=score)
         for h, score in fused_scores.items()

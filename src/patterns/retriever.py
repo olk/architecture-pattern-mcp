@@ -29,10 +29,19 @@ Stage-1 (recall) retrieval pipeline:
   4. BM25 leg:   tokenize(normalized_domain) → bm25s top-K via DomainBM25Index.as_retriever
      (bm25_top_k / dense_top_k = 0 means "full corpus" — lossless recall)
   5. Apply fusion function: simple | reciprocal_rerank | relative_score | dist_based_score
-  6. Optionally rerank with TextEmbeddingInference (cross-encoder via TEI sidecar);
-     cap survivors to rerank_top_n before pattern resolution (scoring itself is lossless)
+  6. Optionally rerank with TextEmbeddingInference (cross-encoder via TEI sidecar).
+     The slug-cut strategy is controlled by :paramref:`rerank_selection`:
+       "rerank"       - keep top rerank_top_n by cross-encoder order only
+                       (llama-index convention; correct when the CE signal dominates).
+                       Reported fusion_score is the original RRF reciprocal-rank score.
+       "rank_fusion" - keep top rerank_top_n by RR(rrf_rank) + RR(ce_rank)
+                       (Vespa-style blend, k=60).  Protects consensus-backed slugs
+                       from CE outliers on short domain-slug inputs.
+                       Reported fusion_score is the blended selection score.
+     Scoring itself remains lossless regardless of selection mode.
   7. Resolve each NodeWithScore.slug → patterns via PatternLoader.filter_by_domain
-  8. Aggregate: pattern_score = max(fusion_score) over slugs surfacing it
+  8. Aggregate: pattern_score = max(fusion_score) over slugs surfacing it.
+     fusion_score is RRF (``rerank``) or the blended RR(rrf)+RR(ce) (``rank_fusion``).
   9. Return resolved patterns with fusion scores. When reranking is enabled,
      the slug pool is bounded by rerank_top_n before pattern resolution.
      Requirements-aware selection of top_k_patterns happens downstream in the
@@ -44,7 +53,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 from llama_index.core.schema import QueryBundle
 from llama_index.postprocessor.tei_rerank import TextEmbeddingInference
@@ -52,7 +61,7 @@ from llama_index.postprocessor.tei_rerank import TextEmbeddingInference
 if TYPE_CHECKING:
     from llama_index.core.retrievers import BaseRetriever
 
-from src.patterns._fusion import FusionMode, apply_fusion
+from src.patterns._fusion import FusionMode, RRF_K, apply_fusion, reciprocal_rank_score
 from src.patterns.bm25_index import DomainBM25Index
 from src.patterns.embedder import TEI_RERANKER_MODEL
 from src.patterns.loader import PatternLoader
@@ -77,10 +86,19 @@ DOMAIN_MATCH_REPORT_LIMIT = 5
 
 @dataclass(frozen=True)
 class DomainMatch:
-    """A resolved domain slug with its fusion score, surfaced for agent transparency."""
+    """A resolved domain slug with its fusion score, surfaced for agent transparency.
+
+    Attributes:
+        fusion_score: RRF fusion score (``rerank`` mode) or the Vespa-style
+            blended score ``RR(rrf_rank) + RR(ce_rank)`` (``rank_fusion`` mode).
+            Higher values indicate stronger domain-similarity consensus.
+        rerank_score: Cross-encoder rerank logit for this slug, or None when
+            reranking did not run (e.g. single-candidate path).
+    """
 
     slug: str
     fusion_score: float
+    rerank_score: float | None = None
 
 
 @dataclass(frozen=True)
@@ -139,6 +157,7 @@ class HybridPatternRetriever:
         min_fusion_score: float = 0.0,
         rerank_top_n: int = 10,
         reranker_config: Any | None = None,
+        rerank_selection: Literal["rerank", "rank_fusion"] = "rerank",
     ) -> None:
         self._bm25 = bm25_index
         self._vector = vector_index
@@ -152,6 +171,7 @@ class HybridPatternRetriever:
         self._reranker: TextEmbeddingInference | None = None
         self._dense_retriever: BaseRetriever | None = None
         self._bm25_retriever: BaseRetriever | None = None
+        self._rerank_selection: Literal["rerank", "rank_fusion"] = rerank_selection
 
     def _ensure_retrievers(self) -> None:
         """Lazily build the underlying retrievers once.
@@ -215,21 +235,23 @@ class HybridPatternRetriever:
     def _matched_domains_from_nodes(
         self, nodes: list[Any]
     ) -> list[DomainMatch]:
-        slug_best: dict[str, float] = {}
+        slug_best: dict[str, tuple[float, float | None]] = {}
         for nws in nodes:
             slug = nws.node.metadata.get("slug", "")
             if not slug:
                 continue
-            score = float(nws.score) if nws.score is not None else 0.0
-            if slug not in slug_best or score > slug_best[slug]:
-                slug_best[slug] = score
-        sorted_slugs = sorted(slug_best.items(), key=lambda x: x[1], reverse=True)
+            fusion = float(nws.score) if nws.score is not None else 0.0
+            rerank = nws.node.metadata.get("rerank_logit")
+            rerank = float(rerank) if rerank is not None else None
+            if slug not in slug_best or fusion > slug_best[slug][0]:
+                slug_best[slug] = (fusion, rerank)
+        sorted_slugs = sorted(slug_best.items(), key=lambda x: x[1][0], reverse=True)
         return [
-            DomainMatch(slug=s, fusion_score=sc)
-            for s, sc in sorted_slugs[:DOMAIN_MATCH_REPORT_LIMIT]
+            DomainMatch(slug=s, fusion_score=sc, rerank_score=sr)
+            for s, (sc, sr) in sorted_slugs[:DOMAIN_MATCH_REPORT_LIMIT]
         ]
 
-    def retrieve(
+    def retrieve(  # noqa: PLR0912, PLR0915 — rationale in module docstring stage 6b
         self,
         user_domain: str,
         normalized_domain: str,
@@ -243,6 +265,21 @@ class HybridPatternRetriever:
         ``top_k_patterns`` happens in the analyze phase (ArchitecturePipeline),
         which scores each candidate against the requirements and only then truncates.
 
+        When reranking runs, each survivor's :class:`DomainMatch` entry carries
+        both the fusion score and the cross-encoder logit (``rerank_score``).
+        The fusion score semantics differ by mode:
+
+        - ``"rerank"`` mode: fusion_score is the original RRF reciprocal-rank
+          score.  The CE rank alone decides the survivor cut; RRF score is
+          preserved for downstream gating and observability.
+        - ``"rank_fusion"`` mode: fusion_score is the Vespa-style blended
+          selection score ``RR(rrf_rank) + RR(ce_rank)``.  Both RRF and CE
+          ranks contribute to the cut; the reported score reflects that blend.
+          The ``min_fusion_score`` gate applies to the blended value in this mode.
+
+        In both modes the pattern dict carries ``rerank_logit`` (the raw CE
+        logit) and the tuple score equals the mode's fusion_score.
+
         Args:
             user_domain:      Raw domain string from user (embedding query)
             normalized_domain: Pre-normalised domain (BM25 lexical query)
@@ -250,11 +287,15 @@ class HybridPatternRetriever:
         Returns:
             RetrievalOutcome containing:
             - patterns: list of (pattern_dict, fusion_score) tuples sorted by score
-              descending. fusion_score is a domain-similarity rank signal (RRF),
-              NOT a requirements-fit score.
+              descending. fusion_score is the RRF score (``"rerank"``) or the
+              blended score ``RR(rrf_rank) + RR(ce_rank)`` (``"rank_fusion"``),
+              NOT a requirements-fit score.  When reranking ran the pattern dict
+              additionally carries ``rerank_logit`` (the cross-encoder logit).
             - matched_domains: top matched ArchitectureDomain slugs (max 5)
-              with their fusion scores, for agent transparency.
-              Drawn from the post-cap survivor pool.
+              with their fusion scores and cross-encoder rerank logits
+              (``fusion_score`` and ``rerank_score`` fields), for agent
+              transparency.  ``fusion_score`` follows the same semantics as
+              above.  Drawn from the post-cap survivor pool.
         """
         self._ensure_retrievers()
         assert self._dense_retriever is not None
@@ -316,38 +357,82 @@ class HybridPatternRetriever:
         if len(fused) > 1:
             self._ensure_reranker()
             assert self._reranker is not None
-            # Score every fused node (lossless scoring) but cap the survivor
-            # pool to rerank_top_n before pattern resolution. Requirements-
-            # aware selection still happens downstream in the analyze phase.
+            rrf_rank = {n.node.hash: i for i, n in enumerate(fused, start=1)}
             self._reranker.top_n = len(fused)
-            fused = self._reranker.postprocess_nodes(
-                fused, query_bundle=QueryBundle(query_str=user_domain)
+            scored = self._reranker.postprocess_nodes(
+                list(fused), query_bundle=QueryBundle(query_str=user_domain)
             )
-            # Slice BEFORE restoring RRF scores: ranking is by cross-encoder
-            # order (set by postprocess_nodes), not by current nws.score.
-            # Capturing the pre-slice length keeps the debug log honest.
-            pre_slice_len = len(fused)
-            fused = fused[: self._rerank_top_n]
-            # Restore original RRF scores on survivors; stash the reranker
-            # logit in node.metadata for observability. The downstream
-            # min_fusion_score gate (and the analyze phase) still see RRF.
-            for nws in fused:
-                orig = nws.node.metadata.get("retrieval_score")
-                nws.node.metadata["rerank_logit"] = float(nws.score)  # type: ignore[arg-type]
-                nws.score = float(orig) if orig is not None else 0.0
-            logger.debug(
-                "Reranking scored %d candidates, kept %d after rerank_top_n cap",
-                pre_slice_len,
-                len(fused),
-            )
+            ce_rank = {n.node.hash: i for i, n in enumerate(scored, start=1)}
+
+            if (
+                self._rerank_selection == "rank_fusion"
+                and len(scored) >= self._rerank_top_n
+            ):
+                # Only include nodes present in scored (defensive: the reranker
+                # must return a permutation of fused, but guard against it adding
+                # or dropping nodes by intersecting with ce_rank keys).
+                scored_hashes = ce_rank.keys()
+                safe_rrf_rank = {h: rrf_rank[h] for h in scored_hashes if h in rrf_rank}
+                survivors = sorted(
+                    scored,
+                    key=lambda n: (
+                        reciprocal_rank_score(safe_rrf_rank.get(n.node.hash, len(scored)))
+                        + reciprocal_rank_score(ce_rank[n.node.hash])
+                    ),
+                    reverse=True,
+                )[: self._rerank_top_n]
+                selection_mode = "rank_fusion"
+            else:
+                survivors = scored[: self._rerank_top_n]
+                selection_mode = "rerank"
+
             logger.info(
-                "Reranking: %d candidates kept after rerank_top_n cap",
-                len(fused),
+                "Rerank selection mode: %s (%s)",
+                selection_mode,
+                "RR(rrf_rank) + RR(ce_rank)" if selection_mode == "rank_fusion" else "cross-encoder only",
+            )
+
+            for nws in survivors:
+                h = nws.node.hash
+                nws.node.metadata["rerank_logit"] = float(nws.score)  # type: ignore[arg-type]
+                if selection_mode == "rank_fusion":
+                    blend = (
+                        reciprocal_rank_score(safe_rrf_rank.get(h, len(scored)))
+                        + reciprocal_rank_score(ce_rank[h])
+                    )
+                    nws.node.metadata["selection_score"] = blend  # type: ignore[assignment]
+                    nws.score = blend
+                else:
+                    orig = nws.node.metadata.get("retrieval_score")
+                    nws.score = float(orig) if orig is not None else 0.0
+
+            logger.debug(
+                "Reranking (%s): %d candidates, kept %d after rerank_top_n cap",
+                selection_mode,
+                len(survivors),
+                self._rerank_top_n,
+            )
+            rerank_summary = {
+                "count": len(survivors),
+                "shown": len(survivors),
+                "top": [
+                    {
+                        "slug": n.node.metadata.get("slug", ""),
+                        "score": float(n.score or 0.0),
+                    }
+                    for n in survivors
+                ],
+            }
+            logger.info(
+                "Reranking (%s): %d candidates kept after rerank_top_n cap",
+                selection_mode,
+                len(survivors),
                 extra={
                     "stage": "rerank",
-                    "summary": _summarize_nodes(fused, len(fused)),
+                    "summary": rerank_summary,
                 },
             )
+            fused = survivors
 
         pattern_best: dict[str, tuple[dict[str, Any], float]] = {}
         for nws in fused:
@@ -355,13 +440,15 @@ class HybridPatternRetriever:
             if not slug:
                 continue
             score = nws.score if nws.score is not None else 0.0
+            rerank_logit = nws.node.metadata.get("rerank_logit")
             patterns = self._loader.filter_by_domain(slug)
             if not patterns:
                 continue
             for p in patterns:
                 pid = p.get("name", "")
                 if pid not in pattern_best or score > pattern_best[pid][1]:
-                    pattern_best[pid] = (p, float(score))
+                    p_with_rerank = dict(p) if rerank_logit is None else {**p, "rerank_logit": rerank_logit}
+                    pattern_best[pid] = (p_with_rerank, float(score))
 
         resolved = list(pattern_best.values())
         resolved.sort(key=lambda x: x[1], reverse=True)

@@ -167,6 +167,20 @@ class RetrievalConfig(BaseModel):
             "Reranker scoring itself remains lossless."
         ),
     )
+    rerank_selection: Literal["rerank", "rank_fusion"] = Field(
+        "rerank",
+        description=(
+            "Slug-cut strategy after cross-encoder scoring. "
+            '"rerank" (default): keep top rerank_top_n by cross-encoder order only '
+            "(llama-index convention). Reported fusion_score is the original RRF score. "
+            '"rank_fusion": Vespa-style blend — keep top rerank_top_n by '
+            "RR(rrf_rank) + RR(ce_rank), k=60.  "
+            "Protects consensus-backed slugs from CE outliers on short domain-slug inputs. "
+            "Reported fusion_score is the blended selection score "
+            "(the min_fusion_score gate applies to that blended value in this mode). "
+            "Has no effect when the candidate pool is < rerank_top_n."
+        ),
+    )
     reranker: RerankerConfig = Field(
         default_factory=lambda: RerankerConfig(
             config=RerankerInnerConfig(base_url="http://pattern-tei-rerank:8080")

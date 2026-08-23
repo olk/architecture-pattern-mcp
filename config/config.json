@@ -28,6 +28,7 @@
     "mode": "{env:RETRIEVAL_MODE:-reciprocal_rerank}",
     "min_fusion_score": "{env:RETRIEVAL_MIN_FUSION_SCORE:-0.0}",
     "rerank_top_n": "{env:RETRIEVAL_RERANK_TOP_N:-10}",
+    "rerank_selection": "{env:RETRIEVAL_RERANK_SELECTION:-rerank}",
     "reranker": {
       "config": {
         "base_url": "{env:RERANKER_BASE_URL:-http://pattern-tei-rerank:8080}",

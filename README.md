@@ -450,6 +450,7 @@ The server reads `~/.config/architecture-pattern-mcp/config.json` (override with
 | `RETRIEVAL_MODE` | `reciprocal_rerank` | Fusion mode: `simple`, `reciprocal_rerank` |
 | `RETRIEVAL_MIN_FUSION_SCORE` | `0.0` | Minimum RRF fusion score |
 | `RETRIEVAL_RERANK_TOP_N` | `10` | Rerank top N |
+| `RETRIEVAL_RERANK_SELECTION` | `rerank` | Slug-cut strategy: `rerank` (CE-only) or `rank_fusion` (Vespa-style RR blend) |
 | `RETRIEVAL_USE_LEAN_WIRE_SCHEMA` | `false` | Use lean response schema |
 | `RETRIEVAL_STYLE_SCORE_THRESHOLD` | `50.0` | Min analysis score for style recommendation |
 | `RETRIEVAL_ANALYSIS_BLEND_WEIGHT` | `0.7` | Weight on analysis score in blend |

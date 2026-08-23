@@ -402,6 +402,7 @@ class ArchitecturePipeline(Workflow):
                 reranker_config=self._retrieval_config.reranker.config
                 if self._retrieval_config.reranker
                 else None,
+                rerank_selection=self._retrieval_config.rerank_selection,
             )
 
             # ── Stage 1 (recall): all candidate patterns + fusion scores ──
@@ -429,7 +430,11 @@ class ArchitecturePipeline(Workflow):
 
             is_fallback = not has_real_candidate
             matched_domains = [
-                {"slug": m.slug, "fusion_score": m.fusion_score}
+                {
+                    "slug": m.slug,
+                    "fusion_score": m.fusion_score,
+                    "rerank_score": m.rerank_score,
+                }
                 for m in outcome.matched_domains
             ]
 

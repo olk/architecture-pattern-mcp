@@ -129,7 +129,11 @@ def analysis_to_pydantic(dc: AnalysisResultDC) -> AnalysisResult:
             patterns.append(_lint_convert(ScoredPattern, p))
 
     matched_domains = [
-        MatchedDomain(slug=d["slug"], fusion_score=d["fusion_score"])
+        MatchedDomain(
+            slug=d["slug"],
+            fusion_score=d["fusion_score"],
+            rerank_score=d.get("rerank_score"),
+        )
         for d in dc.matched_domains
     ]
 

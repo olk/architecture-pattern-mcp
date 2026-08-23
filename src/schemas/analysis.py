@@ -36,11 +36,16 @@ class MatchedDomain(BaseModel):
     A resolved architecture domain slug from the BM25+FAISS hybrid retriever.
 
     Returned in tool outputs so calling agents can see which domain slugs
-    were matched and how confidently (fusion score).
+    were matched and how confidently (fusion score and, when reranking ran,
+    cross-encoder rerank logit).
     """
 
     slug: str = Field(..., description="ArchitectureDomain slug (e.g. 'e-commerce', 'payment-processing')")
     fusion_score: float = Field(..., description="RRF fusion score for this slug (higher = better match)")
+    rerank_score: float | None = Field(
+        default=None,
+        description="Cross-encoder rerank logit for this slug (None when reranking did not run).",
+    )
 
 
 class AnalysisResult(BaseModel):

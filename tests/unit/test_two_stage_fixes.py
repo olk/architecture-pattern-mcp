@@ -884,3 +884,553 @@ class TestRerankTopNCap:
         assert result.patterns[0][0].get("is_fallback") is True
         assert result.patterns[0][1] == 0.0
         assert result.matched_domains == []
+
+
+# ─── T8 ────────────────────────────────────────────────────────────────────────
+
+
+class TestT8RankFusionSelection:
+    """T8: rank_fusion slug-cut (Vespa-style) blends RRF consensus rank
+    with cross-encoder rank, protecting consensus-backed slugs from CE outliers
+    on short domain-slug inputs."""
+
+    def _make_fused_nodes(self, rrf_scores_and_slugs):
+        """Build a fused list where each node has:
+        - score = RRF score (descending position = RRF rank)
+        - node.hash = unique per node
+        - node.metadata["slug"] = slug
+        - node.metadata["retrieval_score"] = RRF score (for restore)
+
+        The caller (retriever) mutates .score and metadata on these objects,
+        so the same objects must be returned by the mock postprocess_nodes.
+        """
+        nodes = []
+        for rrf_score, slug in rrf_scores_and_slugs:
+            node = NodeWithScore(
+                node=TextNode(
+                    text=slug,
+                    metadata={
+                        "slug": slug,
+                        "retrieval_score": rrf_score,
+                    },
+                ),
+                score=rrf_score,
+            )
+            nodes.append(node)
+        return nodes
+
+    def _reranker_mock(self, fused_nodes, ce_scores_by_slug):
+        """Build a mock reranker that mutates the SAME node objects
+        in fused_nodes (setting node.score = CE logit) and returns them
+        sorted by CE score descending.
+
+        ce_scores_by_slug: dict mapping slug -> CE logit.
+        The order of the returned list is CE-descending.
+        """
+        class _MockReranker:
+            def __init__(self, nodes, scores):
+                self.top_n = len(nodes)
+                self._nodes = nodes
+                self._scores = scores
+
+            def postprocess_nodes(self, nodes, query_bundle):
+                # Mutate each node's score to CE logit (in-place on the passed list)
+                slug_to_ce = self._scores
+                for n in nodes:
+                    n.score = slug_to_ce.get(n.node.metadata["slug"], 0.0)
+                # Sort descending by CE score (in-place on the passed list)
+                nodes.sort(key=lambda n: n.score, reverse=True)
+                return nodes
+
+        return _MockReranker(fused_nodes, ce_scores_by_slug)
+
+    def test_rerank_mode_discards_rrf_consensus_slug(self):
+        """rerank mode keeps cross-encoder top-1 slug (CE-only ordering).
+
+        slug-a is RRF rank 1, CE rank 2 (CE score 0.05).
+        slug-b is RRF rank 2, CE rank 3 (CE score 0.01).
+        slug-c is RRF rank 3, CE rank 1 (CE score 0.95).
+        With top_n=1, rerank mode keeps slug-c (CE #1) and discards slug-a (RRF #1).
+        """
+        fused = self._make_fused_nodes([
+            (1.0 / 60, "slug-a"),
+            (1.0 / 61, "slug-b"),
+            (1.0 / 62, "slug-c"),
+        ])
+
+        class _CR:
+            is_built = True
+            domains = ["x"]
+
+            def __init__(self, nd):
+                self._nodes = nd
+
+            def as_retriever(self, _k):
+                return self
+
+            def retrieve(self, _q):
+                from copy import deepcopy
+                return deepcopy(self._nodes)
+
+        class _MR:
+            def __init__(self):
+                self.top_n = 3
+
+            def postprocess_nodes(self, nodes, query_bundle):
+                slug_to_ce = {"slug-a": 0.05, "slug-b": 0.01, "slug-c": 0.95}
+                for n in nodes:
+                    n.score = slug_to_ce[n.node.metadata["slug"]]
+                nodes.sort(key=lambda n: n.score, reverse=True)
+                return nodes
+
+        class _ML:
+            _loaded = True
+
+            def filter_by_domain(self, domain):
+                return [{
+                    "name": domain, "context": "T", "category": "a",
+                    "benefits": [], "tradeoffs": [], "quality_attributes": {},
+                    "suitable_domains": [],
+                }]
+
+            def get_by_name(self, _n):
+                return None
+
+        dr = _CR(fused)
+        br = _CR([])
+        retriever = HybridPatternRetriever(
+            bm25_index=br, vector_index=dr, pattern_loader=_ML(),
+            rerank_top_n=1,
+            reranker_config=MagicMock(base_url="http://x", timeout=30.0),
+            rerank_selection="rerank",
+        )
+        retriever._dense_retriever = dr
+        retriever._bm25_retriever = br
+        mock = _MR()
+        with patch("src.patterns.retriever.TextEmbeddingInference", return_value=mock):
+            result = retriever.retrieve("microservices", "microservices")
+        assert len(result.patterns) == 1
+        assert result.patterns[0][0]["name"] == "slug-c"
+
+    def test_rank_fusion_keeps_rrf_consensus_slug(self):
+        """rank_fusion keeps RRF top-1 slug instead of CE top-1.
+
+        slug-a is RRF rank 1, CE rank 2 (blended = 1/60 + 1/61 ≈ 0.033).
+        slug-c is RRF rank 3, CE rank 1 (blended = 1/62 + 1/60 ≈ 0.033).
+        slug-a wins the blend and survives the top-1 cut.
+        """
+        fused = self._make_fused_nodes([
+            (1.0 / 60, "slug-a"),
+            (1.0 / 61, "slug-b"),
+            (1.0 / 62, "slug-c"),
+        ])
+
+        class _CR:
+            is_built = True
+            domains = ["x"]
+
+            def __init__(self, nd):
+                self._nodes = nd
+
+            def as_retriever(self, _k):
+                return self
+
+            def retrieve(self, _q):
+                from copy import deepcopy
+                return deepcopy(self._nodes)
+
+        class _MR:
+            def __init__(self):
+                self.top_n = 3
+
+            def postprocess_nodes(self, nodes, query_bundle):
+                slug_to_ce = {"slug-a": 0.05, "slug-b": 0.01, "slug-c": 0.95}
+                for n in nodes:
+                    n.score = slug_to_ce[n.node.metadata["slug"]]
+                nodes.sort(key=lambda n: n.score, reverse=True)
+                return nodes
+
+        class _ML:
+            _loaded = True
+
+            def filter_by_domain(self, domain):
+                return [{
+                    "name": domain, "context": "T", "category": "a",
+                    "benefits": [], "tradeoffs": [], "quality_attributes": {},
+                    "suitable_domains": [],
+                }]
+
+            def get_by_name(self, _n):
+                return None
+
+        dr = _CR(fused)
+        br = _CR([])
+        retriever = HybridPatternRetriever(
+            bm25_index=br, vector_index=dr, pattern_loader=_ML(),
+            rerank_top_n=1,
+            reranker_config=MagicMock(base_url="http://x", timeout=30.0),
+            rerank_selection="rank_fusion",
+        )
+        retriever._dense_retriever = dr
+        retriever._bm25_retriever = br
+        mock = _MR()
+        with patch("src.patterns.retriever.TextEmbeddingInference", return_value=mock):
+            result = retriever.retrieve("microservices", "microservices")
+        assert len(result.patterns) == 1
+        assert result.patterns[0][0]["name"] == "slug-a"
+
+    def test_rank_fusion_reports_blended_scores(self):
+        """In rank_fusion mode, fusion_score IS the blended RR(rrf)+RR(ce) score."""
+        fused = self._make_fused_nodes([
+            (1.0 / 60, "slug-a"),
+            (1.0 / 61, "slug-b"),
+            (1.0 / 62, "slug-c"),
+        ])
+
+        class _CR:
+            is_built = True
+            domains = ["x"]
+
+            def __init__(self, nd):
+                self._nodes = nd
+
+            def as_retriever(self, _k):
+                return self
+
+            def retrieve(self, _q):
+                from copy import deepcopy
+                return deepcopy(self._nodes)
+
+        class _MR:
+            def __init__(self):
+                self.top_n = 3
+
+            def postprocess_nodes(self, nodes, query_bundle):
+                slug_to_ce = {"slug-a": 0.05, "slug-b": 0.01, "slug-c": 0.95}
+                for n in nodes:
+                    n.score = slug_to_ce[n.node.metadata["slug"]]
+                nodes.sort(key=lambda n: n.score, reverse=True)
+                return nodes
+
+        class _ML:
+            _loaded = True
+
+            def filter_by_domain(self, domain):
+                return [{
+                    "name": domain, "context": "T", "category": "a",
+                    "benefits": [], "tradeoffs": [], "quality_attributes": {},
+                    "suitable_domains": [],
+                }]
+
+            def get_by_name(self, _n):
+                return None
+
+        dr = _CR(fused)
+        br = _CR([])
+        retriever = HybridPatternRetriever(
+            bm25_index=br, vector_index=dr, pattern_loader=_ML(),
+            rerank_top_n=3,
+            reranker_config=MagicMock(base_url="http://x", timeout=30.0),
+            rerank_selection="rank_fusion",
+        )
+        retriever._dense_retriever = dr
+        retriever._bm25_retriever = br
+        mock = _MR()
+        with patch("src.patterns.retriever.TextEmbeddingInference", return_value=mock):
+            result = retriever.retrieve("microservices", "microservices")
+        blend_a = 1.0 / 60 + 1.0 / 61
+        blend_c = 1.0 / 62 + 1.0 / 60
+        blend_b = 1.0 / 61 + 1.0 / 62
+        assert len(result.matched_domains) == 3
+        assert result.matched_domains[0].slug == "slug-a"
+        assert result.matched_domains[0].fusion_score == pytest.approx(blend_a)
+        assert result.matched_domains[0].rerank_score == pytest.approx(0.05)
+        assert result.matched_domains[1].slug == "slug-c"
+        assert result.matched_domains[1].fusion_score == pytest.approx(blend_c)
+        assert result.matched_domains[1].rerank_score == pytest.approx(0.95)
+        assert result.matched_domains[2].slug == "slug-b"
+        assert result.matched_domains[2].fusion_score == pytest.approx(blend_b)
+        assert result.matched_domains[2].rerank_score == pytest.approx(0.01)
+        assert len(result.patterns) == 3
+        assert result.patterns[0][0]["name"] == "slug-a"
+        assert result.patterns[0][1] == pytest.approx(blend_a)
+        assert result.patterns[0][0]["rerank_logit"] == pytest.approx(0.05)
+
+    def test_rerank_mode_default_unchanged(self):
+        """Default rerank_selection='rerank' produces CE-only ordering (regression)."""
+        fused = self._make_fused_nodes([
+            (1.0 / 60, "slug-a"),
+            (1.0 / 75, "slug-b"),
+        ])
+
+        class _ConcreteRetriever:
+            def __init__(self, nodes):
+                self._nodes = nodes
+
+            def as_retriever(self, _k):
+                return self
+
+            def retrieve(self, _q):
+                return list(self._nodes)
+
+        class _MockReranker:
+            def __init__(self):
+                self.top_n = 3
+
+            def postprocess_nodes(self, nodes, query_bundle):
+                slug_to_ce = {"slug-a": 0.05, "slug-b": 0.01, "slug-c": 0.95}
+                for n in nodes:
+                    n.score = slug_to_ce[n.node.metadata["slug"]]
+                nodes.sort(key=lambda n: n.score, reverse=True)
+                return nodes
+
+        class _MockLoader:
+            _loaded = True
+
+            def filter_by_domain(self, domain):
+                return [
+                    {
+                        "name": domain,
+                        "context": "Test.",
+                        "category": "architectural",
+                        "benefits": [],
+                        "tradeoffs": [],
+                        "quality_attributes": {},
+                        "suitable_domains": [],
+                    }
+                ]
+
+            def get_by_name(self, _n):
+                return None
+
+        dense_retriever = _ConcreteRetriever(fused)
+        bm25_retriever = _ConcreteRetriever([])
+
+        for selection_mode in ("rerank", "rank_fusion"):
+            retriever = HybridPatternRetriever(
+                bm25_index=bm25_retriever,
+                vector_index=dense_retriever,
+                pattern_loader=_MockLoader(),
+                rerank_top_n=1,
+                reranker_config=MagicMock(
+                    base_url="http://localhost:8080", timeout=30.0
+                ),
+                rerank_selection=selection_mode,
+            )
+            retriever._dense_retriever = dense_retriever
+            retriever._bm25_retriever = bm25_retriever
+            mock = _MockReranker()
+            with patch(
+                "src.patterns.retriever.TextEmbeddingInference",
+                return_value=mock,
+            ):
+                result = retriever.retrieve(
+                    user_domain="microservices", normalized_domain="microservices"
+                )
+            assert result.patterns[0][0]["name"] == "slug-a"
+
+    def test_rank_fusion_noop_when_pool_le_topn(self):
+        """When pool size <= rerank_top_n, rank_fusion produces identical survivors to rerank mode (cut is a no-op)."""
+        fused = self._make_fused_nodes([
+            (1.0 / 60, "slug-a"),
+            (1.0 / 61, "slug-b"),
+        ])
+
+        class _CR:
+            def __init__(self, nd):
+                self._nodes = nd
+            def as_retriever(self, _k): return self
+            def retrieve(self, _q):
+                from copy import deepcopy
+                return deepcopy(self._nodes)
+
+        class _MR:
+            def __init__(self):
+                self.top_n = 2
+            def postprocess_nodes(self, nodes, query_bundle):
+                slug_to_ce = {"slug-a": 0.05, "slug-b": 0.95}
+                for n in nodes:
+                    n.score = slug_to_ce[n.node.metadata["slug"]]
+                nodes.sort(key=lambda n: n.score, reverse=True)
+                return nodes
+
+        class _ML:
+            _loaded = True
+            def filter_by_domain(self, domain):
+                return [{"name": domain, "context": "T", "category": "a",
+                         "benefits": [], "tradeoffs": [], "quality_attributes": {}, "suitable_domains": []}]
+            def get_by_name(self, _n): return None
+
+        results = {}
+        for mode in ("rerank", "rank_fusion"):
+            dr = _CR(fused)
+            br = _CR([])
+            retriever = HybridPatternRetriever(
+                bm25_index=br,
+                vector_index=dr,
+                pattern_loader=_ML(),
+                rerank_top_n=10,
+                reranker_config=MagicMock(
+                    base_url="http://localhost:8080", timeout=30.0
+                ),
+                rerank_selection=mode,
+            )
+            retriever._dense_retriever = dr
+            retriever._bm25_retriever = br
+            mock = _MR()
+            with patch(
+                "src.patterns.retriever.TextEmbeddingInference",
+                return_value=mock,
+            ):
+                results[mode] = retriever.retrieve(
+                    user_domain="microservices", normalized_domain="microservices"
+                )
+        assert results["rerank"].patterns == results["rank_fusion"].patterns
+
+    def test_domain_match_carries_rerank_score(self):
+        """After reranking, matched_domains entries carry rerank_score (CE logit) alongside fusion_score (RRF)."""
+        rrf_a = 1.0 / 60
+        rrf_b = 1.0 / 61
+        fused = self._make_fused_nodes([(rrf_a, "slug-a"), (rrf_b, "slug-b")])
+        ce_logit = 3.7
+
+        class _CR:
+            def __init__(self, nd):
+                self._nodes = nd
+            def as_retriever(self, _k): return self
+            def retrieve(self, _q):
+                from copy import deepcopy
+                return deepcopy(self._nodes)
+
+        class _MR:
+            def __init__(self): self.top_n = 2
+            def postprocess_nodes(self, nodes, query_bundle):
+                for n in nodes:
+                    n.score = ce_logit
+                return nodes
+
+        class _ML:
+            _loaded = True
+            def filter_by_domain(self, domain):
+                return [{"name": domain, "context": "T", "category": "a",
+                         "benefits": [], "tradeoffs": [], "quality_attributes": {}, "suitable_domains": []}]
+            def get_by_name(self, _n): return None
+
+        dr = _CR(fused)
+        br = _CR([])
+        retriever = HybridPatternRetriever(
+            bm25_index=br, vector_index=dr, pattern_loader=_ML(),
+            rerank_top_n=1,
+            reranker_config=MagicMock(base_url="http://x", timeout=30.0),
+            rerank_selection="rerank",
+        )
+        retriever._dense_retriever = dr
+        retriever._bm25_retriever = br
+        mock = _MR()
+        with patch("src.patterns.retriever.TextEmbeddingInference", return_value=mock):
+            result = retriever.retrieve("microservices", "microservices")
+        assert len(result.matched_domains) >= 1
+        assert result.matched_domains[0].slug == "slug-a"
+        assert result.matched_domains[0].fusion_score == pytest.approx(rrf_a)
+        assert result.matched_domains[0].rerank_score == pytest.approx(ce_logit)
+
+    def test_domain_match_rerank_score_none_without_rerank(self):
+        """When reranking is skipped (single candidate), matched_domains
+        rerank_score is None."""
+        fused = self._make_fused_nodes([(1.0 / 60, "slug-a")])
+
+        class _ConcreteRetriever:
+            def __init__(self, nodes):
+                self._nodes = nodes
+
+            def as_retriever(self, _k):
+                return self
+
+            def retrieve(self, _q):
+                return self._nodes
+
+        class _MockLoader:
+            _loaded = True
+
+            def filter_by_domain(self, domain):
+                return [
+                    {
+                        "name": domain,
+                        "context": "Test.",
+                        "category": "architectural",
+                        "benefits": [],
+                        "tradeoffs": [],
+                        "quality_attributes": {},
+                        "suitable_domains": [],
+                    }
+                ]
+
+            def get_by_name(self, _n):
+                return None
+
+        dense_retriever = _ConcreteRetriever(fused)
+        bm25_retriever = _ConcreteRetriever([])
+
+        retriever = HybridPatternRetriever(
+            bm25_index=bm25_retriever,
+            vector_index=dense_retriever,
+            pattern_loader=_MockLoader(),
+            rerank_top_n=1,
+            reranker_config=None,
+        )
+        retriever._dense_retriever = dense_retriever
+        retriever._bm25_retriever = bm25_retriever
+        result = retriever.retrieve(
+            user_domain="microservices", normalized_domain="microservices"
+        )
+        assert len(result.matched_domains) == 1
+        assert result.matched_domains[0].slug == "slug-a"
+        assert result.matched_domains[0].rerank_score is None
+
+    def test_pattern_dict_carries_rerank_logit(self):
+        """Resolved pattern dicts carry rerank_logit after reranking."""
+        rrf_a = 1.0 / 60
+        rrf_b = 1.0 / 61
+        fused = self._make_fused_nodes([(rrf_a, "slug-a"), (rrf_b, "slug-b")])
+        ce_logit = 2.3
+
+        class _CR:
+            def __init__(self, nd):
+                self._nodes = nd
+            def as_retriever(self, _k): return self
+            def retrieve(self, _q):
+                from copy import deepcopy
+                return deepcopy(self._nodes)
+
+        class _MR:
+            def __init__(self):
+                self.top_n = 2
+            def postprocess_nodes(self, nodes, query_bundle):
+                for n in nodes:
+                    n.score = ce_logit
+                return nodes
+
+        class _ML:
+            _loaded = True
+            def filter_by_domain(self, domain):
+                return [{"name": domain, "context": "T", "category": "a",
+                         "benefits": [], "tradeoffs": [], "quality_attributes": {}, "suitable_domains": []}]
+            def get_by_name(self, _n): return None
+
+        dr = _CR(fused)
+        br = _CR([])
+        retriever = HybridPatternRetriever(
+            bm25_index=br, vector_index=dr, pattern_loader=_ML(),
+            rerank_top_n=1,
+            reranker_config=MagicMock(base_url="http://x", timeout=30.0),
+            rerank_selection="rerank",
+        )
+        retriever._dense_retriever = dr
+        retriever._bm25_retriever = br
+        mock = _MR()
+        with patch("src.patterns.retriever.TextEmbeddingInference", return_value=mock):
+            result = retriever.retrieve("microservices", "microservices")
+        assert len(result.patterns) == 1
+        pattern_dict = result.patterns[0][0]
+        assert "rerank_logit" in pattern_dict
+        assert pattern_dict["rerank_logit"] == pytest.approx(ce_logit)
