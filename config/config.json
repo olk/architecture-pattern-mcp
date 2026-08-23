@@ -18,8 +18,7 @@
       "api_key": "{env:EMBEDDER_API_KEY}",
       "embed_batch_size": "{env:EMBEDDER_BATCH_SIZE:-16}",
       "query_instruction": "{env:EMBEDDER_QUERY_INSTRUCTION:-}",
-      "text_instruction": "{env:EMBEDDER_TEXT_INSTRUCTION:-}",
-      "max_embedder_tokens": "{env:EMBEDDER_MAX_TOKENS:-3000}"
+      "text_instruction": "{env:EMBEDDER_TEXT_INSTRUCTION:-}"
     }
   },
   "retrieval": {

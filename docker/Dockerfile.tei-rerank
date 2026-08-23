@@ -14,6 +14,51 @@
 #
 # No sed patches are needed: max_position_embeddings=8192 < default
 # max_batch_tokens=16384 so TEI accepts the model config without warning.
+#
+# Runtime tunables (clap env fallbacks — see below for the full contract):
+#
+#   MAX_CONCURRENT_REQUESTS  (default 512 in TEI; we set 32 as a safe CPU cap)
+#   MAX_BATCH_TOKENS       (default 16384 in TEI; model context is 8k, so this
+#                          is well above max_input_length — no warmup warning.
+#                          The embedder's warmup-OOM concern (PR #634/#725) does
+#                          NOT apply to this 149 M model; 16384 is safe.)
+#   MAX_CLIENT_BATCH_SIZE  (default 32 in TEI; must be ≥ the fused candidate
+#                          pool size sent to /rerank.  The pool = bm25_top_k +
+#                          dense_top_k (up to 20 + 20 = 40 with compose settings;
+#                          config.json defaults 0/0 = full corpus which can be
+#                          larger than any fixed server-side cap).  Raise this
+#                          if your pattern catalogue grows beyond ~48 candidates.
+#                          Client-side chunking is NOT done by llama-index's
+#                          TextEmbeddingInference — all candidates are posted in
+#                          one request.)
+#   AUTO_TRUNCATE           (default true; silently truncates inputs longer than
+#                          the model's max_input_length.  Keep enabled: domain
+#                          slugs are short but requirement strings can be long.)
+#   PROMETHEUS_PORT        (default 9000; we set 0 to bind an OS-assigned
+#                          ephemeral port so /metrics is never exposed outside
+#                          the container.)
+#   HOSTNAME               (default 0.0.0.0; bind to all interfaces so the
+#                          container is reachable from other containers.)
+#                          NOTE: Docker auto-injects HOSTNAME=<container-hostname>
+#                          into every container's process env at runtime.  TEI's
+#                          hostname parser rejects non-IP strings (logs "Invalid
+#                          hostname, defaulting to 0.0.0.0") so the effective
+#                          bind address is always 0.0.0.0 regardless of this
+#                          env var.  To actually bind to a specific IP, use
+#                          `docker run --hostname <ip>` (which sets the injected
+#                          env var to a valid IP that TEI accepts).  This env
+#                          var is included for API consistency; it cannot be
+#                          set to a useful value through compose -e or Dockerfile
+#                          ENV alone because Docker overrides it at runtime.
+#   PORT                   (default 8080; TEI's port.  NOTE: if you change this,
+#                          update the healthcheck curl URL in docker-compose.yml
+#                          and any RERANKER_BASE_URL that hard-codes :8080.)
+#
+# Clap precedence: CLI flag > env var > built-in default.
+# We keep --model-id and --dtype pinned in CMD to protect invariants
+# (ORT requires float32; sequence-classification models don't use --pooling
+# so it is correctly absent).  All seven tunables above are configurable via
+# environment variables.
 
 # Stage 1: download weights into a local directory.
 FROM python:3.10-slim AS model-downloader
@@ -53,10 +98,18 @@ COPY --from=model-downloader /data /data
 
 ENV HF_HUB_OFFLINE=1
 
+# Safe tunables as image-level defaults.  These are overridable at runtime via
+# docker-compose environment block or bare `docker run -e VAR=VALUE`.
+ENV MAX_CONCURRENT_REQUESTS=32 \
+    MAX_BATCH_TOKENS=16384 \
+    MAX_CLIENT_BATCH_SIZE=48 \
+    AUTO_TRUNCATE=true \
+    PROMETHEUS_PORT=0 \
+    HOSTNAME=0.0.0.0 \
+    PORT=8080
+
+# Pinned invariants only.  Runtime tunables (MAX_CONCURRENT_REQUESTS,
+# MAX_BATCH_TOKENS, MAX_CLIENT_BATCH_SIZE, AUTO_TRUNCATE, PROMETHEUS_PORT,
+# HOSTNAME, PORT) are controlled via environment variables — see header comment.
 CMD ["--model-id", "/data/reranker-model", \
-     "--hostname", "0.0.0.0", \
-     "--port", "8080", \
-     "--max-concurrent-requests", "32", \
-     "--max-client-batch-size", "32", \
-     "--auto-truncate", \
-     "--prometheus-port", "0"]
+     "--dtype", "float32"]

@@ -444,7 +444,6 @@ The server reads `~/.config/architecture-pattern-mcp/config.json` (override with
 | `EMBEDDER_BATCH_SIZE` | `16` | Embedding batch size |
 | `EMBEDDER_QUERY_INSTRUCTION` | *(empty)* | Query instruction prefix |
 | `EMBEDDER_TEXT_INSTRUCTION` | *(empty)* | Text instruction prefix |
-| `EMBEDDER_MAX_TOKENS` | `3000` | Max embedder tokens |
 | `RETRIEVAL_BM25_TOP_K` | `0` | BM25 stage-1 recall cap (0=full corpus) |
 | `RETRIEVAL_DENSE_TOP_K` | `0` | Dense stage-1 recall cap (0=full corpus) |
 | `RETRIEVAL_TOP_K_PATTERNS` | `5` | Number of patterns to select |

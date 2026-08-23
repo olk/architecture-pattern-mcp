@@ -55,7 +55,6 @@ def mock_config_manager():
                 "embed_batch_size": 16,
                 "query_instruction": "Instruct: Given a software architecture pattern domain tag, retrieve the most relevant existing pattern domain from the catalogue\nQuery: ",
                 "text_instruction": "",
-                "max_embedder_tokens": 3000,
             }
         },
         "pattern_directory": "/tmp/test_patterns",

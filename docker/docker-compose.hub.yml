@@ -1,7 +1,9 @@
 # Hub-friendly compose for users pulling olkowa/architecture-pattern-mcp from Docker Hub.
 #
-# This compose starts all three services: MCP server + TEI embedder + TEI reranker.
-# Everything is pulled from Docker Hub — no git clone, no GitHub fetches.
+# This compose starts the MCP server only.  TEI sidecar services (embedder + reranker)
+# must be started separately — pull or build `olkowa/pattern-tei-embed` and
+# `olkowa/pattern-tei-rerank` and wire them via EMBEDDER_BASE_URL /
+# RERANKER_BASE_URL (see the MCP service environment block below).
 #
 # Usage:
 #   TAG=0.1.0 docker compose -f docker-compose.hub.yml up -d   # pinned version

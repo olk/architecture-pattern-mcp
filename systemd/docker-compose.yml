@@ -30,6 +30,10 @@ services:
       - GENERATOR_TOP_K=20
 
       - EMBEDDER_PROVIDER=tei
+      # TEI sidecars (embedder + reranker) live in the external pattern-tei-infra
+      # stack.  TEI capacity tuning (MAX_BATCH_TOKENS, MAX_CONCURRENT_REQUESTS,
+      # AUTO_TRUNCATE, etc.) is configured there via the same env-var names used
+      # in the Dockerfile.ENV block of the pattern-tei-infra build.
       - EMBEDDER_BASE_URL=http://pattern-tei-embed:8080/v1
       - EMBEDDER_BATCH_SIZE=8
       - EMBEDDER_API_KEY=not-needed

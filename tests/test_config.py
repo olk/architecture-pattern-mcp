@@ -92,7 +92,6 @@ class TestLoadConfig:
                     "embed_batch_size": 16,
                     "query_instruction": "Instruct: test\nQuery: ",
                     "text_instruction": "",
-                    "max_embedder_tokens": 3000,
                 }
             }
         }
@@ -172,7 +171,6 @@ class TestLoadConfig:
                     "embed_batch_size": 16,
                     "query_instruction": "Instruct: test\nQuery: ",
                     "text_instruction": "",
-                    "max_embedder_tokens": 3000,
                 }
             }
         }))
@@ -208,7 +206,6 @@ class TestLoadConfig:
                     "embed_batch_size": 16,
                     "query_instruction": "Instruct: test\nQuery: ",
                     "text_instruction": "",
-                    "max_embedder_tokens": 3000,
                 }
             }
         }))
@@ -258,7 +255,6 @@ class TestLoadConfig:
                     "embed_batch_size": 32,
                     "query_instruction": "Instruct: modified\nQuery: ",
                     "text_instruction": "",
-                    "max_embedder_tokens": 3000,
                 }
             }
         }))

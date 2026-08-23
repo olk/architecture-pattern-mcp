@@ -9,7 +9,7 @@
 # (`onnx-community/Qwen3-Embedding-0.6B-ONNX`) instead of the upstream
 # `Qwen/Qwen3-Embedding-0.6B`:
 #
-#   TEI tries the ORT (ONNX Runtime) backend first, then falls back to
+#   TEI tries the ORT (OnnxRuntime) backend first, then falls back to
 #   candle. The upstream Qwen3-Embedding-0.6B repo ships PyTorch /
 #   Safetensors weights only — no `onnx/model.onnx` — so ORT fails to
 #   start, the server logs an `ERROR Could not start ORT backend`, and
@@ -29,36 +29,63 @@
 # We use the float32 ONNX variant (`onnx/model.onnx` +
 # `onnx/model.onnx_data`, ~4.7 GB) for best accuracy. The int8
 # variant is available at `onnx/model_int8.onnx` (~1.2 GB, 2-4× faster
-# CPU inference, small accuracy drop) if the image size is a concern;
-# swap `allow_patterns` below to pick it.
+# CPU inference, small accuracy drop) if the image size is a concern.
 #
-# Why we override the base image's CMD (which is unset/empty for the
-# public image):
+# Switching to int8 REQUIRES two steps after snapshot_download:
 #
-# 1. `--max-batch-tokens 8192` is the per-batch token budget; raising
-#    it to 32768 crashes the warmup on CPU (PR #634, #725: warmup
-#    allocates `max_batch_requests × max_input_length` of state,
-#    8 × 32768 fp32 OOMs). 8192 is enough because chunks are bounded
-#    by `max_embedder_input_chars=8000` in config.json (~2400 tokens
-#    each for German); the Qwen team's own usage example also uses
-#    `max_length=8192`.
+#   1. In the `allow_patterns` list below, replace
+#      `'onnx/model.onnx'` with `'onnx/model_int8.onnx'`
+#      and remove `'onnx/model.onnx_data'` (the int8 variant is self-contained).
+#   2. After the snapshot_download Python block completes, add a RUN step
+#      that renames the file so ORT can find it:
+#        mv /data/qwen3-embedding-0.6b/onnx/model_int8.onnx
+#           /data/qwen3-embedding-0.6b/onnx/model.onnx
+#      ORT hard-codes the filename lookup to `model.onnx` /
+#      `onnx/model.onnx` in `backends/ort/src/lib.rs`; renaming is
+#      required because there is no `--onnx-filename` flag in TEI 1.9.
 #
-# 2. The per-request batch-size cap (`--max-client-batch-size 32`) and
-#    the concurrent-request cap (`--max-concurrent-requests 32`) must
-#    both be ≥ the llama-index client's `embed_batch_size` (capped from
-#    config.json's `tei_max_client_batch_size`, default 8). With
-#    fewer permits, the batch handler returns HTTP 429 with
-#    `try_acquire_permit: no permits available` (core/src/infer.rs:102)
-#    because TEI acquires a semaphore permit *per input*
-#    (router/src/http/server.rs, batch branch), not per request.
+# Runtime tunables (clap env fallbacks — see below for the full contract):
 #
-# Silence the "maximum input length 32768 exceeds --max-batch-tokens=8192"
-# warning at router/src/lib.rs:214 by aligning the model's advertised
-# `max_position_embeddings` with the operational token cap. After this
-# patch, `base_input_length` (parsed from config.json) becomes 8192, the
-# warning branch is never taken, and warmup uses 8192. The community
-# ONNX model inherits `max_position_embeddings: 32768` from the
-# original Qwen3-Embedding-0.6B config, so the same sed patch applies.
+#   MAX_CONCURRENT_REQUESTS  (default 512 in TEI; we set 32 as a safe CPU cap)
+#   MAX_BATCH_TOKENS       (default 16384 in TEI; we set 8192 to avoid the
+#                          documented CPU warmup OOM at PR #634/#725 — raising
+#                          to 32768 with 8 × 32768 fp32 allocation crashes the
+#                          process.  The Qwen team's own usage example also uses
+#                          max_length=8192.)
+#   MAX_CLIENT_BATCH_SIZE  (default 32 in TEI; must be ≥ the client's
+#                          EMBEDDER_BATCH_SIZE.  With fewer permits TEI returns HTTP 429
+#                          `try_acquire_permit: no permits available` because it
+#                          acquires one semaphore permit per input, not per request
+#                          (router/src/http/server.rs batch branch).  Client-side
+#                          embed_batch_size is controlled by EMBEDDER_BATCH_SIZE
+#                          (compose) / embed_batch_size (config.json), default 16.
+#   AUTO_TRUNCATE           (default true; silently truncates inputs longer than
+#                          max_input_length.  Keep enabled: client requirements
+#                          strings can be up to 100 000 chars.)
+#   PROMETHEUS_PORT        (default 9000; we set 0 to bind an OS-assigned
+#                          ephemeral port so /metrics is never exposed outside
+#                          the container.)
+#   HOSTNAME               (default 0.0.0.0; bind to all interfaces so the
+#                          container is reachable from other containers.)
+#                          NOTE: Docker auto-injects HOSTNAME=<container-hostname>
+#                          into every container's process env at runtime.  TEI's
+#                          hostname parser rejects non-IP strings (logs "Invalid
+#                          hostname, defaulting to 0.0.0.0") so the effective
+#                          bind address is always 0.0.0.0 regardless of this
+#                          env var.  To actually bind to a specific IP, use
+#                          `docker run --hostname <ip>` (which sets the injected
+#                          env var to a valid IP that TEI accepts).  This env
+#                          var is included for API consistency; it cannot be
+#                          set to a useful value through compose -e or Dockerfile
+#                          ENV alone because Docker overrides it at runtime.
+#   PORT                   (default 8080; TEI's port.  NOTE: if you change this,
+#                          update the healthcheck curl URL in docker-compose.yml
+#                          and any EMBEDDER_BASE_URL that hard-codes :8080.)
+#
+# Clap precedence: CLI flag > env var > built-in default.
+# We keep --model-id, --pooling, --dtype pinned in CMD to protect invariants
+# (ORT requires dtype=float32; Qwen3 uses last-token pooling).
+# All seven tunables above are configurable via environment variables.
 #
 # Persistent warnings (genuinely unfixable from the command line):
 #   - "Could not find a Sentence Transformers config" (lib.rs:203) —
@@ -70,11 +97,11 @@
 #     the backend in `backend.max_batch_size.inspect(...)` and exposed
 #     via `/info`. The check fires against the backend's capability,
 #     not against `--max-batch-requests`; setting the flag does not
-#     silence the warning. 8 happens to match the llama-index client's
+#     silence the warning.  8 happens to match the llama-index client's
 #     `embed_batch_size=8` exactly, so no client-side splitting is
-#     needed. The earlier private base image (candle backend) also
+#     needed.  The earlier private base image (candle backend) also
 #     reported 8; cpu-1.9 + candle reported 4 — switching to ORT
-#     doubled the cap back to 8. Raising it further requires a GPU
+#     doubled the cap back to 8.  Raising it further requires a GPU
 #     image (cuda-1.9 et al.) or a different ONNX export.
 #
 # No model weights are re-downloaded at runtime — they are baked into
@@ -106,9 +133,6 @@ RUN pip install --no-cache-dir huggingface_hub
 # We use the BuildKit secret if present (see docker-compose.yaml
 # `secrets: - hf_token`); otherwise the download proceeds anonymously.
 # `allow_patterns` picks the float32 ONNX variant + tokenizer files.
-# To switch to int8 (~1.2 GB, 2-4× faster CPU), replace
-# `onnx/model.onnx` and `onnx/model.onnx_data` with
-# `onnx/model_int8.onnx` below and drop the .onnx_data line.
 RUN --mount=type=secret,id=hf_token \
     HF_TOKEN="$(cat /run/secrets/hf_token 2>/dev/null || true)" \
     python -c "import os; \
@@ -131,16 +155,22 @@ COPY --from=model-downloader /data /data
 
 ENV HF_HUB_OFFLINE=1
 
+# Safe CPU tunables as image-level defaults.  These are overridable at
+# runtime via docker-compose environment block or bare `docker run -e VAR=VALUE`.
+ENV MAX_CONCURRENT_REQUESTS=32 \
+    MAX_BATCH_TOKENS=8192 \
+    MAX_CLIENT_BATCH_SIZE=32 \
+    AUTO_TRUNCATE=true \
+    PROMETHEUS_PORT=0 \
+    HOSTNAME=0.0.0.0 \
+    PORT=8080
+
 RUN sed -i -E 's/("max_position_embeddings"[[:space:]]*:[[:space:]]*)32768/\18192/' \
         /data/qwen3-embedding-0.6b/config.json
 
+# Pinned invariants only.  Runtime tunables (MAX_CONCURRENT_REQUESTS,
+# MAX_BATCH_TOKENS, MAX_CLIENT_BATCH_SIZE, AUTO_TRUNCATE, PROMETHEUS_PORT,
+# HOSTNAME, PORT) are controlled via environment variables — see header comment.
 CMD ["--model-id", "/data/qwen3-embedding-0.6b", \
-     "--hostname", "0.0.0.0", \
-     "--port", "8080", \
      "--pooling", "last-token", \
-     "--max-concurrent-requests", "32", \
-     "--max-batch-tokens", "8192", \
-     "--max-client-batch-size", "32", \
-     "--dtype", "float32", \
-     "--auto-truncate", \
-     "--prometheus-port", "0"]
+     "--dtype", "float32"]

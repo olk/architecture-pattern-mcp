@@ -57,7 +57,6 @@ def _tei_config(
             embed_batch_size=16,
             query_instruction=query_instruction,
             text_instruction=text_instruction,
-            max_embedder_tokens=3000,
         ),
     )
 
@@ -70,7 +69,6 @@ class TestDomainVectorIndexInit:
         index = DomainVectorIndex(
             base_url="http://localhost:8080",
             api_key=None,
-            max_tokens=3000,
             embed_batch_size=16,
             query_instruction="Instruct: ",
             text_instruction="",
@@ -84,7 +82,6 @@ class TestDomainVectorIndexInit:
         index = DomainVectorIndex(
             base_url="http://localhost:8080",
             api_key=None,
-            max_tokens=3000,
             embed_batch_size=16,
             query_instruction="Instruct: ",
             text_instruction="",
@@ -97,7 +94,6 @@ class TestDomainVectorIndexInit:
         index = DomainVectorIndex(
             base_url="http://localhost:8080",
             api_key=None,
-            max_tokens=3000,
             embed_batch_size=16,
             query_instruction="Instruct: ",
             text_instruction="",
@@ -121,13 +117,12 @@ class TestDomainVectorIndexInit:
         with pytest.raises(ValueError, match="provider is required"):
             DomainVectorIndex(
                 base_url="http://localhost:8080",
-                api_key=None,
-                max_tokens=3000,
-                embed_batch_size=16,
-                query_instruction="",
-                text_instruction="",
-                provider="",
-            )
+            api_key=None,
+            embed_batch_size=16,
+            query_instruction="",
+            text_instruction="",
+            provider="",
+        )
 
 
 class TestDomainVectorIndexBuildIndex:
@@ -138,7 +133,6 @@ class TestDomainVectorIndexBuildIndex:
         index = DomainVectorIndex(
             base_url="http://localhost:8080",
             api_key=None,
-            max_tokens=3000,
             embed_batch_size=16,
             query_instruction="Instruct: ",
             text_instruction="",
@@ -158,7 +152,6 @@ class TestDomainVectorIndexBuildIndex:
         index = DomainVectorIndex(
             base_url="http://localhost:8080",
             api_key=None,
-            max_tokens=3000,
             embed_batch_size=16,
             query_instruction="Instruct: ",
             text_instruction="",
@@ -180,7 +173,6 @@ class TestDomainVectorIndexBuildIndex:
         index = DomainVectorIndex(
             base_url="http://localhost:8080",
             api_key=None,
-            max_tokens=3000,
             embed_batch_size=16,
             query_instruction="Instruct: ",
             text_instruction="",
@@ -197,7 +189,6 @@ class TestDomainVectorIndexBuildIndex:
         index = DomainVectorIndex(
             base_url="http://localhost:8080",
             api_key=None,
-            max_tokens=3000,
             embed_batch_size=16,
             query_instruction="Instruct: ",
             text_instruction="",
@@ -226,7 +217,6 @@ class TestDomainVectorIndexSearch:
         index = DomainVectorIndex(
             base_url="http://localhost:8080",
             api_key=None,
-            max_tokens=3000,
             embed_batch_size=16,
             query_instruction="Instruct: ",
             text_instruction="",
@@ -254,7 +244,6 @@ class TestDomainVectorIndexSearch:
         index = DomainVectorIndex(
             base_url="http://localhost:8080",
             api_key=None,
-            max_tokens=3000,
             embed_batch_size=16,
             query_instruction="Instruct: ",
             text_instruction="",
@@ -268,7 +257,6 @@ class TestDomainVectorIndexSearch:
         index = DomainVectorIndex(
             base_url="http://localhost:8080",
             api_key=None,
-            max_tokens=3000,
             embed_batch_size=16,
             query_instruction="Instruct: ",
             text_instruction="",
@@ -294,7 +282,6 @@ class TestErrorHandling:
         index = DomainVectorIndex(
             base_url="http://localhost:8080",
             api_key=None,
-            max_tokens=3000,
             embed_batch_size=16,
             query_instruction="Instruct: ",
             text_instruction="",
@@ -318,7 +305,6 @@ class TestL2Normalization:
         index = DomainVectorIndex(
             base_url="http://localhost:8080",
             api_key=None,
-            max_tokens=3000,
             embed_batch_size=16,
             query_instruction="Instruct: ",
             text_instruction="",
@@ -361,7 +347,6 @@ class TestL2Normalization:
         index = DomainVectorIndex(
             base_url="http://localhost:8080",
             api_key=None,
-            max_tokens=3000,
             embed_batch_size=16,
             query_instruction="Instruct: ",
             text_instruction="",
@@ -388,7 +373,6 @@ class TestVectorStoreProperty:
         index = DomainVectorIndex(
             base_url="http://localhost:8080",
             api_key=None,
-            max_tokens=3000,
             embed_batch_size=16,
             query_instruction="Instruct: ",
             text_instruction="",
@@ -403,7 +387,6 @@ class TestVectorStoreProperty:
         index = DomainVectorIndex(
             base_url="http://localhost:8080",
             api_key=None,
-            max_tokens=3000,
             embed_batch_size=16,
             query_instruction="Instruct: ",
             text_instruction="",

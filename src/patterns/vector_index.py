@@ -66,7 +66,6 @@ class DomainVectorIndex:
         self,
         base_url: str,
         api_key: str | None,
-        max_tokens: int,
         embed_batch_size: int,
         query_instruction: str,
         text_instruction: str,
@@ -77,9 +76,8 @@ class DomainVectorIndex:
         Args:
             base_url:          Embedder base URL, e.g. "http://localhost:8080".
             api_key:           Optional Bearer token / API key for the embedder.
-            max_tokens:        Max sequence length for the embedder.
             embed_batch_size:  Batch size for embedding calls (issue #9: now used).
-            query_instruction:  Instruction prefix prepended to query text.
+            query_instruction: Instruction prefix prepended to query text.
             text_instruction:  Instruction prefix prepended to indexed text.
             provider:          Embedder provider: "tei", "openai", "ollama", "vllm".
         """
@@ -111,7 +109,6 @@ class DomainVectorIndex:
             embed_batch_size=cfg.embed_batch_size,
             query_instruction=cfg.query_instruction,
             text_instruction=cfg.text_instruction,
-            max_tokens=cfg.max_embedder_tokens,
         )
 
     @property

@@ -86,7 +86,6 @@ class EmbedderInnerConfig(BaseModel):
     embed_batch_size: int = 16
     query_instruction: str = ""
     text_instruction: str = ""
-    max_embedder_tokens: int = 3000
 
 
 class EmbedderConfig(BaseModel):
