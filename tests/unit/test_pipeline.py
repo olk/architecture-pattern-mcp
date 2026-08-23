@@ -854,6 +854,96 @@ class TestAnalyzeScoring:
 
         assert [c.name for c in candidates] == ["kappa-architecture", "pipe-and-filter"]
 
+    def test_selected_style_score_returns_blended_for_winner(self):
+        """_selected_style_score returns blended_score of the matching entry."""
+        from src.pipeline import AnalysisResult
+
+        selected = [
+            {"name": "kappa-architecture", "blended_score": 88.0, "analysis_score": 90.0},
+            {"name": "pipe-and-filter", "blended_score": 80.0},
+        ]
+        result = AnalysisResult(
+            strengths=[],
+            weaknesses=[],
+            recommendations=[],
+            quality_metrics=None,
+            recommended_style="kappa-architecture",
+            selected_patterns=selected,
+            matched_domains=[],
+            is_fallback=False,
+        )
+
+        pipeline = create_test_pipeline()
+        assert pipeline._selected_style_score(result, final_style="kappa-architecture") == 88.0
+
+    def test_selected_style_score_falls_back_to_analysis_score(self):
+        """When blended_score is missing on the winner, use analysis_score."""
+        from src.pipeline import AnalysisResult
+
+        selected = [
+            {"name": "kappa-architecture", "analysis_score": 90.0},  # no blended_score
+            {"name": "pipe-and-filter", "blended_score": 80.0},
+        ]
+        result = AnalysisResult(
+            strengths=[],
+            weaknesses=[],
+            recommendations=[],
+            quality_metrics=None,
+            recommended_style="kappa-architecture",
+            selected_patterns=selected,
+            matched_domains=[],
+            is_fallback=False,
+        )
+
+        pipeline = create_test_pipeline()
+        assert pipeline._selected_style_score(result, final_style="kappa-architecture") == 90.0
+
+    def test_selected_style_score_none_when_final_style_not_in_analyze(self):
+        """_selected_style_score returns None when no entry matches final_style."""
+        from src.pipeline import AnalysisResult
+
+        selected = [
+            {"name": "kappa-architecture", "blended_score": 88.0},
+            {"name": "pipe-and-filter", "blended_score": 80.0},
+        ]
+        result = AnalysisResult(
+            strengths=[],
+            weaknesses=[],
+            recommendations=[],
+            quality_metrics=None,
+            recommended_style="kappa-architecture",
+            selected_patterns=selected,
+            matched_domains=[],
+            is_fallback=False,
+        )
+
+        pipeline = create_test_pipeline()
+        assert pipeline._selected_style_score(result, final_style="event-driven") is None
+
+    def test_selected_style_score_none_when_fallback(self):
+        """_selected_style_score returns None when is_fallback is True."""
+        from src.pipeline import AnalysisResult
+
+        selected = [{"name": "layered-monolith", "blended_score": 50.0}]
+        result = AnalysisResult(
+            strengths=[],
+            weaknesses=[],
+            recommendations=[],
+            quality_metrics=None,
+            recommended_style="layered-monolith",
+            selected_patterns=selected,
+            matched_domains=[],
+            is_fallback=True,
+        )
+
+        pipeline = create_test_pipeline()
+        assert pipeline._selected_style_score(result, final_style="layered-monolith") is None
+
+    def test_selected_style_score_none_when_analysis_result_none(self):
+        """_selected_style_score returns None when analysis_result is None."""
+        pipeline = create_test_pipeline()
+        assert pipeline._selected_style_score(None, final_style="anything") is None
+
     @pytest.mark.asyncio
     async def test_analyze_injects_scores_and_selects_top_k(self):
         """analyze() injects analysis_score, sorts, and truncates to top_k_patterns."""
@@ -1593,6 +1683,104 @@ class TestDesignLoopPhase:
         )
 
         assert result.final_quality_score == 80.0
+
+    @pytest.mark.asyncio
+    async def test_design_loop_stamps_selection_score_on_overview(self):
+        """design_loop stamps the analyze selection score onto design.overview.score."""
+        from src.pipeline import AnalysisResult
+
+        pipeline = create_test_pipeline()
+
+        async def generate_design(system_prompt, user_prompt, response_schema):
+            from src.schemas.evaluation import ArchitectureEvaluation, EvaluationSummary, MetricResult
+            if response_schema is ArchitectureDesignResponse:
+                return ArchitectureDesignResponse(
+                    overview={"style": "microservices", "category": "structural", "principles": ["single responsibility"], "constraints": []},
+                    components=[{"id": "s1", "name": "S1", "type": "service", "description": "svc", "responsibilities": ["serve"], "interfaces": [], "technology_stack": [], "api_contract": None, "data_models": [],  "config_requirements": []}],
+                    relationships=[],
+                    quality_attributes={},
+                    api_contracts=[],
+                    shared_data_models=[],
+                    event_contracts=[],
+                )
+            if response_schema.__name__ == "ArchitectureEvaluation":
+                return ArchitectureEvaluation(
+                    summary=EvaluationSummary(overall_score=70.0, strengths=["good"], weaknesses=["minor"], critical_findings=["none"]),
+                    metrics=[MetricResult(name="overall_quality", score=70.0, description="q", findings=[], recommendations=[])],
+                     compliance=[], recommendations={}
+                )
+            return None
+
+        pipeline._agent.generate_structured = generate_design
+
+        analysis_result = AnalysisResult(
+            strengths=[],
+            weaknesses=[],
+            recommendations=[],
+            quality_metrics=None,
+            recommended_style="microservices",
+            selected_patterns=[
+                {"name": "microservices", "context": "", "category": "structural", "benefits": [], "best_practices": [], "blended_score": 88.0},
+                {"name": "pipe-and-filter", "context": "", "category": "dataflow", "benefits": [], "best_practices": [], "blended_score": 80.0},
+            ],
+            matched_domains=[],
+            is_fallback=False,
+        )
+
+        result = await pipeline.design_loop(
+            requirements="test",
+            domain="cloud-native",
+            style="microservices",
+            selected_patterns=[{"name": "microservices", "context": "", "category": "structural", "benefits": [], "best_practices": []}],
+            criteria="quality",
+            analysis_result=analysis_result,
+            max_tries=1,
+        )
+
+        assert result.design.overview.score == 88.0
+        assert result.alternative_styles[0].name == "pipe-and-filter"
+        assert result.alternative_styles[0].score == 80.0
+        # selection score must NOT appear as a top-level output field anymore
+        assert not hasattr(result, "final_style_score")
+
+    @pytest.mark.asyncio
+    async def test_design_loop_overview_score_none_without_analyze(self):
+        """overview.score stays None when analysis_result is None."""
+        pipeline = create_test_pipeline()
+
+        async def generate_design(system_prompt, user_prompt, response_schema):
+            from src.schemas.evaluation import ArchitectureEvaluation, EvaluationSummary, MetricResult
+            if response_schema is ArchitectureDesignResponse:
+                return ArchitectureDesignResponse(
+                    overview={"style": "microservices", "category": "structural", "principles": ["single responsibility"], "constraints": []},
+                    components=[{"id": "s1", "name": "S1", "type": "service", "description": "svc", "responsibilities": ["serve"], "interfaces": [], "technology_stack": [], "api_contract": None, "data_models": [],  "config_requirements": []}],
+                    relationships=[],
+                    quality_attributes={},
+                    api_contracts=[],
+                    shared_data_models=[],
+                    event_contracts=[],
+                )
+            if response_schema.__name__ == "ArchitectureEvaluation":
+                return ArchitectureEvaluation(
+                    summary=EvaluationSummary(overall_score=70.0, strengths=["good"], weaknesses=["minor"], critical_findings=["none"]),
+                    metrics=[MetricResult(name="overall_quality", score=70.0, description="q", findings=[], recommendations=[])],
+                     compliance=[], recommendations={}
+                )
+            return None
+
+        pipeline._agent.generate_structured = generate_design
+
+        result = await pipeline.design_loop(
+            requirements="test",
+            domain="cloud-native",
+            style="microservices",
+            selected_patterns=[{"name": "microservices", "context": "", "category": "structural", "benefits": [], "best_practices": []}],
+            criteria="quality",
+            analysis_result=None,
+            max_tries=1,
+        )
+
+        assert result.design.overview.score is None
 
     @pytest.mark.asyncio
     async def test_design_loop_respects_max_tries(self):

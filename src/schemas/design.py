@@ -57,6 +57,16 @@ class ArchitectureOverview(BaseModel):
         default_factory=list,
         description="Architectural constraints and requirements"
     )
+    score: float | None = Field(
+        default=None,
+        description=(
+            "Analyze-phase selection score (blended_score, else analysis_score) for this "
+            "style; same metric as alternative_styles[].score. None when the style was "
+            "not scored by analyze (override_style without a match, or fallback). "
+            "Not comparable with final_quality_score, which is a separate LLM-judged "
+            "metric of the generated design."
+        ),
+    )
 
 
 class ArchitectureDesign(BaseModel):

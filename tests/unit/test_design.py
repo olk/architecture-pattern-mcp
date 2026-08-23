@@ -268,6 +268,21 @@ class TestDesignArchitectureOutput:
             {"name": "microservices", "score": 70.0},
         ]
 
+    def test_overview_score_default_none(self):
+        """ArchitectureOverview.score defaults to None."""
+        overview = ArchitectureOverview(
+            style=ArchitectureStyle.ACTOR_BASED,
+            category=PatternCategory.STRUCTURAL,
+            principles=["p1"],
+        )
+        assert overview.score is None
+        assert "score" in overview.model_dump()
+
+    def test_output_model_has_no_final_style_score(self):
+        """final_style_score was removed; selection score lives in design.overview.score."""
+        output = DesignArchitectureOutput()
+        assert not hasattr(output, "final_style_score")
+
 
 class TestDesignArchitectureToolDesign:
     """Test suite for DesignArchitectureTool.design() method."""

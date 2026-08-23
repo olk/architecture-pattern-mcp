@@ -161,6 +161,20 @@ QUALITY_ATTRIBUTE_KEYS: tuple[str, ...] = (
 )
 
 
+def _effective_pattern_score(p: dict[str, Any]) -> float:
+    """Return the effective sort score for one scored-pattern entry.
+
+    Used by ``_style_candidates`` and ``_selected_style_score`` so the winner
+    and the alternatives report the same metric on the same scale.  Prefers
+    ``blended_score`` (selection key when fusion blending is active) and
+    falls back to ``analysis_score``; missing values default to 0.0.
+    """
+    blended = p.get("blended_score")
+    if blended is not None:
+        return float(blended)
+    return float(p.get("analysis_score", 0.0))
+
+
 class RequirementWeights(BaseModel):
     """Requirement priority weights (0.0-1.0) extracted from requirements.
 
@@ -769,6 +783,11 @@ class ArchitecturePipeline(Workflow):
                     raise last_error from None
                 raise RuntimeError("design_loop produced no valid design")
 
+            style_score = self._selected_style_score(
+                analysis_result, best_design.overview.style.value
+            )
+            best_design.overview.score = style_score
+
             return PipelineResult(
                 design=cast(ArchitectureDesign, best_design),
                 evaluation=cast(ArchitectureEvaluation, best_evaluation),
@@ -1345,12 +1364,33 @@ Please generate an architecture design following the schema provided.
             name = p.get("name")
             if not name or name == final_style:
                 continue
-            blended = p.get("blended_score")
-            score = float(blended) if blended is not None else float(p.get("analysis_score", 0.0))
-            candidates.append(StyleCandidate(name=str(name), score=score))
+            candidates.append(StyleCandidate(name=str(name), score=_effective_pattern_score(p)))
 
         candidates.sort(key=lambda c: c.score, reverse=True)
         return candidates
+
+    def _selected_style_score(
+        self,
+        analysis_result: AnalysisResult | None,
+        final_style: str,
+    ) -> float | None:
+        """Return the analyze-phase effective score of the final selected architecture.
+
+        Surfaces the same score metric that ``alternative_styles`` entries carry,
+        so the winner and the runner-ups can be compared on a single scale.
+
+        Returns ``None`` when:
+        - ``analysis_result`` is None (pipeline ran without analyze);
+        - ``is_fallback`` is True (the fallback pattern was never scored);
+        - ``final_style`` is not among ``selected_patterns`` (e.g. ``override_style``
+          caused the LLM to produce a style the analyzer never scored).
+        """
+        if analysis_result is None or analysis_result.is_fallback:
+            return None
+        for p in analysis_result.selected_patterns:
+            if p.get("name") == final_style:
+                return _effective_pattern_score(p)
+        return None
 
     def _build_analyze_system_prompt(self, domain: str) -> str:
         """Build system prompt for the ANALYZE phase (weight extraction only)."""

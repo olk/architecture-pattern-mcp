@@ -80,6 +80,7 @@ def sample_pipeline_result():
             style=ArchitectureStyle.ACTOR_BASED,
             category=PatternCategory.STRUCTURAL,
             principles=["principle1", "principle2"],
+            score=87.5,
         ),
         components=[
             Component(
@@ -357,6 +358,8 @@ class TestRunJobStoresAllFields:
         assert stored_result["matched_domains"][0]["fusion_score"] == 0.95
         assert "is_fallback" in stored_result
         assert stored_result["is_fallback"] is False
+        assert "final_style_score" not in stored_result
+        assert stored_result["design"]["overview"]["score"] == 87.5
 
     @pytest.mark.asyncio
     async def test_run_job_stores_fallback_fields(
