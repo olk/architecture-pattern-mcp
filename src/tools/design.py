@@ -125,6 +125,13 @@ class DesignArchitectureOutput(BaseModel):
         default=False,
         description="True when no real domain match was found and the fallback layered-monolith pattern was used"
     )
+    alternative_styles: list[dict] = Field(
+        default_factory=list,
+        description=(
+            "Runner-up architectures from the analyze phase (score < final selected architecture), "
+            "sorted by score descending. Empty when is_fallback is True."
+        ),
+    )
 
 
 class DesignArchitectureTool:
@@ -372,6 +379,7 @@ def pipeline_result_to_output(refined: PipelineResult) -> DesignArchitectureOutp
         final_quality_score=refined.final_quality_score,
         matched_domains=[m.model_dump() for m in refined.matched_domains],
         is_fallback=refined.is_fallback,
+        alternative_styles=[c.model_dump() for c in refined.alternative_styles],
     )
 
 

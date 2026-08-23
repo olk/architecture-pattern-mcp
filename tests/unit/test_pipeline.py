@@ -725,6 +725,135 @@ class TestAnalyzeScoring:
         pipeline = create_test_pipeline()
         assert pipeline._select_recommended_style([], None) == "layered-monolith"
 
+    def test_style_candidates_excludes_winner(self):
+        """_style_candidates excludes the entry whose name == final_style."""
+        from src.pipeline import AnalysisResult
+
+        selected = [
+            {"name": "kappa-architecture", "blended_score": 88.0, "analysis_score": 90.0},
+            {"name": "pipe-and-filter", "blended_score": 80.0, "analysis_score": 75.0},
+            {"name": "microservices", "blended_score": 70.0, "analysis_score": 65.0},
+        ]
+        result = AnalysisResult(
+            strengths=[],
+            weaknesses=[],
+            recommendations=[],
+            quality_metrics=None,
+            recommended_style="kappa-architecture",
+            selected_patterns=selected,
+            matched_domains=[],
+            is_fallback=False,
+        )
+
+        pipeline = create_test_pipeline()
+        candidates = pipeline._style_candidates(result, final_style="kappa-architecture")
+
+        assert [c.name for c in candidates] == ["pipe-and-filter", "microservices"]
+        assert candidates[0].score == 80.0
+        assert candidates[1].score == 70.0
+
+    def test_style_candidates_sorted_descending(self):
+        """_style_candidates defensively re-sorts descending."""
+        from src.pipeline import AnalysisResult
+
+        # selected_patterns intentionally out of order
+        selected = [
+            {"name": "a", "blended_score": 50.0},
+            {"name": "c", "blended_score": 90.0},
+            {"name": "b", "blended_score": 70.0},
+        ]
+        result = AnalysisResult(
+            strengths=[],
+            weaknesses=[],
+            recommendations=[],
+            quality_metrics=None,
+            recommended_style="z",
+            selected_patterns=selected,
+            matched_domains=[],
+            is_fallback=False,
+        )
+
+        pipeline = create_test_pipeline()
+        candidates = pipeline._style_candidates(result, final_style="z")
+
+        assert [c.name for c in candidates] == ["c", "b", "a"]
+        assert [c.score for c in candidates] == [90.0, 70.0, 50.0]
+
+    def test_style_candidates_falls_back_to_analysis_score(self):
+        """When blended_score is missing, use analysis_score."""
+        from src.pipeline import AnalysisResult
+
+        selected = [
+            {"name": "kappa-architecture", "analysis_score": 90.0},  # no blended
+            {"name": "pipe-and-filter", "blended_score": 80.0},
+        ]
+        result = AnalysisResult(
+            strengths=[],
+            weaknesses=[],
+            recommendations=[],
+            quality_metrics=None,
+            recommended_style="kappa-architecture",
+            selected_patterns=selected,
+            matched_domains=[],
+            is_fallback=False,
+        )
+
+        pipeline = create_test_pipeline()
+        candidates = pipeline._style_candidates(result, final_style="kappa-architecture")
+
+        assert len(candidates) == 1
+        assert candidates[0].name == "pipe-and-filter"
+        assert candidates[0].score == 80.0
+
+    def test_style_candidates_empty_when_fallback(self):
+        """Empty list when is_fallback=True."""
+        from src.pipeline import AnalysisResult
+
+        selected = [{"name": "layered-monolith", "blended_score": 50.0}]
+        result = AnalysisResult(
+            strengths=[],
+            weaknesses=[],
+            recommendations=[],
+            quality_metrics=None,
+            recommended_style="layered-monolith",
+            selected_patterns=selected,
+            matched_domains=[],
+            is_fallback=True,
+        )
+
+        pipeline = create_test_pipeline()
+        assert pipeline._style_candidates(result, final_style="layered-monolith") == []
+
+    def test_style_candidates_empty_when_analysis_result_none(self):
+        """Empty list when analysis_result is None."""
+        pipeline = create_test_pipeline()
+        assert pipeline._style_candidates(None, final_style="anything") == []
+
+    def test_style_candidates_keeps_all_when_final_style_not_in_analyze(self):
+        """When final_style matches no entry, all selected_patterns are returned."""
+        from src.pipeline import AnalysisResult
+
+        selected = [
+            {"name": "kappa-architecture", "blended_score": 88.0},
+            {"name": "pipe-and-filter", "blended_score": 80.0},
+        ]
+        result = AnalysisResult(
+            strengths=[],
+            weaknesses=[],
+            recommendations=[],
+            quality_metrics=None,
+            recommended_style="kappa-architecture",
+            selected_patterns=selected,
+            matched_domains=[],
+            is_fallback=False,
+        )
+
+        pipeline = create_test_pipeline()
+        # LLM produced a style not in analyze (e.g. due to override_style)
+        candidates = pipeline._style_candidates(result, final_style="event-driven")
+
+        assert [c.name for c in candidates] == ["kappa-architecture", "pipe-and-filter"]
+
     @pytest.mark.asyncio
     async def test_analyze_injects_scores_and_selects_top_k(self):
         """analyze() injects analysis_score, sorts, and truncates to top_k_patterns."""

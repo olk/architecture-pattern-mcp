@@ -246,6 +246,28 @@ class TestDesignArchitectureOutput:
         assert output.attempts == 1
         assert output.final_quality_score == 0.0
 
+    def test_output_model_alternative_styles_default_empty(self):
+        """alternative_styles defaults to empty list."""
+        output = DesignArchitectureOutput()
+        assert output.alternative_styles == []
+
+    def test_pipeline_result_to_output_maps_alternative_styles(self, sample_refined_architecture):
+        """pipeline_result_to_output serializes alternative_styles as list of {name, score} dicts."""
+        from src.schemas.evaluation import StyleCandidate
+        from src.tools.design import pipeline_result_to_output
+
+        sample_refined_architecture.alternative_styles = [
+            StyleCandidate(name="pipe-and-filter", score=80.0),
+            StyleCandidate(name="microservices", score=70.0),
+        ]
+        output = pipeline_result_to_output(sample_refined_architecture)
+        dump = output.model_dump()
+
+        assert dump["alternative_styles"] == [
+            {"name": "pipe-and-filter", "score": 80.0},
+            {"name": "microservices", "score": 70.0},
+        ]
+
 
 class TestDesignArchitectureToolDesign:
     """Test suite for DesignArchitectureTool.design() method."""

@@ -48,6 +48,30 @@ class MatchedDomain(BaseModel):
     )
 
 
+class StyleCandidate(BaseModel):
+    """
+    A runner-up architecture pattern from the analyze phase.
+
+    Surfaced in design tool outputs so calling agents can see which other
+    patterns the analyzer scored highly but the pipeline did not select as
+    the final architecture. Excludes the entry whose name equals the
+    ``final_style`` actually delivered; empty when the pipeline fell back
+    to the default pattern.
+    """
+
+    name: str = Field(
+        ...,
+        description="ArchitectureStyle value of the runner-up pattern (e.g. 'kappa-architecture')",
+    )
+    score: float = Field(
+        ...,
+        description=(
+            "Effective sort score from the analyze phase (blended_score when blending is active, "
+            "otherwise analysis_score)"
+        ),
+    )
+
+
 class AnalysisResult(BaseModel):
     """
     Result of architecture requirements analysis.

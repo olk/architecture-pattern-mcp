@@ -27,7 +27,7 @@ Defines quality assessment and pipeline output structures.
 
 from pydantic import BaseModel, Field
 
-from src.schemas.analysis import MatchedDomain
+from src.schemas.analysis import MatchedDomain, StyleCandidate
 from src.schemas.design import ArchitectureDesign
 from src.schemas.quality import QualityMetrics
 
@@ -148,4 +148,12 @@ class PipelineResult(BaseModel):
     is_fallback: bool = Field(
         default=False,
         description="True when no real domain match was found and the fallback 'layered-monolith' pattern was used"
+    )
+    alternative_styles: list[StyleCandidate] = Field(
+        default_factory=list,
+        description=(
+            "Runner-up patterns from the analyze phase that scored below the final selected architecture. "
+            "Excludes the entry matching final_style. Empty when is_fallback is True. "
+            "Sorted by score descending."
+        ),
     )

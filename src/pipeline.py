@@ -76,6 +76,7 @@ from src.schemas.contracts import (
     EventContract,
 )
 
+from src.schemas.analysis import StyleCandidate
 from src.schemas.design import ArchitectureDesign
 from src.schemas.evaluation import (
     ArchitectureEvaluation,
@@ -777,6 +778,9 @@ class ArchitecturePipeline(Workflow):
                 final_quality_score=best_score,  # already 0-100
                 matched_domains=analysis_result.matched_domains if analysis_result else [],
                 is_fallback=analysis_result.is_fallback if analysis_result else False,
+                alternative_styles=self._style_candidates(
+                    analysis_result, best_design.overview.style.value
+                ),
             )
 
     # ──────────────────────────────────────────────────────────────────────────
@@ -1306,6 +1310,47 @@ Please generate an architecture design following the schema provided.
             DEFAULT_FALLBACK_PATTERN_NAME,
         )
         return DEFAULT_FALLBACK_PATTERN_NAME
+
+    def _style_candidates(
+        self,
+        analysis_result: AnalysisResult | None,
+        final_style: str,
+    ) -> list[StyleCandidate]:
+        """Build the runner-up architecture list for tool-output transparency.
+
+        Surfaces patterns the analyzer scored highly but that did not become the
+        final selected architecture.  Excludes the entry whose ``name`` matches
+        ``final_style`` (so the list never contains the actually-delivered
+        pattern).  Empty when the pipeline fell back to the default pattern or
+        when ``analysis_result`` is None.
+
+        The reported score is the effective sort score from the analyze phase:
+        ``blended_score`` when fusion blending is active, otherwise
+        ``analysis_score``.  This keeps the score and the ordering semantically
+        aligned.  Re-sorted descending defensively after the winner-exclusion
+        filter so the contract is explicit.
+
+        Args:
+            analysis_result: AnalysisResult from the analyze phase, or None.
+            final_style: Name of the architecture style actually delivered.
+
+        Returns:
+            List of StyleCandidate sorted by score descending.
+        """
+        if analysis_result is None or analysis_result.is_fallback:
+            return []
+
+        candidates: list[StyleCandidate] = []
+        for p in analysis_result.selected_patterns:
+            name = p.get("name")
+            if not name or name == final_style:
+                continue
+            blended = p.get("blended_score")
+            score = float(blended) if blended is not None else float(p.get("analysis_score", 0.0))
+            candidates.append(StyleCandidate(name=str(name), score=score))
+
+        candidates.sort(key=lambda c: c.score, reverse=True)
+        return candidates
 
     def _build_analyze_system_prompt(self, domain: str) -> str:
         """Build system prompt for the ANALYZE phase (weight extraction only)."""

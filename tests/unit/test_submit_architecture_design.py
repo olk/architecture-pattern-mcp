@@ -23,8 +23,9 @@
 Unit tests for the async submit_architecture_design_job / get_architecture_design_status trio.
 
 Covers:
-- FR-224 parity: stored job result contains all 8 fields that
-  design_architecture returns (including matched_domains and is_fallback)
+- FR-224 parity: stored job result contains all fields that
+  design_architecture returns (including matched_domains, is_fallback,
+  alternative_styles)
 - Job lifecycle: PENDING -> RUNNING -> COMPLETED
 - get_architecture_design_status returns parsed result with all fields intact
 """
@@ -257,7 +258,7 @@ class TestPipelineResultToOutputParity:
 
     def test_all_eight_fields_present(self, sample_pipeline_result):
         """
-        pipeline_result_to_output must include all 8 DesignArchitectureOutput fields.
+        pipeline_result_to_output must include all DesignArchitectureOutput fields.
 
         FR-224 / parity: design_architecture and the async job path must return
         the same field set.
@@ -274,6 +275,7 @@ class TestPipelineResultToOutputParity:
             "final_quality_score",
             "matched_domains",
             "is_fallback",
+            "alternative_styles",
         }
         assert set(dump.keys()) == expected_keys
 
@@ -317,7 +319,7 @@ class TestPipelineResultToOutputParity:
 
 
 class TestRunJobStoresAllFields:
-    """Test that _run_job stores a result with all 8 fields including matched_domains and is_fallback."""
+    """Test that _run_job stores a result with all fields including matched_domains, is_fallback, and alternative_styles."""
 
     @pytest.mark.asyncio
     async def test_run_job_stores_matched_domains_and_is_fallback(
