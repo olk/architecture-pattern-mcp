@@ -8,6 +8,7 @@ Validates:
 - Migration refs are canonical catalog names or well-formed external refs
 - No malformed domain slugs (commas, spaces)
 - ArchitectureStyle values match JSON file names
+- All suitable_domains/unsuitable_domains entries are valid ArchitectureDomain values
 - Alias resolution works correctly in filter_by_domain
 """
 
@@ -140,6 +141,27 @@ class TestPatternFileCompleteness:
 
         orphan = json_names - enum_values
         assert not orphan, f"JSON files without enum entries: {orphan}"
+
+    def test_all_domain_slugs_in_architecture_domain_enum(self) -> None:
+        """Every suitable_domains/unsuitable_domains entry is a valid ArchitectureDomain value."""
+        from src.schemas.enums import ArchitectureDomain
+
+        pattern_dir = Path(__file__).parent.parent.parent / "pattern"
+        valid = {item.value for item in ArchitectureDomain}
+
+        bad: list[tuple[str, str, str]] = []
+        for path in sorted(pattern_dir.glob("*.json")):
+            with open(path) as f:
+                data = json.load(f)
+            for field in ("suitable_domains", "unsuitable_domains"):
+                for v in data.get(field, []):
+                    if v not in valid:
+                        bad.append((path.name, field, v))
+
+        assert not bad, (
+            f"Found {len(bad)} domain slugs not in ArchitectureDomain enum:\n" +
+            "\n".join(f"  {n} {f}: '{v}'" for n, f, v in bad)
+        )
 
 
 class TestDomainAliasResolution:
