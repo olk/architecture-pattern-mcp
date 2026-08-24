@@ -84,7 +84,7 @@ CMD ["/app/.venv/bin/python", "-m", "src.main"]
 
 LABEL org.opencontainers.image.title="architecture-pattern-mcp" \
       org.opencontainers.image.description="MCP server providing architecture pattern expertise" \
-      org.opencontainers.image.version="1.0.14" \
+      org.opencontainers.image.version="1.0.15" \
       org.opencontainers.image.authors="Oliver Kowalke" \
       org.opencontainers.image.source="https://github.com/olk/architecture-pattern-mcp" \
       org.opencontainers.image.licenses="MIT"

@@ -17,7 +17,7 @@
 
 [project]
 name = "architecture-pattern-mcp"
-version = "1.0.14"
+version = "1.0.15"
 requires-python = ">=3.12"
 description = "MCP Architect Server providing comprehensive architectural expertise through lightweight pipeline coordinator and domain-specific tools"
 license = { text = "MIT" }
