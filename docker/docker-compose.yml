@@ -110,12 +110,11 @@ services:
       - HF_HUB_OFFLINE=1
       - HUGGINGFACE_HUB_CACHE=/data
       # TEI reranker tunables — clap env fallbacks. Compose overrides Dockerfile ENV.
-      # Invariant: MAX_CLIENT_BATCH_SIZE must be ≥ bm25_top_k + dense_top_k
-      # (up to 40 with RETRIEVAL_BM25_TOP_K=20 / RETRIEVAL_DENSE_TOP_K=20).
+      # Invariant: max_batch_size (client, default 48) ≤ min(MAX_CLIENT_BATCH_SIZE, MAX_CONCURRENT_REQUESTS).
       # NOTE: PORT here must match the RERANKER_BASE_URL used by the MCP server
       # (compose env or config.json default: http://pattern-tei-rerank:8080).
       # If you change PORT, update those URLs accordingly.
-      - MAX_CONCURRENT_REQUESTS=${TEI_RERANK_MAX_CONCURRENT_REQUESTS:-32}
+      - MAX_CONCURRENT_REQUESTS=${TEI_RERANK_MAX_CONCURRENT_REQUESTS:-64}
       - MAX_BATCH_TOKENS=${TEI_RERANK_MAX_BATCH_TOKENS:-16384}
       - MAX_CLIENT_BATCH_SIZE=${TEI_RERANK_MAX_CLIENT_BATCH_SIZE:-48}
       - AUTO_TRUNCATE=${TEI_RERANK_AUTO_TRUNCATE:-true}

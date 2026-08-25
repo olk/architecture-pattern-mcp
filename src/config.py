@@ -102,6 +102,17 @@ class RerankerInnerConfig(BaseModel):
 
     base_url: str = ""
     timeout: float = Field(30.0, gt=0)
+    max_batch_size: int = Field(
+        48,
+        ge=1,
+        le=1024,
+        description=(
+            "Max number of texts sent to TEI /rerank in a single HTTP request. "
+            "Must be ≤ min(sidecar MAX_CLIENT_BATCH_SIZE, MAX_CONCURRENT_REQUESTS). "
+            "HybridPatternRetriever chunks the fused slug pool into requests of this size. "
+            "Default 48 matches the TEI reranker sidecar's MAX_CLIENT_BATCH_SIZE."
+        ),
+    )
 
 
 class RerankerConfig(BaseModel):

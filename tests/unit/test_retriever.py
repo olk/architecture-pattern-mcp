@@ -41,6 +41,7 @@ from llama_index.core.schema import NodeWithScore, TextNode
 from src.patterns.retriever import (
     DEFAULT_FALLBACK_PATTERN_NAME,
     HybridPatternRetriever,
+    _safe_tei_rerank_call,
 )
 
 MOCK_FUSION_SCORE = 1 / 60
@@ -449,3 +450,241 @@ class TestRetrievalLogging:
         patterns = getattr(selected_logs[0], "patterns", [])
         assert len(patterns) == 1
         assert patterns[0]["name"] == "microservices"
+
+
+class TestSafeTeiRerankCall:
+    """Error surfacing: _safe_tei_rerank_call raises RuntimeError on HTTP errors."""
+
+    def test_raises_on_http_429_overloaded(self) -> None:
+        """TEI returns HTTP 429 'Model is overloaded' — must raise RuntimeError, not AssertionError."""
+        with patch("src.patterns.retriever.httpx.Client") as mock_client_cls:
+            mock_client = MagicMock()
+            mock_resp = MagicMock()
+            mock_resp.status_code = 429
+            mock_resp.text = '{"error":"Model is overloaded","error_type":"Overloaded"}'
+            mock_resp.json.return_value = {"error": "Model is overloaded", "error_type": "Overloaded"}
+            mock_client.post.return_value = mock_resp
+            mock_client_cls.return_value.__enter__.return_value = mock_client
+
+            with pytest.raises(RuntimeError) as exc_info:
+                _safe_tei_rerank_call(
+                    base_url="http://localhost:8080",
+                    timeout=30.0,
+                    auth_token=None,
+                    query="e-commerce",
+                    texts=[f"domain-{i}" for i in range(35)],
+                )
+
+            assert "429" in str(exc_info.value)
+            assert "Model is overloaded" in str(exc_info.value)
+
+    def test_raises_on_http_400_batch_size(self) -> None:
+        """TEI returns HTTP 400 for oversized batch — must raise RuntimeError."""
+        with patch("src.patterns.retriever.httpx.Client") as mock_client_cls:
+            mock_client = MagicMock()
+            mock_resp = MagicMock()
+            mock_resp.status_code = 422
+            mock_resp.text = '{"error":"batch size > maximum allowed batch size 48","error_type":"Validation"}'
+            mock_resp.json.return_value = {"error": "batch size > maximum allowed batch size 48", "error_type": "Validation"}
+            mock_client.post.return_value = mock_resp
+            mock_client_cls.return_value.__enter__.return_value = mock_client
+
+            with pytest.raises(RuntimeError) as exc_info:
+                _safe_tei_rerank_call(
+                    base_url="http://localhost:8080",
+                    timeout=30.0,
+                    auth_token=None,
+                    query="q",
+                    texts=[f"d-{i}" for i in range(50)],
+                )
+
+            assert "422" in str(exc_info.value)
+            assert "batch size" in str(exc_info.value)
+
+    def test_raises_on_non_list_body(self) -> None:
+        """TEI returns HTTP 200 but with an error dict body — must raise RuntimeError."""
+        with patch("src.patterns.retriever.httpx.Client") as mock_client_cls:
+            mock_client = MagicMock()
+            mock_resp = MagicMock()
+            mock_resp.status_code = 200
+            mock_resp.json.return_value = {"error": "some internal error"}
+            mock_client.post.return_value = mock_resp
+            mock_client_cls.return_value.__enter__.return_value = mock_client
+
+            with pytest.raises(RuntimeError) as exc_info:
+                _safe_tei_rerank_call(
+                    base_url="http://localhost:8080",
+                    timeout=30.0,
+                    auth_token=None,
+                    query="q",
+                    texts=["a", "b"],
+                )
+
+            assert "non-list response" in str(exc_info.value)
+
+    def test_passes_through_valid_list_response(self) -> None:
+        """HTTP 200 with a valid list of scores — returns the list unchanged."""
+        with patch("src.patterns.retriever.httpx.Client") as mock_client_cls:
+            mock_client = MagicMock()
+            mock_resp = MagicMock()
+            mock_resp.status_code = 200
+            mock_resp.json.return_value = [
+                {"index": 1, "score": 0.85},
+                {"index": 0, "score": 0.72},
+            ]
+            mock_client.post.return_value = mock_resp
+            mock_client_cls.return_value.__enter__.return_value = mock_client
+
+            result = _safe_tei_rerank_call(
+                base_url="http://localhost:8080",
+                timeout=30.0,
+                auth_token=None,
+                query="e-commerce",
+                texts=["slug-a", "slug-b"],
+            )
+
+            assert len(result) == 2
+            assert result[0]["score"] == 0.85
+
+
+class TestChunkedReranking:
+    """Chunked reranking when fused pool exceeds max_batch_size."""
+
+    def test_chunks_pool_when_exceeds_max_batch_size(self) -> None:
+        """When fused pool > max_batch_size, postprocess_nodes is called multiple times."""
+        loader = MockPatternLoader(
+            filter_by_domain_result=[{"name": "microservices", "category": "arch"}],
+            get_by_name_result=LAYERED_MONOLITH,
+        )
+        reranker_config = MagicMock(
+            base_url="http://localhost:8080",
+            timeout=30.0,
+            max_batch_size=20,
+        )
+        retriever = HybridPatternRetriever(
+            bm25_index=MockBM25Index(),
+            vector_index=MockVectorIndex(),
+            pattern_loader=loader,
+            reranker_config=reranker_config,
+        )
+        retriever._dense_retriever = MagicMock()
+        retriever._bm25_retriever = MagicMock()
+
+        # Build a fused pool of 50 unique nodes (exceeds max_batch_size=20)
+        fused_nodes = [
+            NodeWithScore(
+                node=TextNode(text=f"slug-{i}", metadata={"slug": f"slug-{i}"}),
+                score=0.5,
+            )
+            for i in range(50)
+        ]
+        # Both legs return the same 50 nodes; fusion dedupes to 50 unique
+        retriever._dense_retriever.retrieve.return_value = fused_nodes
+        retriever._bm25_retriever.retrieve.return_value = fused_nodes
+
+        recorded_chunks: list[int] = []
+
+        class _ChunkRecordingReranker:
+            top_n = 1
+
+            def postprocess_nodes(self, nodes, query_bundle=None):
+                recorded_chunks.append(len(nodes))
+                # Return nodes sorted by text descending so ordering differs from fusion order
+                return sorted(nodes, key=lambda n: n.node.text, reverse=True)
+
+        with patch(
+            "src.patterns.retriever.TextEmbeddingInference",
+            return_value=_ChunkRecordingReranker(),
+        ):
+            result = retriever.retrieve(
+                user_domain="microservices",
+                normalized_domain="microservices",
+            )
+
+        # Should be split into ceil(50/20) = 3 chunks: 20, 20, 10
+        assert recorded_chunks == [20, 20, 10], f"Expected [20, 20, 10], got {recorded_chunks}"
+        # Result should still contain the pattern
+        assert len(result.patterns) == 1
+
+    def test_single_chunk_when_pool_within_max_batch_size(self) -> None:
+        """When fused pool <= max_batch_size, only one postprocess_nodes call is made."""
+        loader = MockPatternLoader(
+            filter_by_domain_result=[{"name": "microservices", "category": "arch"}],
+            get_by_name_result=LAYERED_MONOLITH,
+        )
+        reranker_config = MagicMock(
+            base_url="http://localhost:8080",
+            timeout=30.0,
+            max_batch_size=48,
+        )
+        retriever = HybridPatternRetriever(
+            bm25_index=MockBM25Index(),
+            vector_index=MockVectorIndex(),
+            pattern_loader=loader,
+            reranker_config=reranker_config,
+        )
+        retriever._dense_retriever = MagicMock()
+        retriever._bm25_retriever = MagicMock()
+
+        fused_nodes = [
+            NodeWithScore(
+                node=TextNode(text=f"slug-{i}", metadata={"slug": f"slug-{i}"}),
+                score=0.5,
+            )
+            for i in range(10)
+        ]
+        retriever._dense_retriever.retrieve.return_value = fused_nodes
+        retriever._bm25_retriever.retrieve.return_value = []
+
+        call_count = 0
+
+        class _CountingReranker:
+            top_n = 1
+
+            def postprocess_nodes(self, nodes, query_bundle=None):
+                nonlocal call_count
+                call_count += 1
+                return nodes
+
+        with patch(
+            "src.patterns.retriever.TextEmbeddingInference",
+            return_value=_CountingReranker(),
+        ):
+            result = retriever.retrieve(
+                user_domain="microservices",
+                normalized_domain="microservices",
+            )
+
+        assert call_count == 1, f"Expected 1 call, got {call_count}"
+        assert len(result.patterns) == 1
+
+
+class TestRerankerConfigMaxBatchSize:
+    """RerankerInnerConfig validates max_batch_size bounds."""
+
+    def test_rejects_zero_max_batch_size(self) -> None:
+        from src.config import RerankerInnerConfig
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            RerankerInnerConfig(base_url="http://localhost:8080", max_batch_size=0)
+
+    def test_rejects_negative_max_batch_size(self) -> None:
+        from src.config import RerankerInnerConfig
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            RerankerInnerConfig(base_url="http://localhost:8080", max_batch_size=-1)
+
+    def test_rejects_excessive_max_batch_size(self) -> None:
+        from src.config import RerankerInnerConfig
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            RerankerInnerConfig(base_url="http://localhost:8080", max_batch_size=1025)
+
+    def test_accepts_default_max_batch_size(self) -> None:
+        from src.config import RerankerInnerConfig
+
+        cfg = RerankerInnerConfig(base_url="http://localhost:8080")
+        assert cfg.max_batch_size == 48

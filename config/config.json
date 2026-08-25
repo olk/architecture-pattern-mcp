@@ -24,7 +24,8 @@
   "reranker": {
     "config": {
       "base_url": "{env:RERANKER_BASE_URL:-http://pattern-tei-rerank:8080}",
-      "timeout": "{env:RERANKER_TIMEOUT:-30.0}"
+      "timeout": "{env:RERANKER_TIMEOUT:-30.0}",
+      "max_batch_size": "{env:RERANKER_MAX_BATCH_SIZE:-48}"
     },
     "rerank_top_n": "{env:RETRIEVAL_RERANK_TOP_N:-10}",
     "rerank_selection": "{env:RETRIEVAL_RERANK_SELECTION:-rerank}"

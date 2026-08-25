@@ -463,6 +463,7 @@ The server reads `~/.config/architecture-pattern-mcp/config.json` (override with
 | `RETRIEVAL_MIN_QUALITY_SCORE` | `50.0` | Early-stop quality threshold |
 | `RERANKER_BASE_URL` | *(default reranker URL)* | TEI reranker endpoint (host:port); model is fixed to `gte-reranker-modernbert-base` |
 | `RERANKER_TIMEOUT` | `30.0` | Reranker timeout (seconds) |
+| `RERANKER_MAX_BATCH_SIZE` | `48` | Max texts per TEI /rerank request; must be ≤ min(MAX_CLIENT_BATCH_SIZE, MAX_CONCURRENT_REQUESTS) of the reranker sidecar. HybridPatternRetriever chunks large pools automatically. |
 | `PATTERN_DIRECTORY` | `~/.config/architecture-pattern-mcp/pattern` | Pattern files directory |
 | `VALIDATION_MAX_RETRIES` | `2` | Max self-healing retry attempts |
 | `VALIDATION_RETRY_ON_FAIL` | `true` | Retry on validation failure |

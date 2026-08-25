@@ -17,20 +17,20 @@
 #
 # Runtime tunables (clap env fallbacks — see below for the full contract):
 #
-#   MAX_CONCURRENT_REQUESTS  (default 512 in TEI; we set 32 as a safe CPU cap)
+#   MAX_CONCURRENT_REQUESTS  (default 512 in TEI; we set 64 as a safe CPU cap.
+#                          TEI's /rerank consumes one queue slot per text, so this
+#                          must be ≥ the number of texts in a single rerank request.
+#                          The client-side max_batch_size (default 48) is the
+#                          binding constraint; 64 gives headroom for concurrent calls.)
 #   MAX_BATCH_TOKENS       (default 16384 in TEI; model context is 8k, so this
 #                          is well above max_input_length — no warmup warning.
 #                          The embedder's warmup-OOM concern (PR #634/#725) does
 #                          NOT apply to this 149 M model; 16384 is safe.)
-#   MAX_CLIENT_BATCH_SIZE  (default 32 in TEI; must be ≥ the fused candidate
-#                          pool size sent to /rerank.  The pool = bm25_top_k +
-#                          dense_top_k (up to 20 + 20 = 40 with compose settings;
-#                          config.json defaults 0/0 = full corpus which can be
-#                          larger than any fixed server-side cap).  Raise this
-#                          if your pattern catalogue grows beyond ~48 candidates.
-#                          Client-side chunking is NOT done by llama-index's
-#                          TextEmbeddingInference — all candidates are posted in
-#                          one request.)
+#   MAX_CLIENT_BATCH_SIZE  (default 32 in TEI; must be ≥ max_batch_size sent by
+#                          the client.  Default 48 matches RERANKER_MAX_BATCH_SIZE.
+#                          NOTE: the binding invariant is
+#                          max_batch_size ≤ min(MAX_CLIENT_BATCH_SIZE, MAX_CONCURRENT_REQUESTS).
+#                          Client-side chunking is handled by the MCP server.)
 #   AUTO_TRUNCATE           (default true; silently truncates inputs longer than
 #                          the model's max_input_length.  Keep enabled: domain
 #                          slugs are short but requirement strings can be long.)
@@ -100,7 +100,7 @@ ENV HF_HUB_OFFLINE=1
 
 # Safe tunables as image-level defaults.  These are overridable at runtime via
 # docker-compose environment block or bare `docker run -e VAR=VALUE`.
-ENV MAX_CONCURRENT_REQUESTS=32 \
+ENV MAX_CONCURRENT_REQUESTS=64 \
     MAX_BATCH_TOKENS=16384 \
     MAX_CLIENT_BATCH_SIZE=48 \
     AUTO_TRUNCATE=true \

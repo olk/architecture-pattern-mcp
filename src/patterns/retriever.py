@@ -53,9 +53,10 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Callable, Literal
 
-from llama_index.core.schema import QueryBundle
+import httpx
+from llama_index.core.schema import QueryBundle, NodeWithScore
 from llama_index.postprocessor.tei_rerank import TextEmbeddingInference
 
 if TYPE_CHECKING:
@@ -82,6 +83,50 @@ DEFAULT_FALLBACK_PATTERN_NAME = "layered-monolith"
 LOG_SUMMARY_CAP = 10
 
 DOMAIN_MATCH_REPORT_LIMIT = 5
+
+
+def _safe_tei_rerank_call(
+    base_url: str,
+    timeout: float,
+    auth_token: str | Callable[[str], str] | None,
+    query: str,
+    texts: list[str],
+) -> list[dict[str, Any]]:
+    """Call TEI /rerank with HTTP status validation and informative error messages.
+
+    Mirrors llama_index.postprocessor.tei_rerank.TextEmbeddingInference._call_api
+    but raises RuntimeError (instead of an AssertionError) when TEI returns an
+    error or a non-list response body.
+    """
+    headers: dict[str, str] = {"Content-Type": "application/json"}
+    if auth_token is not None:
+        if callable(auth_token):
+            headers["Authorization"] = auth_token(base_url)
+        else:
+            headers["Authorization"] = auth_token
+
+    payload = {"query": query, "texts": texts}
+    with httpx.Client() as client:
+        resp = client.post(
+            f"{base_url}/rerank",
+            headers=headers,
+            json=payload,
+            timeout=timeout,
+        )
+
+    if resp.status_code >= 400:
+        raise RuntimeError(
+            f"TEI reranker {base_url}/rerank returned HTTP {resp.status_code}: {resp.text[:500]}"
+        )
+
+    body = resp.json()
+    if not isinstance(body, list):
+        raise RuntimeError(  # noqa: TRY004
+            f"TEI reranker {base_url}/rerank returned non-list response "
+            f"(HTTP {resp.status_code}): {str(body)[:500]}"
+        )
+
+    return body
 
 
 @dataclass(frozen=True)
@@ -231,6 +276,14 @@ class HybridPatternRetriever:
             top_n=1,
         )
         self._reranker.keep_retrieval_score = True
+        max_batch = getattr(self._reranker_config, "max_batch_size", 48)
+        self._reranker._call_api = lambda q, t: _safe_tei_rerank_call(
+            self._reranker.base_url,
+            self._reranker.timeout,
+            self._reranker.auth_token,
+            q,
+            t,
+        )
 
     def _matched_domains_from_nodes(
         self, nodes: list[Any]
@@ -358,9 +411,23 @@ class HybridPatternRetriever:
             self._ensure_reranker()
             assert self._reranker is not None
             rrf_rank = {n.node.hash: i for i, n in enumerate(fused, start=1)}
-            self._reranker.top_n = len(fused)
-            scored = self._reranker.postprocess_nodes(
-                list(fused), query_bundle=QueryBundle(query_str=user_domain)
+            max_batch = getattr(self._reranker_config, "max_batch_size", 48)
+            query_bundle = QueryBundle(query_str=user_domain)
+            scored: list[NodeWithScore] = []
+            for i in range(0, len(fused), max_batch):
+                chunk = fused[i : i + max_batch]
+                self._reranker.top_n = len(chunk)
+                scored.extend(
+                    self._reranker.postprocess_nodes(
+                        list(chunk), query_bundle=query_bundle
+                    )
+                )
+            scored.sort(key=lambda n: n.score if n.score is not None else 0.0, reverse=True)
+            logger.info(
+                "Reranker chunking: %d candidates → %d chunk(s) of ≤ %d",
+                len(fused),
+                (len(fused) + max_batch - 1) // max_batch,
+                max_batch,
             )
             ce_rank = {n.node.hash: i for i, n in enumerate(scored, start=1)}
 
