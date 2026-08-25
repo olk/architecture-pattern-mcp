@@ -16,6 +16,7 @@ An MCP (Model Context Protocol) server that provides architecture design experti
   - [Claude Code](#claude-code)
   - [OpenCode](#opencode)
   - [Codex CLI](#codex-cli)
+- [🧑‍🏫 SKILL for AI Agents](#-skill-for-ai-agents)
 - [🧪 Use the Tools](#-use-the-tools)
   - [Design your first architecture](#design-your-first-architecture)
   - [Explore the pattern catalog](#explore-the-pattern-catalog)
@@ -132,6 +133,29 @@ codex mcp add architecture-pattern \
   -e GENERATOR_API_KEY=your_key \
   -- architecture-pattern-mcp --transport stdio
 ```
+
+---
+
+## 🧑‍🏫 SKILL for AI Agents
+
+AI coding agents (Claude Code, OpenCode, Codex CLI) can load a SKILL that teaches them how and when to use this server's tools — including timeout-aware entry-point selection, output interpretation, and the full workflow recipe.
+
+The SKILL lives in `skills/architecture-pattern-mcp/`:
+
+```
+skills/architecture-pattern-mcp/
+├── SKILL.md                 # Discovery, critical rules, decision guide
+└── references/
+    ├── tools.md             # All 9 tool signatures and output schemas
+    └── workflows.md         # 4 worked examples, 4 prompts, best practices
+```
+
+**For agents that support file-based skills** (OpenCode, Claude Code): point the agent's skill loader at `skills/architecture-pattern-mcp/SKILL.md`. The skill tells the agent:
+
+- Which tool to use based on client type and timeout budget
+- How to phrase `requirements`, `domain`, and `style` as separate structured arguments
+- How to interpret `final_quality_score`, `attempts > 1`, and `evaluation.recommendations`
+- When to use the async job trio vs `design_architecture` directly
 
 ---
 
