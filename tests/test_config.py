@@ -42,6 +42,8 @@ from src.config import (
     ERROR_CONFIG_NOT_FOUND,
     ERROR_INVALID_CONFIG,
     ConfigManager,
+    RerankerConfig,
+    RerankerInnerConfig,
     RetrievalConfig,
     ServerConfig,
 )
@@ -479,3 +481,136 @@ class TestExtraForbid:
         assert config.retrieval.bm25_top_k == 30
         assert config.retrieval.dense_top_k == 40
         assert config.retrieval.top_k_patterns == 8
+
+    def test_server_config_rejects_retrieval_reranker_block(self) -> None:
+        """
+        Test that ServerConfig rejects a legacy retrieval.reranker block
+        (extra='forbid' on RetrievalConfig enforces clean break).
+        """
+        with pytest.raises(ValidationError):
+            ServerConfig(
+                generator={"provider": "openai", "config": {"model": "gpt-4"}},
+                embedder={"provider": "tei", "config": {"base_url": "http://localhost:8080"}},
+                retrieval={
+                    "bm25_top_k": 30,
+                    "dense_top_k": 40,
+                    "reranker": {"config": {"base_url": "http://rerank:8080"}},
+                },
+            )
+
+    def test_server_config_accepts_top_level_reranker_block(self) -> None:
+        """
+        Test that ServerConfig accepts a valid top-level reranker block
+        with config, rerank_top_n, and rerank_selection.
+        """
+        config = ServerConfig(
+            generator={"provider": "openai", "config": {"model": "gpt-4"}},
+            embedder={"provider": "tei", "config": {"base_url": "http://localhost:8080"}},
+            reranker={
+                "config": {"base_url": "http://rerank:8080", "timeout": 60.0},
+                "rerank_top_n": 20,
+                "rerank_selection": "rank_fusion",
+            },
+        )
+        assert config.reranker is not None
+        assert config.reranker.config is not None
+        assert config.reranker.config.base_url == "http://rerank:8080"
+        assert config.reranker.config.timeout == 60.0
+        assert config.reranker.rerank_top_n == 20
+        assert config.reranker.rerank_selection == "rank_fusion"
+
+    def test_server_config_reranker_defaults(self) -> None:
+        """
+        Test that ServerConfig reranker field has correct defaults
+        when only config is provided.
+        """
+        config = ServerConfig(
+            generator={"provider": "openai", "config": {"model": "gpt-4"}},
+            embedder={"provider": "tei", "config": {"base_url": "http://localhost:8080"}},
+            reranker={"config": {"base_url": "http://rerank:8080"}},
+        )
+        assert config.reranker.rerank_top_n == 10
+        assert config.reranker.rerank_selection == "rerank"
+
+    def test_server_config_reranker_validator_rejects_empty_base_url(self) -> None:
+        """
+        Test that the _check_reranker_configured validator on ServerConfig
+        rejects an empty reranker.config.base_url.
+        """
+        with pytest.raises(ValidationError) as exc_info:
+            ServerConfig(
+                generator={"provider": "openai", "config": {"model": "gpt-4"}},
+                embedder={"provider": "tei", "config": {"base_url": "http://localhost:8080"}},
+                reranker={"config": {"base_url": ""}},
+            )
+        assert "reranker.config.base_url" in str(exc_info.value)
+
+
+class TestRerankerConfig:
+    """Test suite for RerankerConfig Pydantic model."""
+
+    def test_reranker_config_default_values(self) -> None:
+        """
+        Test that RerankerConfig accepts valid default values.
+        """
+        config = RerankerConfig(config=RerankerInnerConfig(base_url="http://rerank:8080"))
+        assert config.rerank_top_n == 10
+        assert config.rerank_selection == "rerank"
+        assert config.config is not None
+        assert config.config.base_url == "http://rerank:8080"
+
+    def test_reranker_config_custom_values(self) -> None:
+        """
+        Test that RerankerConfig accepts valid custom values.
+        """
+        config = RerankerConfig(
+            config=RerankerInnerConfig(base_url="http://rerank:8080", timeout=60.0),
+            rerank_top_n=25,
+            rerank_selection="rank_fusion",
+        )
+        assert config.rerank_top_n == 25
+        assert config.rerank_selection == "rank_fusion"
+        assert config.config.timeout == 60.0
+
+    def test_reranker_config_boundary_top_n(self) -> None:
+        """Test rerank_top_n boundary values."""
+        config_min = RerankerConfig(
+            config=RerankerInnerConfig(base_url="http://rerank:8080"),
+            rerank_top_n=1,
+        )
+        assert config_min.rerank_top_n == 1
+
+        config_max = RerankerConfig(
+            config=RerankerInnerConfig(base_url="http://rerank:8080"),
+            rerank_top_n=100,
+        )
+        assert config_max.rerank_top_n == 100
+
+    def test_reranker_config_invalid_top_n(self) -> None:
+        """Test that rerank_top_n < 1 or > 100 raises ValidationError."""
+        with pytest.raises(ValidationError):
+            RerankerConfig(
+                config=RerankerInnerConfig(base_url="http://rerank:8080"),
+                rerank_top_n=0,
+            )
+        with pytest.raises(ValidationError):
+            RerankerConfig(
+                config=RerankerInnerConfig(base_url="http://rerank:8080"),
+                rerank_top_n=101,
+            )
+
+    def test_reranker_config_invalid_selection(self) -> None:
+        """Test that invalid rerank_selection raises ValidationError."""
+        with pytest.raises(ValidationError):
+            RerankerConfig(
+                config=RerankerInnerConfig(base_url="http://rerank:8080"),
+                rerank_selection="invalid",
+            )
+
+    def test_reranker_config_rejects_extra_fields(self) -> None:
+        """Test that extra fields are rejected (extra='forbid')."""
+        with pytest.raises(ValidationError):
+            RerankerConfig(
+                config=RerankerInnerConfig(base_url="http://rerank:8080"),
+                unknown_field=True,
+            )

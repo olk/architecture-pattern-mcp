@@ -57,7 +57,7 @@ from workflows import Context, Workflow, step
 from workflows.events import StartEvent, StopEvent
 
 from src.agent import SoftwareArchitectAgent
-from src.config import RetrievalConfig
+from src.config import RetrievalConfig, RerankerConfig
 from src.design_normalization import denormalize_contracts
 from src.errors import ERROR_INVALID_ARCHITECTURE, MalformedArchitectureOverviewError
 from src.patterns.bm25_index import DomainBM25Index
@@ -309,6 +309,7 @@ class ArchitecturePipeline(Workflow):
         vector_index: DomainVectorIndex,
         bm25_index: DomainBM25Index,
         retrieval_config: RetrievalConfig | None = None,
+        reranker_config: RerankerConfig | None = None,
     ) -> None:
         """
         Initialize ArchitecturePipeline with injected dependencies.
@@ -321,6 +322,8 @@ class ArchitecturePipeline(Workflow):
             vector_index: DomainVectorIndex instance for domain similarity search
             bm25_index: DomainBM25Index instance for lexical domain search
             retrieval_config: Retrieval tuning parameters (defaults to RetrievalConfig())
+            reranker_config: Reranker parameters — TEI connection and post-fusion slug-cut
+                settings (defaults to RerankerConfig() with default base_url).
         """
         super().__init__(timeout=1200)
         self._agent = agent
@@ -328,6 +331,7 @@ class ArchitecturePipeline(Workflow):
         self._vector_index = vector_index
         self._bm25_index = bm25_index
         self._retrieval_config = retrieval_config or RetrievalConfig()
+        self._reranker_config = reranker_config or RerankerConfig()
         self._pattern_context_cache: OrderedDict[tuple, str] = OrderedDict()
         self._pattern_context_cache_max: int = self.PATTERN_CONTEXT_CACHE_MAX
 
@@ -337,6 +341,7 @@ class ArchitecturePipeline(Workflow):
                 "agent_type": type(agent).__name__,
                 "pattern_loader_loaded": pattern_loader._loaded,
                 "retrieval_config": self._retrieval_config.model_dump(),
+                "reranker_config": self._reranker_config.model_dump(),
             }
         )
 
@@ -413,11 +418,9 @@ class ArchitecturePipeline(Workflow):
                 dense_top_k=self._retrieval_config.dense_top_k,
                 mode=self._retrieval_config.mode,
                 min_fusion_score=self._retrieval_config.min_fusion_score,
-                rerank_top_n=self._retrieval_config.rerank_top_n,
-                reranker_config=self._retrieval_config.reranker.config
-                if self._retrieval_config.reranker
-                else None,
-                rerank_selection=self._retrieval_config.rerank_selection,
+                rerank_top_n=self._reranker_config.rerank_top_n,
+                reranker_config=self._reranker_config.config,
+                rerank_selection=self._reranker_config.rerank_selection,
             )
 
             # ── Stage 1 (recall): all candidate patterns + fusion scores ──

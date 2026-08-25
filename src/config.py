@@ -105,9 +105,39 @@ class RerankerInnerConfig(BaseModel):
 
 
 class RerankerConfig(BaseModel):
-    """Reranker provider configuration."""
+    """Reranker provider configuration — connection and post-fusion slug-cut settings.
 
-    config: RerankerInnerConfig | None = None
+    Contains the TEI-backed cross-encoder connection settings (base_url, timeout)
+    and the reranking stage parameters (rerank_top_n, rerank_selection).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    config: RerankerInnerConfig = Field(
+        default_factory=lambda: RerankerInnerConfig(base_url="http://pattern-tei-rerank:8080")
+    )
+    rerank_top_n: int = Field(
+        10, ge=1, le=100,
+        description=(
+            "Max candidates kept AFTER cross-encoder reranking. Bounds the slug "
+            "pool fed to pattern resolution and matched_domains reporting. "
+            "Reranker scoring itself remains lossless."
+        ),
+    )
+    rerank_selection: Literal["rerank", "rank_fusion"] = Field(
+        "rerank",
+        description=(
+            "Slug-cut strategy after cross-encoder scoring. "
+            '"rerank" (default): keep top rerank_top_n by cross-encoder order only '
+            "(llama-index convention). Reported fusion_score is the original RRF score. "
+            '"rank_fusion": Vespa-style blend — keep top rerank_top_n by '
+            "RR(rrf_rank) + RR(ce_rank), k=60.  "
+            "Protects consensus-backed slugs from CE outliers on short domain-slug inputs. "
+            "Reported fusion_score is the blended selection score "
+            "(the min_fusion_score gate applies to that blended value in this mode). "
+            "Has no effect when the candidate pool is < rerank_top_n."
+        ),
+    )
 
 
 FusionMode = Literal["simple", "reciprocal_rerank"]
@@ -157,33 +187,6 @@ class RetrievalConfig(BaseModel):
             "RRF scores encode rank consensus, not calibrated relevance — "
             "0.0 disables this gate (recommended). Relevance gating happens "
             "downstream via style_score_threshold (0-100 scale)."
-        )
-    )
-    rerank_top_n: int = Field(
-        10, ge=1, le=100,
-        description=(
-            "Max candidates kept AFTER cross-encoder reranking. Bounds the slug "
-            "pool fed to pattern resolution and matched_domains reporting. "
-            "Reranker scoring itself remains lossless."
-        ),
-    )
-    rerank_selection: Literal["rerank", "rank_fusion"] = Field(
-        "rerank",
-        description=(
-            "Slug-cut strategy after cross-encoder scoring. "
-            '"rerank" (default): keep top rerank_top_n by cross-encoder order only '
-            "(llama-index convention). Reported fusion_score is the original RRF score. "
-            '"rank_fusion": Vespa-style blend — keep top rerank_top_n by '
-            "RR(rrf_rank) + RR(ce_rank), k=60.  "
-            "Protects consensus-backed slugs from CE outliers on short domain-slug inputs. "
-            "Reported fusion_score is the blended selection score "
-            "(the min_fusion_score gate applies to that blended value in this mode). "
-            "Has no effect when the candidate pool is < rerank_top_n."
-        ),
-    )
-    reranker: RerankerConfig = Field(
-        default_factory=lambda: RerankerConfig(
-            config=RerankerInnerConfig(base_url="http://pattern-tei-rerank:8080")
         )
     )
     min_quality_score: float = Field(
@@ -254,21 +257,6 @@ class RetrievalConfig(BaseModel):
             )
         return self
 
-    @model_validator(mode="after")
-    def _check_reranker_configured(self) -> "RetrievalConfig":
-        if (
-            self.reranker is None
-            or self.reranker.config is None
-            or not self.reranker.config.base_url.strip()
-        ):
-            raise ValueError(
-                "Reranking is mandatory; `retrieval.reranker.config.base_url` "
-                "must be a non-empty URL. Set RERANKER_BASE_URL and ensure the "
-                "deployed config.json contains the `retrieval.reranker` block "
-                "(an outdated config file copied from an older image may omit it)."
-            )
-        return self
-
 
 class ValidationConfig(BaseModel):
     """
@@ -321,6 +309,13 @@ class ServerConfig(BaseModel):
 
     embedder: EmbedderConfig
 
+    # Reranker: TEI-backed cross-encoder connection and post-fusion slug-cut settings.
+    reranker: RerankerConfig = Field(
+        default_factory=lambda: RerankerConfig(
+            config=RerankerInnerConfig(base_url="http://pattern-tei-rerank:8080")
+        )
+    )
+
     # Retrieval tuning: hybrid BM25 + dense fusion parameters.
     retrieval: RetrievalConfig | None = None
 
@@ -346,6 +341,21 @@ class ServerConfig(BaseModel):
         if v == "":
             return None
         return v
+
+    @model_validator(mode="after")
+    def _check_reranker_configured(self) -> "ServerConfig":
+        if (
+            self.reranker is None
+            or self.reranker.config is None
+            or not self.reranker.config.base_url.strip()
+        ):
+            raise ValueError(
+                "Reranking is mandatory; `reranker.config.base_url` "
+                "must be a non-empty URL. Set RERANKER_BASE_URL and ensure the "
+                "deployed config.json contains the `reranker` block "
+                "(an outdated config file copied from an older image may omit it)."
+            )
+        return self
 
     # Heartbeat settings for long-running tools
     tasks: TasksConfig = Field(default_factory=lambda: TasksConfig())

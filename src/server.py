@@ -382,6 +382,7 @@ class MCPArchitectServer:
                 vector_index=vector_index,
                 bm25_index=bm25_index,
                 retrieval_config=self._config.retrieval,
+                reranker_config=self._config.reranker,
             )
 
             logger.info("ArchitecturePipeline initialized")

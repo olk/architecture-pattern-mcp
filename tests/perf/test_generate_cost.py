@@ -33,7 +33,7 @@ from typing import Any, cast
 
 import pytest
 
-from src.config import ConfigManager, RetrievalConfig, ServerConfig
+from src.config import ConfigManager, RerankerConfig, RetrievalConfig, ServerConfig
 from src.schemas.architecture import ArchitectureDesignResponse, ArchitectureDesignResponseWire
 from src.schemas.patterns import Pattern
 from src.schemas.enums import PatternCategory, ArchitectureDomain
@@ -240,6 +240,7 @@ def test_generate_live_llm_timing() -> None:
     vector_idx = DomainVectorIndex()
     bm25_idx = DomainBM25Index()
     retrieval = RetrievalConfig(**cfg.get("retrieval", {}))
+    reranker = RerankerConfig(**cfg.get("reranker", {}))
 
     pipeline = ArchitecturePipeline(
         agent=agent,
@@ -247,6 +248,7 @@ def test_generate_live_llm_timing() -> None:
         vector_index=vector_idx,
         bm25_index=bm25_idx,
         retrieval_config=retrieval,
+        reranker_config=reranker,
     )
 
     timings: dict[str, float] = {}
