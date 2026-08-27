@@ -363,37 +363,3 @@ class TestL2Normalization:
 
         assert result.shape == (1, 3)
         np.testing.assert_array_equal(result[0], [0.0, 0.0, 0.0])
-
-
-class TestVectorStoreProperty:
-    """Verify FaissVectorStore exposure via .vector_store property."""
-
-    def test_vector_store_is_none_before_build(self):
-        """Verify vector_store property is None before build_index."""
-        index = DomainVectorIndex(
-            base_url="http://localhost:8080",
-            api_key=None,
-            embed_batch_size=16,
-            query_instruction="Instruct: ",
-            text_instruction="",
-            provider="tei",
-        )
-        assert index.vector_store is None
-
-    def test_vector_store_is_faiss_vector_store_after_build(self):
-        """Verify vector_store is a FaissVectorStore after build."""
-        from llama_index.vector_stores.faiss import FaissVectorStore
-
-        index = DomainVectorIndex(
-            base_url="http://localhost:8080",
-            api_key=None,
-            embed_batch_size=16,
-            query_instruction="Instruct: ",
-            text_instruction="",
-            provider="tei",
-        )
-
-        with patch.object(index, "_embed", return_value=np.random.rand(3, 1024).astype(np.float32)):
-            index.build_index(["a", "b", "c"])
-
-        assert isinstance(index.vector_store, FaissVectorStore)

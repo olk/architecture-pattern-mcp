@@ -19,16 +19,14 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-"""DomainVectorIndex - FAISS vector index via llama-index-vector-stores-faiss.
+"""DomainVectorIndex - FAISS vector index for domain slug similarity search.
 
-FR-200: The system SHALL depend on llama-index-vector-stores-faiss and LiteLLMEmbedding.
 FR-201: The system SHALL provide a DomainVectorIndex class for fast domain similarity search.
 
 Architecture:
 - Embedder: LiteLLMEmbedding (from llama-index-embeddings-litellm), optionally wrapped
   in InstructionAwareEmbedding when query/text instructions are set.
-- Vector store: FaissVectorStore wrapping a faiss.IndexFlatIP.
-- Both backends produce L2-normalised vectors so IndexFlatIP == cosine similarity.
+- Vector index: faiss.IndexFlatIP (L2-normalised, so inner product == cosine similarity).
 
 Error Handling:
 - E-6 (ERR_006): Failed to initialise LiteLLMEmbedding (http_status: 500, severity: critical)
@@ -40,7 +38,6 @@ import logging
 
 import faiss
 import numpy as np
-from llama_index.vector_stores.faiss import FaissVectorStore
 
 from src.config import EmbedderConfig
 from src.patterns.embedder import build_embedder
@@ -56,10 +53,9 @@ class DomainVectorIndex:
     the application config Pydantic model.
 
     Attributes:
-        _embedder:     LiteLLMEmbedding (or InstructionAwareEmbedding) instance.
-        _domains:      List of domain strings indexed.
-        _faiss_index:  faiss.IndexFlatIP instance.
-        _vector_store: FaissVectorStore wrapping _faiss_index.
+        _embedder:    LiteLLMEmbedding (or InstructionAwareEmbedding) instance.
+        _domains:     List of domain strings indexed.
+        _faiss_index: faiss.IndexFlatIP instance.
     """
 
     def __init__(  # noqa: PLR0913
@@ -96,7 +92,6 @@ class DomainVectorIndex:
 
         self._domains: list[str] = []
         self._faiss_index: faiss.IndexFlatIP | None = None
-        self._vector_store: FaissVectorStore | None = None
 
     @classmethod
     def from_embedder_config(cls, embedder_config: EmbedderConfig) -> DomainVectorIndex:
@@ -117,7 +112,7 @@ class DomainVectorIndex:
 
     @property
     def is_built(self) -> bool:
-        return self._vector_store is not None and len(self._domains) > 0
+        return self._faiss_index is not None and len(self._domains) > 0
 
     def _embed(self, texts: list[str], *, is_query: bool = False) -> np.ndarray:
         """Embed a batch of texts via LiteLLMEmbedding.
@@ -156,7 +151,6 @@ class DomainVectorIndex:
             logger.warning("build_index called with empty domains list")
             self._domains = []
             self._faiss_index = None
-            self._vector_store = None
             return
 
         self._domains = list(domains)
@@ -165,7 +159,6 @@ class DomainVectorIndex:
         idx = faiss.IndexFlatIP(embs.shape[1])
         idx.add(embs.astype(np.float32))
         self._faiss_index = idx
-        self._vector_store = FaissVectorStore(faiss_index=idx)
 
         logger.info(
             f"FAISS index built with {idx.ntotal} vectors",
@@ -213,8 +206,3 @@ class DomainVectorIndex:
     def domains(self) -> list[str]:
         """Return a copy of the indexed domain slug list."""
         return list(self._domains)
-
-    @property
-    def vector_store(self) -> FaissVectorStore | None:
-        """Expose FaissVectorStore for advanced callers that need it."""
-        return self._vector_store

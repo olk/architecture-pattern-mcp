@@ -30,6 +30,9 @@ tried to look up node IDs that didn't exist in index_struct.nodes_dict.
 The new class bypasses LlamaIndex's broken docstore plumbing entirely,
 mirroring how DomainBM25Index.as_retriever() / BM25Retriever already work
 with their own bm25s.BM25 engine and corpus.
+
+Note: FaissVectorStore is no longer used; DomainVectorIndex now stores
+the raw faiss.IndexFlatIP directly.
 """
 
 from __future__ import annotations

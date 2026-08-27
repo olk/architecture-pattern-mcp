@@ -333,17 +333,6 @@ class MockDomainVectorIndex:
         return list(self._domains)
 
     @property
-    def vector_store(self):
-        if not self._built:
-            return None
-        import faiss
-        from llama_index.vector_stores.faiss import FaissVectorStore
-        idx = faiss.IndexFlatIP(8)
-        vs = FaissVectorStore(faiss_index=idx)
-        vs.stores_text = True
-        return vs
-
-    @property
     def _embedder(self):
         from llama_index.core.embeddings import MockEmbedding
         return MockEmbedding(embed_dim=8)
