@@ -59,7 +59,7 @@ from workflows.events import StartEvent, StopEvent
 from src.agent import SoftwareArchitectAgent
 from src.config import RetrievalConfig, RerankerConfig
 from src.design_normalization import denormalize_contracts
-from src.errors import ERROR_INVALID_ARCHITECTURE, MalformedArchitectureOverviewError
+from src.errors import MalformedArchitectureOverviewError
 from src.patterns.bm25_index import DomainBM25Index
 from src.patterns.loader import PatternLoader
 from src.patterns.retriever import DEFAULT_FALLBACK_PATTERN_NAME, HybridPatternRetriever
@@ -562,10 +562,10 @@ class ArchitecturePipeline(Workflow):
                                verbose=self._retrieval_config.verbose_timing):
             if override_user_prompt:
                 user_prompt = override_user_prompt
-                system_prompt = self._build_generate_system_prompt(style, selected_patterns)
+                system_prompt = self._build_generate_system_prompt(style)
             else:
                 pattern_context = self._build_pattern_context(selected_patterns)
-                system_prompt = self._build_generate_system_prompt(style, selected_patterns)
+                system_prompt = self._build_generate_system_prompt(style)
                 user_prompt = self._build_generate_user_prompt(
                     requirements, domain, style, pattern_context, analysis_result
                 )
@@ -618,7 +618,6 @@ class ArchitecturePipeline(Workflow):
                     extra={"errors": exc.errors(include_url=False)},
                 )
                 raise MalformedArchitectureOverviewError(
-                    code=ERROR_INVALID_ARCHITECTURE,
                     locator=locator,
                     errors=errors,
                 ) from exc
@@ -655,10 +654,6 @@ class ArchitecturePipeline(Workflow):
                     for p in analysis_result.selected_patterns
                 ]
 
-            pattern_alignment = self._evaluate_pattern_alignment(
-                patterns, criteria
-            )
-
             system_prompt = self._build_evaluate_system_prompt(patterns)
             user_prompt = self._build_evaluate_user_prompt(
                 architecture, criteria, domain, patterns
@@ -672,7 +667,7 @@ class ArchitecturePipeline(Workflow):
             llm_eval = cast(ArchitectureEvaluation, llm_eval)
 
             recs_dict: dict[str, list[str]] = {}
-            for rec in self._generate_evaluation_recommendations(architecture, pattern_alignment):
+            for rec in self._generate_evaluation_recommendations(architecture):
                 area = "general"
                 recs_dict.setdefault(area, []).append(rec)
 
@@ -1096,13 +1091,8 @@ class ArchitecturePipeline(Workflow):
             self._pattern_context_cache.popitem(last=False)
         return result
 
-    def _build_generate_system_prompt(self, style: str, _patterns: list[dict]) -> str:
-        """Build system prompt for generate phase.
-
-        .. deprecated::
-            The ``_patterns`` parameter is unused and is retained only to keep
-            existing call sites compiling. Drop it in the next minor version.
-        """
+    def _build_generate_system_prompt(self, style: str) -> str:
+        """Build system prompt for generate phase."""
         return _generate_system_prompt_cached(style)
 
     def _build_generate_user_prompt(
@@ -1138,35 +1128,9 @@ Please generate an architecture design following the schema provided.
 
         return user_prompt
 
-    def _evaluate_pattern_alignment(
-        self,
-        patterns: list[Pattern],
-        criteria: str,
-    ) -> dict[str, float]:
-        """Evaluate how well patterns align with evaluation criteria."""
-        alignment = {}
-
-        criteria_keywords = criteria.lower().split(",")
-
-        for pattern in patterns:
-            name = pattern.name
-            context = pattern.context.lower()
-            benefits = " ".join(pattern.benefits).lower()
-
-            score = 0.0
-            for kw in criteria_keywords:
-                stripped = kw.strip()
-                if stripped in context or stripped in benefits:
-                    score += 1.0
-
-            alignment[name] = min(score / max(len(criteria_keywords), 1) * 100, 100.0)
-
-        return alignment
-
     def _generate_evaluation_recommendations(
         self,
         architecture: ArchitectureDesign,
-        _pattern_alignment: dict[str, float],
     ) -> list[str]:
         """Generate evaluation recommendations."""
         recommendations = []
@@ -1177,42 +1141,6 @@ Please generate an architecture design following the schema provided.
             )
 
         return recommendations
-
-    def _add_monitoring_components(self, architecture: ArchitectureDesign) -> None:
-        """Add monitoring-related components if not present."""
-        from src.schemas.components import Component
-        has_monitoring = any(
-            "monitoring" in getattr(c, "type", "") or ""
-            or "monitoring" in getattr(c, "name", "") or ""
-            for c in architecture.components
-        )
-
-        if not has_monitoring:
-            architecture.components.append(Component(
-                id="monitoring",
-                name="Monitoring Service",
-                type="monitoring",
-                description="Centralized monitoring and observability",
-                responsibilities=["metrics collection", "log aggregation", "alerting"],
-            ))
-
-    def _add_security_components(self, architecture: ArchitectureDesign) -> None:
-        """Add security-related components if not present."""
-        from src.schemas.components import Component
-        has_security = any(
-            "security" in getattr(c, "type", "") or ""
-            or "auth" in getattr(c, "type", "") or ""
-            for c in architecture.components
-        )
-
-        if not has_security:
-            architecture.components.append(Component(
-                id="security",
-                name="Security Service",
-                type="security",
-                description="Authentication and authorization service",
-                responsibilities=["authentication", "authorization", "token management"],
-            ))
 
     # ──────────────────────────────────────────────────────────────────────────
     # Stage-2 analyze helpers: weight extraction + deterministic scoring

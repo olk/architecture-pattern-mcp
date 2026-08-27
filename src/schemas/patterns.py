@@ -26,7 +26,6 @@ Defines the structure of a single architecture pattern (e.g. microservices, hexa
 """
 
 import logging
-from typing import Any
 
 from pydantic import BaseModel, Field, model_validator
 

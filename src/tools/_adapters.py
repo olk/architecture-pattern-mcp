@@ -46,7 +46,7 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import ValidationError
 
-from src.errors import ERROR_INVALID_ARCHITECTURE, MalformedArchitectureOverviewError
+from src.errors import MalformedArchitectureOverviewError
 
 if TYPE_CHECKING:
     from src.pipeline import (
@@ -217,7 +217,6 @@ def _parse_overview(data: dict[str, Any]) -> ArchitectureOverview:
             extra={"payload_preview": _safe_preview(data)},
         )
         raise MalformedArchitectureOverviewError(
-            code=ERROR_INVALID_ARCHITECTURE,
             locator="overview",
             errors=exc.errors(),
         ) from exc

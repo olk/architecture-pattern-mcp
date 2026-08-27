@@ -60,7 +60,7 @@ from src.config import TasksConfig
 from src.errors import ERROR_REQUIREMENTS_VALIDATION
 from src.patterns.retriever import DEFAULT_FALLBACK_PATTERN_NAME
 from src.pipeline import AnalysisResult, ArchitecturePipeline
-from src.schemas.analysis import MatchedDomain
+
 from src.text_validation import DomainName, PrintableText, ensure_printable_text
 
 logger = logging.getLogger(__name__)

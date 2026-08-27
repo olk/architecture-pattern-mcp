@@ -51,9 +51,6 @@ _STATUS_MESSAGES = {
 
 
 class GetArchitectureDesignStatusTool:
-    def __init__(self) -> None:
-        pass
-
     @tool(
         name="get_architecture_design_status",
         description=(

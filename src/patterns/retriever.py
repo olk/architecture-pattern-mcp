@@ -62,7 +62,7 @@ from src.patterns.safe_tei_rerank import SafeTEIReranker
 if TYPE_CHECKING:
     from llama_index.core.retrievers import BaseRetriever
 
-from src.patterns._fusion import FusionMode, RRF_K, apply_fusion, reciprocal_rank_score
+from src.patterns._fusion import FusionMode, apply_fusion, reciprocal_rank_score
 from src.patterns.bm25_index import DomainBM25Index
 from src.patterns.embedder import TEI_RERANKER_MODEL
 from src.patterns.loader import PatternLoader

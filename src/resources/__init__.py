@@ -18,34 +18,3 @@
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
-
-"""
-src/resources/__init__.py - Public exports for the resources package.
-
-Re-exports all public types so callers can import from a single place:
-    from src.resources import PatternResource, RESOURCES, LayeredArchitectureTemplate, ...
-
-Note: COMPONENT_BLUEPRINTS is NOT a module-level constant because it requires
-a live PatternLoader instance to build. Use build_component_blueprints(loader)
-to construct it at server startup inside the lifespan context.
-"""
-
-from src.resources.components import (
-    ComponentDefinition,
-    build_component_blueprints,
-)
-from src.resources.patterns import PatternResource
-from src.resources.templates import (
-    RESOURCES,
-    LayerDefinition,
-    LayeredArchitectureTemplate,
-)
-
-__all__ = [
-    "RESOURCES",
-    "ComponentDefinition",
-    "LayerDefinition",
-    "LayeredArchitectureTemplate",
-    "PatternResource",
-    "build_component_blueprints",
-]

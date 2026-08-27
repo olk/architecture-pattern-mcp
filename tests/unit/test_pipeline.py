@@ -1872,7 +1872,7 @@ class TestDesignLoopPhase:
     @pytest.mark.asyncio
     async def test_design_loop_retries_on_malformed_error(self):
         """design_loop retries when generate throws MalformedArchitectureOverviewError."""
-        from src.errors import MalformedArchitectureOverviewError, ERROR_INVALID_ARCHITECTURE
+        from src.errors import MalformedArchitectureOverviewError
         pipeline = create_test_pipeline()
 
         attempt = 0
@@ -1883,7 +1883,7 @@ class TestDesignLoopPhase:
             if response_schema is ArchitectureDesignResponse:
                 attempt += 1
                 if attempt == 1:
-                    raise MalformedArchitectureOverviewError(code=ERROR_INVALID_ARCHITECTURE, locator="overview", errors=[])
+                    raise MalformedArchitectureOverviewError(locator="overview", errors=[])
                 return ArchitectureDesignResponse(
                     overview={"style": "microservices", "category": "structural", "principles": ["single responsibility"], "constraints": []},
                     components=[{"id": "s1", "name": "S1", "type": "service", "description": "svc", "responsibilities": ["serve"], "interfaces": [], "technology_stack": [], "api_contract": None, "data_models": [],  "config_requirements": []}],
@@ -2143,7 +2143,7 @@ class TestPromptExamples:
         """Generate system prompt includes architecture design example."""
         pipeline = create_test_pipeline()
         prompt = pipeline._build_generate_system_prompt(
-            style="microservices", _patterns=[]
+            style="microservices"
         )
         assert "Example architecture design response" in prompt
         assert "```json" in prompt

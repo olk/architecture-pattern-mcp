@@ -153,8 +153,6 @@ class RerankerConfig(BaseModel):
 
 FusionMode = Literal["simple", "reciprocal_rerank"]
 
-RANK_ONLY_MODES: frozenset[str] = frozenset({"simple", "reciprocal_rerank"})
-
 
 PATTERN_CONTEXT_LIMITS: dict[str, int] = {
     "benefits": 3,

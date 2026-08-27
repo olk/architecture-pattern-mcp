@@ -32,13 +32,10 @@ Used by: HybridPatternRetriever when reranker_config is provided.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Callable
+from typing import Any, Callable
 
 import httpx
 from llama_index.postprocessor.tei_rerank import TextEmbeddingInference
-
-if TYPE_CHECKING:
-    pass
 
 
 def _safe_tei_rerank_call(

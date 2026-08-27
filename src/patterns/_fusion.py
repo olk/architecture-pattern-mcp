@@ -40,12 +40,9 @@ Supported modes:
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Literal
+from typing import Literal
 
 from llama_index.core.schema import NodeWithScore
-
-if TYPE_CHECKING:
-    from llama_index.core.schema import NodeWithScore as _NWS  # noqa: F401
 
 FusionMode = Literal["simple", "reciprocal_rerank"]
 

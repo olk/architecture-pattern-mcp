@@ -59,7 +59,7 @@ from typing import Any
 
 from fastmcp import Context, FastMCP
 from fastmcp.exceptions import ToolError
-from fastmcp.server.transforms import GetToolNext, PromptsAsTools, Transform, VersionSpec
+from fastmcp.server.transforms import GetToolNext, PromptsAsTools, VersionSpec
 from fastmcp.tools.base import Tool, ToolAnnotations
 
 from src.agent import SoftwareArchitectAgent

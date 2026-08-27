@@ -97,7 +97,7 @@ def test_generate_prompt_sizes() -> None:
 
     pipeline = create_test_pipeline()
 
-    system_prompt = pipeline._build_generate_system_prompt(style="event-driven", _patterns=[])
+    system_prompt = pipeline._build_generate_system_prompt(style="event-driven")
     user_prompt = pipeline._build_generate_user_prompt(
         requirements="Build an event-driven system",
         domain="e-commerce",

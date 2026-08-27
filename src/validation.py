@@ -100,16 +100,13 @@ async def validate_with_retries(  # noqa: UP047
         ValidationError: If all attempts (including repairs) fail validation.
         LLMError: If all attempts fail with provider errors after retries exhausted.
     """
-    last_error: Exception | None = None
     original_error: Exception | None = None
 
     try:
         return await initial_caller()
     except ValidationError as exc:
-        last_error = exc
         original_error = exc
     except LLMError as exc:
-        last_error = exc
         original_error = exc
 
     for attempt in range(max_retries):
@@ -144,13 +141,10 @@ async def validate_with_retries(  # noqa: UP047
 
         try:
             return await repair_caller(system_prompt, repair_user_prompt)
-        except ValidationError as exc:
-            last_error = exc
-        except LLMError as exc:
-            last_error = exc
+        except (ValidationError, LLMError) as exc:
+            logger.warning("Self-healing repair call failed: %s", exc)
         except Exception as exc:
             logger.warning("Self-healing repair call failed: %s", exc)
-            last_error = exc
 
     if original_error is not None:
         raise original_error from None

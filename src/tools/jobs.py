@@ -33,7 +33,7 @@ import asyncio
 import logging
 import os
 import uuid
-from datetime import datetime, timezone, UTC
+from datetime import datetime, UTC
 from typing import Any
 
 logger = logging.getLogger(__name__)

@@ -55,11 +55,10 @@ class MalformedArchitectureOverviewError(ValueError):
 
     def __init__(
         self,
-        code: str,
         locator: str,
         errors: list[Any],
     ) -> None:
-        super().__init__(f"{code}: {locator} failed validation: {errors}")
-        self.code = code
+        super().__init__(f"{ERROR_INVALID_ARCHITECTURE}: {locator} failed validation: {errors}")
+        self.code = ERROR_INVALID_ARCHITECTURE
         self.locator = locator
         self.errors = errors
