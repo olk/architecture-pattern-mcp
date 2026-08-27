@@ -67,7 +67,14 @@ __all__ = [
 ]
 
 
-def create_all_tools(agent, pipeline, pattern_loader, tasks_config=None):
+def create_all_tools(
+    agent,
+    pipeline,
+    pattern_loader,
+    tasks_config=None,
+    *,
+    job_tasks: dict[str, tuple] | None = None,
+):
     """
     Factory function to create all MCP tool instances.
 
@@ -78,10 +85,13 @@ def create_all_tools(agent, pipeline, pattern_loader, tasks_config=None):
         pipeline: ArchitecturePipeline instance for orchestrating design pipeline.
         pattern_loader: PatternLoader instance for direct pattern catalog access.
         tasks_config: TasksConfig instance for heartbeat settings (None = defaults applied).
+        job_tasks: Shared {job_id: (task, cancellation_token)} registry for
+                   the submit/get_status/cancel tool trio.
 
     Returns:
         dict: Dictionary mapping tool names to tool instances.
     """
+    jt = job_tasks if job_tasks is not None else {}
     return {
         "design_architecture": design_architecture_tool(agent, pipeline, tasks_config=tasks_config),
         "analyze_architecture": analyze_architecture_tool(agent, pipeline, tasks_config=tasks_config),
@@ -89,7 +99,7 @@ def create_all_tools(agent, pipeline, pattern_loader, tasks_config=None):
         "evaluate_architecture": evaluate_architecture_tool(agent, pipeline, tasks_config=tasks_config),
         "list_architecture_patterns": list_architecture_patterns_tool(pattern_loader),
         "get_architecture_pattern": get_architecture_pattern_tool(pattern_loader),
-        "submit_architecture_design_job": submit_architecture_design_job_tool(agent, pipeline),
+        "submit_architecture_design_job": submit_architecture_design_job_tool(agent, pipeline, job_tasks=jt),
         "get_architecture_design_status": get_architecture_design_status_tool(),
-        "cancel_architecture_design": cancel_architecture_design_tool(),
+        "cancel_architecture_design": cancel_architecture_design_tool(job_tasks=jt),
     }

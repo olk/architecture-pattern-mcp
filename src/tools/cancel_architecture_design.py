@@ -23,10 +23,15 @@
 cancel_architecture_design tool — cancel a background architecture-design job
 created by submit_architecture_design_job.
 
-Sets the job status to 'cancelled'. The background asyncio task checks
-is_cancelled() before each stage and exits promptly when it sees the flag.
+Signals cancellation via the CancellationToken and calls task.cancel().
+The background task checks the cancellation flag after each design_loop attempt
+and exits at the next checkpoint.  Cancellation is best-effort and may
+take up to one LLM call to take effect.
 """
 
+from __future__ import annotations
+
+import asyncio
 import logging
 from typing import Annotated
 
@@ -37,14 +42,21 @@ from fastmcp.exceptions import ToolError
 from fastmcp.tools import tool
 from fastmcp.tools.base import ToolAnnotations
 
+from src.pipeline import CancellationToken
 from src.tools.jobs import JobStatus, JobsStore
 
 logger = logging.getLogger(__name__)
 
 
 class CancelArchitectureDesignTool:
-    def __init__(self) -> None:
-        pass
+    def __init__(
+        self,
+        *,
+        job_tasks: dict[str, tuple[asyncio.Task[None], CancellationToken]] | None = None,
+    ) -> None:
+        self._job_tasks: dict[str, tuple[asyncio.Task[None], CancellationToken]] = (
+            job_tasks if job_tasks is not None else {}
+        )
 
     @tool(
         name="cancel_architecture_design",
@@ -53,7 +65,8 @@ class CancelArchitectureDesignTool:
             "The background task checks the cancellation flag between pipeline stages "
             "and exits at the next stage boundary. Cancellation is best-effort and may "
             "take up to one LLM call to take effect. Only use with a job_id from "
-            "submit_architecture_design_job; jobs already completed, failed, or cancelled cannot be cancelled again."
+            "submit_architecture_design_job; jobs already completed, failed, or cancelled "
+            "cannot be cancelled again."
         ),
         tags={"architecture", "design"},
         annotations=ToolAnnotations(
@@ -84,17 +97,41 @@ class CancelArchitectureDesignTool:
                 "message": f"Job is already {status}; cannot cancel.",
             }
 
+        entry = self._job_tasks.get(job_id)
+        if entry is None:
+            await store.set_cancelled(job_id)
+            logger.info("Job %s cancelled (no live task found — DB flag set only)", job_id)
+            return {
+                "job_id": job_id,
+                "status": JobStatus.CANCELLED,
+                "cancelled": True,
+                "task_was_running": False,
+                "message": (
+                    f"Job {job_id} marked as cancelled. "
+                    "No live asyncio.Task found (server restart? DB flag set only.)"
+                ),
+            }
+
+        task, token = entry
+        token.cancel()
+        task.cancel()
         await store.set_cancelled(job_id)
-        logger.info("Job cancelled", extra={"job_id": job_id})
+        logger.info("Job %s cancelled", job_id)
 
         return {
             "job_id": job_id,
             "status": JobStatus.CANCELLED,
             "cancelled": True,
-            "message": f"Job {job_id} marked as cancelled. "
-                      "The background task will exit at its next cancellation checkpoint.",
+            "task_was_running": not task.done(),
+            "message": (
+                f"Job {job_id} cancelled. "
+                "The background task will exit at its next cancellation checkpoint."
+            ),
         }
 
 
-def cancel_architecture_design_tool() -> CancelArchitectureDesignTool:
-    return CancelArchitectureDesignTool()
+def cancel_architecture_design_tool(
+    *,
+    job_tasks: dict[str, tuple[asyncio.Task[None], CancellationToken]] | None = None,
+) -> CancelArchitectureDesignTool:
+    return CancelArchitectureDesignTool(job_tasks=job_tasks)

@@ -236,6 +236,10 @@ class MockPatternLoader:
         self.filter_by_domain_calls = []
         self.select_top_patterns_calls = []
 
+    @property
+    def is_loaded(self) -> bool:
+        return self._loaded
+
     def load_all(self) -> list[dict]:
         if not self._loaded:
             self._patterns_cache = self._get_mock_patterns()
@@ -2247,6 +2251,10 @@ class _FakeIndex:
     @property
     def is_built(self) -> bool:
         return self._built
+
+    @property
+    def domains(self) -> list[str]:
+        return self._domains
 
     def build_index(self, domains: list[str]) -> None:
         self.build_calls += 1

@@ -34,6 +34,7 @@ is the default for all other clients.
 import asyncio
 import json
 import logging
+from contextlib import suppress
 from typing import Annotated, Any
 
 from pydantic import Field
@@ -45,7 +46,7 @@ from fastmcp.tools.base import ToolAnnotations
 
 from src.agent import ERROR_LLM_PROVIDER, LLMError, SoftwareArchitectAgent
 from src.errors import ERROR_REQUIREMENTS_VALIDATION
-from src.pipeline import ArchitecturePipeline
+from src.pipeline import ArchitecturePipeline, CancellationToken
 from src.text_validation import DomainName, PrintableText, ensure_printable_text
 from src.tools.design import pipeline_result_to_output
 from src.tools.jobs import JobStatus, JobsStore
@@ -58,10 +59,14 @@ class SubmitArchitectureDesignJobTool:
         self,
         agent: SoftwareArchitectAgent,
         pipeline: ArchitecturePipeline,
+        *,
+        job_tasks: dict[str, tuple[asyncio.Task[None], CancellationToken]] | None = None,
     ) -> None:
         self._agent = agent
         self._pipeline = pipeline
-        self._running_tasks: set[asyncio.Task[None]] = set()
+        self._job_tasks: dict[str, tuple[asyncio.Task[None], CancellationToken]] = (
+            job_tasks if job_tasks is not None else {}
+        )
 
     @tool(
         name="submit_architecture_design_job",
@@ -110,12 +115,13 @@ class SubmitArchitectureDesignJobTool:
             override_style=override_style,
         )
 
+        cancellation = CancellationToken()
         task = asyncio.create_task(
-            self._run_job(job_id, requirements, domain, override_style, ctx),
+            self._run_job(job_id, requirements, domain, override_style, ctx, cancellation),
             name=f"design-job-{job_id}",
         )
-        self._running_tasks.add(task)
-        task.add_done_callback(self._running_tasks.discard)
+        self._job_tasks[job_id] = (task, cancellation)
+        task.add_done_callback(lambda _t, jid=job_id: self._job_tasks.pop(jid, None))
 
         return {
             "job_id": job_id,
@@ -132,38 +138,46 @@ class SubmitArchitectureDesignJobTool:
         requirements: str,
         domain: str,
         override_style: str | None,
-        ctx: Context | None = None,
+        ctx: Context | None,
+        cancellation: CancellationToken,
     ) -> None:
         """Background task: run the pipeline and update job state."""
         store = await JobsStore.get_instance()
 
+        async def _info(msg: str) -> None:
+            if ctx:
+                await ctx.info(msg)
+
         try:
             await store.set_running(job_id)
-            if ctx:
-                await ctx.info(f"Job {job_id}: running design pipeline for domain='{domain}'")
+            await _info(f"Job {job_id}: running design pipeline for domain='{domain}'")
 
             if await store.is_cancelled(job_id):
-                if ctx:
-                    await ctx.info(f"Job {job_id}: cancelled before pipeline started")
+                await _info(f"Job {job_id}: cancelled before pipeline started")
                 return
 
             refined = await self._pipeline.run_design(
                 requirements=requirements,
                 domain=domain,
                 style=override_style,
+                cancellation=cancellation,
             )
 
             if await store.is_cancelled(job_id):
-                if ctx:
-                    await ctx.info(f"Job {job_id}: cancelled after pipeline, discarding result")
+                await _info(f"Job {job_id}: cancelled after pipeline, discarding result")
                 return
 
-            if ctx:
-                await ctx.info(f"Job {job_id}: pipeline finished, storing result (attempts={refined.attempts})")
+            await _info(f"Job {job_id}: pipeline finished, storing result (attempts={refined.attempts})")
 
             output = pipeline_result_to_output(refined).model_dump()
             await store.set_completed(job_id, json.dumps(output))
             logger.info("Job completed", extra={"job_id": job_id})
+
+        except asyncio.CancelledError:
+            logger.info("Job %s cancelled", job_id)
+            await _info(f"Job {job_id}: cancelled — storing result so far")
+            with suppress(Exception):
+                await store.set_cancelled(job_id)
 
         except Exception as e:
             error_text = str(e)
@@ -173,13 +187,14 @@ class SubmitArchitectureDesignJobTool:
                 error_text = f"ERR_999: {error_text}"
             await store.set_failed(job_id, error_text)
             logger.error("Job failed", extra={"job_id": job_id, "error": error_text})
-            if ctx:
-                await ctx.info(f"Job {job_id}: failed — {error_text}")
+            await _info(f"Job {job_id}: failed — {error_text}")
 
 
 def submit_architecture_design_job_tool(
     agent: SoftwareArchitectAgent,
     pipeline: ArchitecturePipeline,
+    *,
+    job_tasks: dict[str, tuple[asyncio.Task[None], CancellationToken]] | None = None,
 ) -> SubmitArchitectureDesignJobTool:
-    return SubmitArchitectureDesignJobTool(agent=agent, pipeline=pipeline)
+    return SubmitArchitectureDesignJobTool(agent=agent, pipeline=pipeline, job_tasks=job_tasks)
 

@@ -88,6 +88,22 @@ from src.schemas.quality import QualityMetrics
 logger = logging.getLogger(__name__)
 
 
+class CancellationToken:
+    """Cooperative cancellation flag checked between pipeline phases."""
+
+    def __init__(self) -> None:
+        self._event: asyncio.Event = asyncio.Event()
+
+    def cancel(self) -> None:
+        self._event.set()
+
+    def cancelled(self) -> bool:
+        return self._event.is_set()
+
+    async def wait(self) -> None:
+        await self._event.wait()
+
+
 def _phase_extra(phase: str, domain: str, duration_s: float) -> dict[str, Any]:
     """Build a fresh dict per call to avoid mutating a shared one across log calls."""
     extra: dict[str, Any] = {"phase": phase, "duration_s": duration_s}
@@ -334,12 +350,13 @@ class ArchitecturePipeline(Workflow):
         self._reranker_config = reranker_config or RerankerConfig()
         self._pattern_context_cache: OrderedDict[tuple, str] = OrderedDict()
         self._pattern_context_cache_max: int = self.PATTERN_CONTEXT_CACHE_MAX
+        self._cancellation_token: CancellationToken | None = None
 
         logger.debug(
             "ArchitecturePipeline initialized",
             extra={
                 "agent_type": type(agent).__name__,
-                "pattern_loader_loaded": pattern_loader._loaded,
+                "pattern_loader_loaded": pattern_loader.is_loaded,
                 "retrieval_config": self._retrieval_config.model_dump(),
                 "reranker_config": self._reranker_config.model_dump(),
             }
@@ -355,6 +372,7 @@ class ArchitecturePipeline(Workflow):
         domain: str,
         style: str | None = None,
         evaluate_criteria: str | None = None,
+        cancellation: CancellationToken | None = None,
     ) -> PipelineResult:
         """
         Execute the full pipeline via the Workflow engine.
@@ -367,10 +385,13 @@ class ArchitecturePipeline(Workflow):
             domain: Domain string
             style: Optional architecture style hint
             evaluate_criteria: Optional evaluation criteria
+            cancellation: Optional cancellation token. When cancelled,
+                          the pipeline stops at the next design_loop checkpoint.
 
         Returns:
             PipelineResult after all phases complete
         """
+        self._cancellation_token = cancellation
         handler = super().run(
             requirements=requirements,
             domain=domain,
@@ -697,9 +718,10 @@ class ArchitecturePipeline(Workflow):
             attempts = 0
             last_error: Exception | None = None
 
-            req_list = [requirements] if isinstance(requirements, str) else list(requirements)
-
             for attempt in range(1, max_tries + 1):
+                if self._cancellation_token is not None and self._cancellation_token.cancelled():
+                    logger.info("Design loop cancelled before attempt %d", attempt)
+                    break
                 attempts += 1
                 score_before = best_score
                 attempt_start = time.monotonic()
@@ -722,7 +744,7 @@ class ArchitecturePipeline(Workflow):
                         feedback_prompt = self._retry_prompt(
                             design=best_design,
                             evaluation=best_evaluation,
-                            requirements=req_list,
+                            requirements=requirements,
                             style=style,
                             domain=domain,
                         )
@@ -773,6 +795,9 @@ class ArchitecturePipeline(Workflow):
                         )
                         break
 
+                except asyncio.CancelledError:
+                    logger.info("Design loop cancelled during attempt %d", attempt)
+                    break
                 except MalformedArchitectureOverviewError as exc:
                     logger.warning(
                         f"Attempt {attempt} failed with MalformedArchitectureOverviewError",
@@ -878,7 +903,7 @@ class ArchitecturePipeline(Workflow):
         start = time.perf_counter()
         self._build_vector_index()
         duration_ms = (time.perf_counter() - start) * 1000.0
-        domain_count = len(self._vector_index._domains)  # type: ignore[attr-defined]
+        domain_count = len(self._vector_index.domains)
         logger.info(
             "Index warmup complete: %d domains, %.1fms",
             domain_count,
@@ -1508,7 +1533,7 @@ Provide the evaluation as JSON matching the ArchitectureEvaluation schema."""
         self,
         design: ArchitectureDesign,
         evaluation: ArchitectureEvaluation,
-        requirements: list[str],
+        requirements: str,
         style: str,
         domain: str,
         selected_pattern: Pattern | None = None,
@@ -1518,7 +1543,7 @@ Provide the evaluation as JSON matching the ArchitectureEvaluation schema."""
         Args:
             design: The current architecture design
             evaluation: The evaluation result with weaknesses and recommendations
-            requirements: Original requirements
+            requirements: Original requirements string
             style: Architecture style
             domain: Application domain
             selected_pattern: Optional pattern for targeted refinement guidance
@@ -1552,12 +1577,10 @@ ANTI-PATTERNS IDENTIFIED IN EVALUATION:
 PATTERN TRADEOFFS (acceptable compromises):
 {chr(10).join(f"- {t}" for t in (selected_pattern.tradeoffs or [])[:tradeoffs_limit])}
 """
-        req_str = "\n".join(f"- {r}" for r in requirements) if isinstance(requirements, list) else requirements
-
         return f"""Refine this architecture design based on evaluation feedback:
 
 ORIGINAL REQUIREMENTS:
-{req_str}
+{requirements}
 
 CURRENT ARCHITECTURE STYLE: {style}
 DOMAIN: {domain}

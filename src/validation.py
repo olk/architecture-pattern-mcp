@@ -20,12 +20,12 @@
 # SOFTWARE.
 
 """
-Self-healing validation with Pydantic lax mode and retry loop.
+Self-healing validation with Pydantic lax mode and async retry loop.
 
 When LLM-structured output fails Pydantic validation, this module formats
 the error into a correction prompt and retries generation with feedback.
 
-The retry loop:
+The async retry loop:
     1. Attempt structured generation via LiteLLM.as_structured_llm
     2. On ValidationError, extract error details → correction prompt
     3. Retry with corrected user prompt (up to max_retries)
@@ -37,8 +37,8 @@ Used by: SoftwareArchitectAgent.generate_structured
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
-from typing import Callable
+from collections.abc import Awaitable, Callable
+from typing import TypeVar
 
 from pydantic import BaseModel, ValidationError
 
@@ -46,12 +46,7 @@ from src.agent import LLMError
 
 logger = logging.getLogger(__name__)
 
-
-@dataclass
-class RetryContext:
-    """Bundles prompt context for self-healing repair calls."""
-    system_prompt: str
-    user_prompt: str
+T = TypeVar("T", bound=BaseModel)
 
 
 def format_validation_errors(exc: ValidationError) -> str:
@@ -73,130 +68,92 @@ def format_validation_errors(exc: ValidationError) -> str:
     return "\n".join(lines)
 
 
-def attempt_repair(
-    repair_caller: Callable[[str, str], BaseModel],
-    context: RetryContext,
-    validation_errors: str,
-    response_schema: type[BaseModel],
-) -> BaseModel | None:
-    """
-    Attempt to repair failed structured generation by calling the LLM
-    with a corrected prompt containing validation error details.
-
-    This is the "self-healing" step: we tell the LLM what went wrong
-    and ask it to produce a correctly-structured response.
-
-    Args:
-        repair_caller: Callable that takes (system_prompt, user_prompt) and
-                       returns a single-shot structured generation result.
-                       Must NOT retry — only one attempt.
-        context: RetryContext with original system_prompt and user_prompt
-                (forwarded so the LLM has context during repair).
-        validation_errors: Formatted validation error string
-        response_schema: Target Pydantic model class
-
-    Returns:
-        Validated Pydantic model, or None if repair attempt also failed
-    """
-    repair_user_prompt = (
-        f"{context.user_prompt}\n\n"
-        f"IMPORTANT: Your previous response failed validation.\n"
-        f"{validation_errors}\n\n"
-        f"Please produce a new response that conforms exactly to the schema "
-        f"for {response_schema.__name__}. Double-check every field before responding."
-    )
-
-    try:
-        repaired = repair_caller(
-            system_prompt=context.system_prompt,
-            user_prompt=repair_user_prompt,
-        )
-        logger.debug(
-            "Self-healing repair succeeded",
-            extra={"schema": response_schema.__name__},
-        )
-        return repaired
-    except (ValidationError, LLMError):
-        logger.debug("Self-healing repair also failed validation")
-        return None
-    except Exception as e:
-        logger.warning(f"Self-healing repair call failed: {e}")
-        return None
-
-
-def validate_with_retries(
-    initial_caller: Callable[[], BaseModel],
-    repair_caller: Callable[[str, str], BaseModel],
-    response_schema: type[BaseModel],
+async def validate_with_retries(  # noqa: UP047
+    initial_caller: Callable[[], Awaitable[T]],
+    repair_caller: Callable[[str, str], Awaitable[T]],
+    response_schema: type[T],
+    *,
     max_retries: int = 3,
-    context: RetryContext | None = None,
-) -> BaseModel:
+    system_prompt: str = "",
+    user_prompt: str = "",
+) -> T:
     """
-    Generate a structured response with self-healing retry on validation failure.
+    Generate a structured response with self-healing async retry on validation failure.
 
-    Calls initial_caller to attempt structured generation. On ValidationError or
-    LLMError (provider error), repairs with a corrected prompt and retries up
-    to max_retries times.
+    Calls initial_caller for the first attempt. On ValidationError or LLMError,
+    calls repair_caller with corrected prompts up to max_retries times.
 
     Args:
-        initial_caller: Zero-arg callable that returns the first structured generation attempt.
+        initial_caller: Zero-arg async callable returning first structured generation attempt.
                         Raises ValidationError or LLMError on failure.
-        repair_caller: Callable(system_prompt, user_prompt) for repair attempts.
-                        Must NOT retry — only one attempt per call.
-        response_schema: Pydantic model class used for validation (passed explicitly).
-        max_retries: Maximum self-healing retry attempts (default 3)
-        context: RetryContext bundling system_prompt and user_prompt for repair
-                 calls (so the LLM has full context when self-healing).
+        repair_caller: Async callable(system_prompt, user_prompt) for repair attempts.
+                       Must NOT retry — only one attempt per call.
+        response_schema: Pydantic model class used for validation (for error messages).
+        max_retries: Maximum self-healing retry attempts (default 3).
+        system_prompt: Original system prompt (forwarded unchanged to repair_caller).
+        user_prompt: Original user prompt (used as base; repair appends error context).
 
     Returns:
-        Validated Pydantic model instance
+        Validated Pydantic model instance.
 
     Raises:
-        ValidationError: If all attempts (including repairs) fail validation
-        LLMError: If all attempts fail with provider errors after retries exhausted
+        ValidationError: If all attempts (including repairs) fail validation.
+        LLMError: If all attempts fail with provider errors after retries exhausted.
     """
-    if context is None:
-        context = RetryContext(system_prompt="", user_prompt="")
     last_error: Exception | None = None
+    original_error: Exception | None = None
 
-    for attempt in range(max_retries + 1):
+    try:
+        return await initial_caller()
+    except ValidationError as exc:
+        last_error = exc
+        original_error = exc
+    except LLMError as exc:
+        last_error = exc
+        original_error = exc
+
+    for attempt in range(max_retries):
+        if original_error is None:
+            raise RuntimeError("validate_with_retries: original_error is None")
+
+        if isinstance(original_error, ValidationError):
+            errors_str = format_validation_errors(original_error)
+            repair_user_prompt = (
+                f"{user_prompt}\n\n"
+                "IMPORTANT: Your previous response failed validation.\n"
+                f"{errors_str}\n\n"
+                f"Please produce a new response that conforms exactly to the schema "
+                f"for {response_schema.__name__}. "
+                "Double-check every field before responding."
+            )
+        elif isinstance(original_error, LLMError):
+            errors_str = f"LLM provider error: {original_error.provider_message}"
+            repair_user_prompt = (
+                f"{user_prompt}\n\n"
+                f"IMPORTANT: previous LLM call failed with: {original_error.provider_message}\n"
+                f"Please produce a new response conforming to {response_schema.__name__}."
+            )
+        else:
+            raise original_error from None
+
+        logger.debug(
+            "Self-healing repair attempt %d",
+            attempt + 1,
+            extra={"error": errors_str[:200]},
+        )
+
         try:
-            return initial_caller()
+            return await repair_caller(system_prompt, repair_user_prompt)
         except ValidationError as exc:
             last_error = exc
-            if attempt < max_retries:
-                errors_str = format_validation_errors(exc)
-                logger.debug(
-                    f"Validation attempt {attempt + 1} failed, attempting repair",
-                    extra={"errors": errors_str[:200]},
-                )
-                repaired = attempt_repair(
-                    repair_caller=repair_caller,
-                    context=context,
-                    validation_errors=errors_str,
-                    response_schema=response_schema,
-                )
-                if repaired is not None:
-                    return repaired
         except LLMError as exc:
             last_error = exc
-            if attempt < max_retries:
-                errors_str = f"LLM provider error: {exc.provider_message}"
-                logger.debug(
-                    f"LLM attempt {attempt + 1} failed, attempting repair",
-                    extra={"error": errors_str},
-                )
-                repaired = attempt_repair(
-                    repair_caller=repair_caller,
-                    context=context,
-                    validation_errors=errors_str,
-                    response_schema=response_schema,
-                )
-                if repaired is not None:
-                    return repaired
+        except Exception as exc:
+            logger.warning("Self-healing repair call failed: %s", exc)
+            last_error = exc
 
-    if last_error is not None:
-        raise last_error
+    if original_error is not None:
+        raise original_error from None
     raise RuntimeError(
         f"validate_with_retries: all {max_retries + 1} attempts failed without known error"
     )

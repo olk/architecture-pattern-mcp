@@ -36,7 +36,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from src.agent import SoftwareArchitectAgent
-from src.pipeline import ArchitecturePipeline
+from src.pipeline import ArchitecturePipeline, CancellationToken
 from src.schemas.analysis import MatchedDomain
 from src.schemas.contracts import ApiContract, ApiEndpoint, EventContract
 from src.schemas.design import ArchitectureDesign, ArchitectureOverview
@@ -347,6 +347,8 @@ class TestRunJobStoresAllFields:
             requirements="Build a scalable ETL pipeline",
             domain="data engineering",
             override_style=None,
+            ctx=None,
+            cancellation=CancellationToken(),
         )
 
         job = await jobs_store.get_job(job_id)
@@ -383,6 +385,8 @@ class TestRunJobStoresAllFields:
             requirements="Build a system",
             domain="unknown-domain-xyz",
             override_style=None,
+            ctx=None,
+            cancellation=CancellationToken(),
         )
 
         job = await jobs_store.get_job(job_id)
@@ -418,6 +422,8 @@ class TestGetArchitectureDesignStatusReturnsAllFields:
             requirements="Build a scalable ETL pipeline",
             domain="data engineering",
             override_style=None,
+            ctx=None,
+            cancellation=CancellationToken(),
         )
 
         status_tool = GetArchitectureDesignStatusTool()
@@ -453,6 +459,8 @@ class TestGetArchitectureDesignStatusReturnsAllFields:
             requirements="Build a system",
             domain="data engineering",
             override_style=None,
+            ctx=None,
+            cancellation=CancellationToken(),
         )
 
         status_tool = GetArchitectureDesignStatusTool()

@@ -50,8 +50,6 @@ import click
 
 from src.server import server_main
 
-app = server_main  # ASGI server compatibility: Uvicorn/Gunicorn look for 'app' variable
-
 
 @click.command()
 @click.option(

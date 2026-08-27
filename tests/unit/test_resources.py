@@ -40,7 +40,7 @@ import pytest
 from src.patterns.loader import PatternLoader
 from src.resources.components import (
     ComponentDefinition,
-    _slugify,
+    slugify,
     build_component_blueprints,
 )
 from src.resources.patterns import PatternResource
@@ -221,7 +221,7 @@ class TestLayeredArchitectureTemplate:
 # ---------------------------------------------------------------------------
 
 class TestSlugify:
-    """Unit tests for _slugify()."""
+    """Unit tests for slugify()."""
 
     @pytest.mark.parametrize(
         ("input_", "expected"),
@@ -234,7 +234,7 @@ class TestSlugify:
         ],
     )
     def test_slugify_examples(self, input_: str, expected: str):
-        assert _slugify(input_) == expected
+        assert slugify(input_) == expected
 
 
 class TestComponentBlueprints:
@@ -353,7 +353,7 @@ class TestServerResourcesRegistration:
         instance which we don't fully instantiate here).
         """
         # We verify the key building blocks exist and are callable:
-        assert callable(_slugify)
+        assert callable(slugify)
         assert callable(build_component_blueprints)
         assert callable(PatternResource)
         # RESOURCES is populated

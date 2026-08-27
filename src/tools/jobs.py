@@ -38,11 +38,6 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-_DB_PATH = os.environ.get(
-    "ARCHITECTURE_PATTERN_JOBS_DB",
-    os.path.expanduser("~/.config/architecture-pattern-mcp/jobs.db"),
-)
-
 
 def _get_db_path() -> str:
     """Return the effective DB path, re-evaluated on every call for test isolation."""

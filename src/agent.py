@@ -131,7 +131,7 @@ class SoftwareArchitectAgent:
         self,
         system_prompt: str,
         user_prompt: str,
-        response_schema: type[BaseModel]
+        response_schema: type[BaseModel],
     ) -> BaseModel:
         """
         # FR-175: The system SHALL provide a generate_structured method that accepts
@@ -158,8 +158,23 @@ class SoftwareArchitectAgent:
         # E-9: ERR_009 - LLM provider returned error
         """
         if self._validation_config.retry_on_fail and self._validation_config.max_retries > 0:
-            return await self._generate_structured_with_retries(
-                system_prompt, user_prompt, response_schema
+            async def initial_caller() -> BaseModel:
+                return await self._generate_structured_once(
+                    system_prompt, user_prompt, response_schema
+                )
+
+            async def repair_caller(sp: str, up: str) -> BaseModel:
+                return await self._generate_structured_once(sp, up, response_schema)
+
+            from src.validation import validate_with_retries
+
+            return await validate_with_retries(
+                initial_caller,
+                repair_caller,
+                response_schema,
+                max_retries=self._validation_config.max_retries,
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
             )
 
         return await self._generate_structured_once(
@@ -200,43 +215,3 @@ class SoftwareArchitectAgent:
                 error=ERROR_LLM_PROVIDER,
                 provider_message=str(e)
             ) from e
-
-    async def _generate_structured_with_retries(
-        self,
-        system_prompt: str,
-        user_prompt: str,
-        response_schema: type[BaseModel],
-    ) -> BaseModel:
-        """
-        Structured generation with self-healing validation retry loop.
-
-        Attempts generation, and on ValidationError, extracts error details
-        and retries with a corrected prompt (up to max_retries times).
-        """
-        import asyncio
-        from src.validation import validate_with_retries
-
-        max_retries = self._validation_config.max_retries
-
-        def initial_caller() -> BaseModel:
-            return asyncio.run(
-                self._generate_structured_once(system_prompt, user_prompt, response_schema)
-            )
-
-        def repair_caller(system_prompt: str, user_prompt: str) -> BaseModel:
-            return asyncio.run(
-                self._generate_structured_once(system_prompt, user_prompt, response_schema)
-            )
-
-        def sync_wrapper() -> BaseModel:
-            from src.validation import RetryContext
-            return validate_with_retries(
-                initial_caller=initial_caller,
-                repair_caller=repair_caller,
-                response_schema=response_schema,
-                max_retries=max_retries,
-                context=RetryContext(system_prompt=system_prompt, user_prompt=user_prompt),
-            )
-
-        loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(None, sync_wrapper)

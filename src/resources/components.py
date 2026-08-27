@@ -59,7 +59,7 @@ class ComponentDefinition(BaseModel):
     )
 
 
-def _slugify(text: str) -> str:
+def slugify(text: str) -> str:
     """Convert a string to a URL-safe slug."""
     text = text.lower().strip()
     text = re.sub(r"[^\w\s-]", "", text)
@@ -100,7 +100,7 @@ def build_component_blueprints(loader: PatternLoader) -> dict[str, ComponentDefi
             if not name:
                 continue
 
-            slug = _slugify(name)
+            slug = slugify(name)
             responsibilities = [description] if description else []
 
             tech_options: list[str] = []

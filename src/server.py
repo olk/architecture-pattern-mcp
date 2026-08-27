@@ -52,6 +52,7 @@ import json
 import logging
 import os
 import sys
+from datetime import datetime, timezone
 from collections.abc import Sequence
 from contextlib import asynccontextmanager
 from typing import Any
@@ -66,8 +67,8 @@ from src.tools.jobs import JobsStore
 from src.config import ConfigManager, ServerConfig
 from src.patterns.loader import PatternLoader
 from src.patterns.vector_index import DomainVectorIndex
-from src.pipeline import ArchitecturePipeline
-from src.resources.components import build_component_blueprints
+from src.pipeline import ArchitecturePipeline, CancellationToken
+from src.resources.components import build_component_blueprints, slugify
 from src.resources.patterns import PatternResource
 from src.resources.templates import RESOURCES
 from src.tools import create_all_tools
@@ -151,7 +152,6 @@ def configure_logging(log_level: str = "INFO", log_format: str = "json") -> None
 
     if log_format.lower() == "json":
         import json
-        from datetime import datetime
 
         class JSONFormatter(logging.Formatter):
             # Standard LogRecord attributes — always present on every record;
@@ -165,7 +165,7 @@ def configure_logging(log_level: str = "INFO", log_format: str = "json") -> None
 
             def format(self, record: logging.LogRecord) -> str:
                 log_entry = {
-                    "timestamp": datetime.utcnow().isoformat() + "Z",
+                    "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),  # noqa: UP017
                     "level": record.levelname,
                     "logger": record.name,
                     "message": record.getMessage(),
@@ -333,6 +333,7 @@ class MCPArchitectServer:
         self._tools_registered: set[str] = set()
         self._resources_registered: bool = False
         self._prompts_registered: bool = False
+        self._job_tasks: dict[str, tuple[asyncio.Task[None], CancellationToken]] = {}
 
         logger.debug(
             "MCPArchitectServer instance created",
@@ -403,6 +404,7 @@ class MCPArchitectServer:
                 self._tools = create_all_tools(
                     self._agent, self._pipeline, self._pattern_loader,
                     tasks_config=self._config.tasks,
+                    job_tasks=self._job_tasks,
                 )
 
                 logger.info(
@@ -460,19 +462,21 @@ class MCPArchitectServer:
                 logger.debug("Cleaning up ArchitecturePipeline")
 
             # Cancel in-flight submit_architecture_design_job background tasks
-            if "submit_architecture_design_job" in self._tools:
-                instance = self._tools["submit_architecture_design_job"]
-                tasks = list(instance._running_tasks)
-                for task in tasks:
-                    task.cancel()
-                if tasks:
-                    await asyncio.gather(*instance._running_tasks, return_exceptions=True)
-                logger.debug("Cancelled %d background design tasks", len(tasks))
+            for job_id, (task, _tok) in list(self._job_tasks.items()):
+                task.cancel()
+                logger.debug("Cancelled background design task: %s", job_id)
+            if self._job_tasks:
+                await asyncio.gather(
+                    *(t for t, _ in self._job_tasks.values()),
+                    return_exceptions=True,
+                )
+                logger.debug("Gathered %d cancelled background design tasks", len(self._job_tasks))
+            self._job_tasks.clear()
 
             # Close JobsStore singleton
             try:
-                if JobsStore._instance is not None and JobsStore._instance._db is not None:
-                    await JobsStore._instance.close()
+                store = await JobsStore.get_instance()
+                await store.close()
             except Exception as exc:
                 logger.debug("JobsStore cleanup", extra={"error": str(exc)})
 
@@ -553,66 +557,33 @@ class MCPArchitectServer:
             logger.info("Shutting down MCPArchitectServer lifespan")
             await self._cleanup()
 
+    _TOOL_METHOD_MAP: dict[str, str] = {
+        "design_architecture": "design",
+        "analyze_architecture": "analyze",
+        "generate_architecture": "generate",
+        "evaluate_architecture": "evaluate",
+        "list_architecture_patterns": "list_architecture_patterns",
+        "get_architecture_pattern": "get_architecture_pattern",
+        "submit_architecture_design_job": "submit_job",
+        "get_architecture_design_status": "get_status",
+        "cancel_architecture_design": "cancel",
+    }
+
     def _register_tools(self, server: FastMCP) -> None:
         """
         Register tools with FastMCP using the standalone @tool decorator pattern.
 
-        Each tool class method is already decorated with @tool (from fastmcp.tools).
-        Tools are registered via server.add_tool() with direct attribute access on the
-        tool instance — the explicit per-tool form eliminates the unresolvable
-        "bound_method" variable that static analyzers flagged as a phantom tool,
-        and preserves per-tool idempotency for partial-failure resilience.
-
         Idempotent: each tool is individually skipped if already registered with
         this FastMCP instance (handles lifespan re-entry when Client connects).
-
-        Args:
-            server: FastMCP server instance
         """
-        if "design_architecture" not in self._tools_registered:
-            server.add_tool(self._tools["design_architecture"].design)
-            self._tools_registered.add("design_architecture")
-            logger.debug("Registered tool: design_architecture")
-
-        if "analyze_architecture" not in self._tools_registered:
-            server.add_tool(self._tools["analyze_architecture"].analyze)
-            self._tools_registered.add("analyze_architecture")
-            logger.debug("Registered tool: analyze_architecture")
-
-        if "generate_architecture" not in self._tools_registered:
-            server.add_tool(self._tools["generate_architecture"].generate)
-            self._tools_registered.add("generate_architecture")
-            logger.debug("Registered tool: generate_architecture")
-
-        if "evaluate_architecture" not in self._tools_registered:
-            server.add_tool(self._tools["evaluate_architecture"].evaluate)
-            self._tools_registered.add("evaluate_architecture")
-            logger.debug("Registered tool: evaluate_architecture")
-
-        if "list_architecture_patterns" not in self._tools_registered:
-            server.add_tool(self._tools["list_architecture_patterns"].list_architecture_patterns)
-            self._tools_registered.add("list_architecture_patterns")
-            logger.debug("Registered tool: list_architecture_patterns")
-
-        if "get_architecture_pattern" not in self._tools_registered:
-            server.add_tool(self._tools["get_architecture_pattern"].get_architecture_pattern)
-            self._tools_registered.add("get_architecture_pattern")
-            logger.debug("Registered tool: get_architecture_pattern")
-
-        if "submit_architecture_design_job" not in self._tools_registered:
-            server.add_tool(self._tools["submit_architecture_design_job"].submit_job)
-            self._tools_registered.add("submit_architecture_design_job")
-            logger.debug("Registered tool: submit_architecture_design_job")
-
-        if "get_architecture_design_status" not in self._tools_registered:
-            server.add_tool(self._tools["get_architecture_design_status"].get_status)
-            self._tools_registered.add("get_architecture_design_status")
-            logger.debug("Registered tool: get_architecture_design_status")
-
-        if "cancel_architecture_design" not in self._tools_registered:
-            server.add_tool(self._tools["cancel_architecture_design"].cancel)
-            self._tools_registered.add("cancel_architecture_design")
-            logger.debug("Registered tool: cancel_architecture_design")
+        for tool_key, method_name in self._TOOL_METHOD_MAP.items():
+            if tool_key in self._tools_registered:
+                continue
+            tool_instance = self._tools[tool_key]
+            method = getattr(tool_instance, method_name)
+            server.add_tool(method)
+            self._tools_registered.add(tool_key)
+            logger.debug("Registered tool: %s", tool_key)
 
     def _register_resources(self, server: FastMCP) -> None:
         """
@@ -672,9 +643,8 @@ class MCPArchitectServer:
             blueprints = ctx.request_context.lifespan_context.get(
                 "component_blueprints", {}
             )
-            from src.resources.components import _slugify
 
-            slug = _slugify(type)
+            slug = slugify(type)
             blueprint = blueprints.get(slug)
             if blueprint is None:
                 raise ToolError(f"Component blueprint not found: {type}")

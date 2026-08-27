@@ -25,6 +25,7 @@ Environment variable expansion for configuration files.
 Supports {env:VAR} and {env:VAR:-default} placeholder syntax.
 """
 
+import os
 import re
 from typing import Any
 
@@ -45,7 +46,7 @@ def expand_env(value: str, environ: dict[str, str] | None = None) -> str:
     Returns:
         String with all placeholders expanded.
     """
-    env = environ if environ is not None else __import__("os").environ
+    env = environ if environ is not None else os.environ
 
     def repl(m: re.Match) -> str:
         var = m.group(1)

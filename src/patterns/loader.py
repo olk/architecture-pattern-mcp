@@ -121,6 +121,11 @@ class PatternLoader:
         self._patterns_cache: list[dict] = []
         self._loaded = False
 
+    @property
+    def is_loaded(self) -> bool:
+        """True once load_all() has populated the in-memory cache."""
+        return self._loaded
+
     def load_all(self) -> list[dict]:
         """
         Load all pattern JSON files from pattern/.

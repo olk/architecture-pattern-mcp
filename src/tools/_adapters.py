@@ -152,6 +152,28 @@ def analysis_to_pydantic(dc: AnalysisResultDC) -> AnalysisResult:
 # ─── ArchitectureDesign ───────────────────────────────────────────────────────
 
 
+def _parse_api_contract(data: dict[str, Any]) -> ApiContract:
+    """Parse a top-level api_contracts entry into an ApiContract."""
+    endpoints = [
+        ApiEndpoint(
+            method=e["method"],
+            path=e["path"],
+            summary=e.get("summary", ""),
+            request_schema=e.get("request_schema"),
+            response_schema=e.get("response_schema"),
+            auth_required=e.get("auth_required", True),
+            tags=list(e.get("tags", [])),
+        )
+        for e in data.get("endpoints", [])
+    ]
+    return ApiContract(
+        component_id=data.get("component_id", ""),
+        base_path=data.get("base_path", ""),
+        endpoints=endpoints,
+        description=data.get("description", ""),
+    )
+
+
 def design_from_dict(data: dict[str, Any]) -> ArchitectureDesign:
     """
     Convert a raw dict (from API/MCP input) to typed ArchitectureDesign Pydantic model.
@@ -171,7 +193,7 @@ def design_from_dict(data: dict[str, Any]) -> ArchitectureDesign:
         components=components,
         relationships=relationships,
         quality_attributes=dict(data.get("quality_attributes", {})),
-        api_contracts=[],
+        api_contracts=[_parse_api_contract(c) for c in data.get("api_contracts", [])],
         shared_data_models=[_lint_convert(DataModel, d) for d in data.get("shared_data_models", [])],
         event_contracts=event_contracts,
     )
