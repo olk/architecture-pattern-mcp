@@ -44,7 +44,6 @@ from __future__ import annotations
 import unicodedata
 from typing import Annotated
 
-from annotated_types import GroupedMetadata
 from pydantic import AfterValidator, Field, StringConstraints
 
 DOMAIN_MAX_LENGTH = 200
@@ -144,21 +143,21 @@ def _pattern_name_validator(value: str) -> str:
     return ensure_printable_text(value, field="name", allow_line_breaks=False, max_length=PATTERN_NAME_MAX_LENGTH)
 
 
-PrintableText: type[Annotated[str, GroupedMetadata]] = Annotated[
+PrintableText = Annotated[
     str,
     StringConstraints(strip_whitespace=True),
     Field(min_length=1, max_length=FREETEXT_MAX_LENGTH),
     AfterValidator(_freetext_validator),
 ]
 
-DomainName: type[Annotated[str, GroupedMetadata]] = Annotated[
+DomainName = Annotated[
     str,
     StringConstraints(strip_whitespace=True),
     Field(min_length=1, max_length=DOMAIN_MAX_LENGTH),
     AfterValidator(_domain_validator),
 ]
 
-PatternName: type[Annotated[str, GroupedMetadata]] = Annotated[
+PatternName = Annotated[
     str,
     StringConstraints(strip_whitespace=True),
     Field(min_length=1, max_length=PATTERN_NAME_MAX_LENGTH),
