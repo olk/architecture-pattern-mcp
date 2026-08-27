@@ -447,7 +447,7 @@ class TestT6RerankLossless:
             vector_index=_MockVec(),
             pattern_loader=_MockLoader(),
             rerank_top_n=1,
-            reranker_config=MagicMock(base_url="http://localhost:8080", timeout=30.0),
+            reranker_config=MagicMock(base_url="http://localhost:8080", timeout=30.0, max_batch_size=48),
         )
         # Pre-seed retrievers
         retriever._dense_retriever = _MockVec().as_retriever(2)
@@ -740,7 +740,7 @@ class TestRerankTopNCap:
             vector_index=_MockVec(),
             pattern_loader=loader,
             rerank_top_n=rerank_top_n,
-            reranker_config=MagicMock(base_url="http://localhost:8080", timeout=30.0),
+            reranker_config=MagicMock(base_url="http://localhost:8080", timeout=30.0, max_batch_size=48),
         )
         retriever._dense_retriever = _MockVec().as_retriever(len(fused_nodes))
         retriever._bm25_retriever = _MockBM25().as_retriever(len(fused_nodes))
@@ -1001,7 +1001,7 @@ class TestT8RankFusionSelection:
         retriever = HybridPatternRetriever(
             bm25_index=br, vector_index=dr, pattern_loader=_ML(),
             rerank_top_n=1,
-            reranker_config=MagicMock(base_url="http://x", timeout=30.0),
+            reranker_config=MagicMock(base_url="http://x", timeout=30.0, max_batch_size=48),
             rerank_selection="rerank",
         )
         retriever._dense_retriever = dr
@@ -1068,7 +1068,7 @@ class TestT8RankFusionSelection:
         retriever = HybridPatternRetriever(
             bm25_index=br, vector_index=dr, pattern_loader=_ML(),
             rerank_top_n=1,
-            reranker_config=MagicMock(base_url="http://x", timeout=30.0),
+            reranker_config=MagicMock(base_url="http://x", timeout=30.0, max_batch_size=48),
             rerank_selection="rank_fusion",
         )
         retriever._dense_retriever = dr
@@ -1130,7 +1130,7 @@ class TestT8RankFusionSelection:
         retriever = HybridPatternRetriever(
             bm25_index=br, vector_index=dr, pattern_loader=_ML(),
             rerank_top_n=3,
-            reranker_config=MagicMock(base_url="http://x", timeout=30.0),
+            reranker_config=MagicMock(base_url="http://x", timeout=30.0, max_batch_size=48),
             rerank_selection="rank_fusion",
         )
         retriever._dense_retriever = dr
@@ -1213,7 +1213,7 @@ class TestT8RankFusionSelection:
                 pattern_loader=_MockLoader(),
                 rerank_top_n=1,
                 reranker_config=MagicMock(
-                    base_url="http://localhost:8080", timeout=30.0
+                    base_url="http://localhost:8080", timeout=30.0, max_batch_size=48
                 ),
                 rerank_selection=selection_mode,
             )
@@ -1271,7 +1271,7 @@ class TestT8RankFusionSelection:
                 pattern_loader=_ML(),
                 rerank_top_n=10,
                 reranker_config=MagicMock(
-                    base_url="http://localhost:8080", timeout=30.0
+                    base_url="http://localhost:8080", timeout=30.0, max_batch_size=48
                 ),
                 rerank_selection=mode,
             )
@@ -1321,7 +1321,7 @@ class TestT8RankFusionSelection:
         retriever = HybridPatternRetriever(
             bm25_index=br, vector_index=dr, pattern_loader=_ML(),
             rerank_top_n=1,
-            reranker_config=MagicMock(base_url="http://x", timeout=30.0),
+            reranker_config=MagicMock(base_url="http://x", timeout=30.0, max_batch_size=48),
             rerank_selection="rerank",
         )
         retriever._dense_retriever = dr
@@ -1422,7 +1422,7 @@ class TestT8RankFusionSelection:
         retriever = HybridPatternRetriever(
             bm25_index=br, vector_index=dr, pattern_loader=_ML(),
             rerank_top_n=1,
-            reranker_config=MagicMock(base_url="http://x", timeout=30.0),
+            reranker_config=MagicMock(base_url="http://x", timeout=30.0, max_batch_size=48),
             rerank_selection="rerank",
         )
         retriever._dense_retriever = dr

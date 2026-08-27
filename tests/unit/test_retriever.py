@@ -184,7 +184,7 @@ class TestRetrieveFallbackMissing:
             bm25_index=MockBM25Index(),
             vector_index=MockVectorIndex(),
             pattern_loader=loader,
-            reranker_config=MagicMock(base_url="http://localhost:8080", timeout=30.0),
+            reranker_config=MagicMock(base_url="http://localhost:8080", timeout=30.0, max_batch_size=48),
         )
         retriever._dense_retriever = MagicMock()
         retriever._bm25_retriever = MagicMock()
@@ -318,7 +318,7 @@ class TestRetrievalLogging:
             pattern_loader=loader,
             bm25_top_k=5,
             dense_top_k=5,
-            reranker_config=MagicMock(base_url="http://reranker:8080", timeout=30.0),
+            reranker_config=MagicMock(base_url="http://reranker:8080", timeout=30.0, max_batch_size=48),
         )
         return retriever
 
