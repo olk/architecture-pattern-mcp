@@ -140,7 +140,7 @@ class DomainVectorIndex:
             vecs = []
             for i in range(0, len(texts), batch):
                 chunk = texts[i : i + batch]
-                vecs.extend(self._embedder._get_text_embeddings(chunk))
+                vecs.extend(self._embedder.get_text_embedding_batch(chunk))
         arr = np.asarray(vecs, dtype=np.float32)
         norms = np.linalg.norm(arr, axis=1, keepdims=True)
         norms = np.where(norms == 0, 1.0, norms)

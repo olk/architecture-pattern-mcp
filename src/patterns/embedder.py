@@ -25,6 +25,7 @@ Supports openai, tei, ollama, vllm providers via EmbedderConfig.
 """
 from typing import Any
 
+from llama_index.core.bridge.pydantic import PrivateAttr
 from llama_index.embeddings.litellm import LiteLLMEmbedding
 
 
@@ -36,10 +37,15 @@ class InstructionAwareEmbedding(LiteLLMEmbedding):
     Batch override: sends a single HTTP call for a chunk of texts instead
     of one call per text (issue #9).
 
-    Attributes:
-        query_instruction: Prepended to query text (retrieval tasks).
-        text_instruction:  Prepended to document text (indexing tasks).
+    Uses PrivateAttr (LlamaIndex's documented extension point) so that
+    _query_instruction, _text_instruction, and _embed_batch_size are
+    stored as proper private attributes without triggering
+    ``object.__setattr__`` workarounds.
     """
+
+    _query_instruction: str = PrivateAttr("")
+    _text_instruction: str = PrivateAttr("")
+    _embed_batch_size: int = PrivateAttr(16)
 
     def __init__(
         self,
@@ -49,17 +55,15 @@ class InstructionAwareEmbedding(LiteLLMEmbedding):
         **kwargs: Any,
     ) -> None:
         super().__init__(**kwargs)
-        object.__setattr__(self, "query_instruction", query_instruction or "")
-        object.__setattr__(self, "text_instruction", text_instruction or "")
-        object.__setattr__(self, "embed_batch_size", max(1, int(embed_batch_size)))
+        self._query_instruction = query_instruction or ""
+        self._text_instruction = text_instruction or ""
+        self._embed_batch_size = max(1, int(embed_batch_size))
 
     def _format_query(self, query: str) -> str:
-        qi = object.__getattribute__(self, "query_instruction")
-        return f"{qi}{query}" if qi else query
+        return f"{self._query_instruction}{query}" if self._query_instruction else query
 
     def _format_text(self, text: str) -> str:
-        ti = object.__getattribute__(self, "text_instruction")
-        return f"{ti}{text}" if ti else text
+        return f"{self._text_instruction}{text}" if self._text_instruction else text
 
     def _get_query_embedding(self, query: str) -> list[float]:
         return super()._get_query_embedding(self._format_query(query))
@@ -73,12 +77,12 @@ class InstructionAwareEmbedding(LiteLLMEmbedding):
     async def _aget_text_embedding(self, text: str) -> list[float]:
         return await super()._aget_text_embedding(self._format_text(text))
 
-    def _get_text_embeddings(self, texts: list[str]) -> list[list[float]]:
-        """Batch override: one HTTP call per chunk of `embed_batch_size` texts.
+    def get_text_embedding_batch(self, texts: list[str]) -> list[list[float]]:
+        """Batch text embedding with instruction prefixes applied.
 
-        LlamaIndex's default iterates one text per call. With 213 domain
-        slugs and `embed_batch_size=16`, this drops cold-start from 213
-        serial HTTP calls to 14 batched ones.
+        One HTTP call per ``_embed_batch_size`` chunk instead of one call
+        per text. With 213 domain slugs and ``embed_batch_size=16``, this
+        drops cold-start from 213 serial HTTP calls to 14 batched ones.
         """
         prefixed = [self._format_text(t) for t in texts]
         return super()._get_text_embeddings(prefixed)

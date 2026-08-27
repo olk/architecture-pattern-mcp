@@ -41,8 +41,8 @@ from llama_index.core.schema import NodeWithScore, TextNode
 from src.patterns.retriever import (
     DEFAULT_FALLBACK_PATTERN_NAME,
     HybridPatternRetriever,
-    _safe_tei_rerank_call,
 )
+from src.patterns.safe_tei_rerank import SafeTEIReranker, _safe_tei_rerank_call
 
 MOCK_FUSION_SCORE = 1 / 60
 
@@ -202,7 +202,7 @@ class TestRetrieveFallbackMissing:
                 return nodes
 
         with patch(
-            "src.patterns.retriever.TextEmbeddingInference",
+            "src.patterns.retriever.SafeTEIReranker",
             return_value=_DummyReranker(),
         ):
             result = retriever.retrieve(
@@ -342,7 +342,7 @@ class TestRetrievalLogging:
                 return nodes
 
         with caplog.at_level(logging.INFO, logger="src.patterns.retriever"), \
-             patch("src.patterns.retriever.TextEmbeddingInference", return_value=_DummyReranker()):
+             patch("src.patterns.retriever.SafeTEIReranker", return_value=_DummyReranker()):
             retriever.retrieve(user_domain="microservices", normalized_domain="microservices")
 
         dense_logs = [r for r in caplog.records if r.levelno == logging.INFO and getattr(r, "stage", None) == "dense"]
@@ -370,7 +370,7 @@ class TestRetrievalLogging:
                 return nodes
 
         with caplog.at_level(logging.INFO, logger="src.patterns.retriever"), \
-             patch("src.patterns.retriever.TextEmbeddingInference", return_value=_DummyReranker()):
+             patch("src.patterns.retriever.SafeTEIReranker", return_value=_DummyReranker()):
             retriever.retrieve(user_domain="microservices", normalized_domain="microservices")
 
         bm25_logs = [r for r in caplog.records if r.levelno == logging.INFO and getattr(r, "stage", None) == "bm25"]
@@ -414,7 +414,7 @@ class TestRetrievalLogging:
         ]
 
         with caplog.at_level(logging.INFO, logger="src.patterns.retriever"), \
-             patch("src.patterns.retriever.TextEmbeddingInference") as mock_reranker_cls:
+             patch("src.patterns.retriever.SafeTEIReranker") as mock_reranker_cls:
             mock_reranker = MagicMock()
             mock_reranker.postprocess_nodes.return_value = retriever._dense_retriever.retrieve.return_value[:1]
             mock_reranker_cls.return_value = mock_reranker
@@ -457,7 +457,7 @@ class TestSafeTeiRerankCall:
 
     def test_raises_on_http_429_overloaded(self) -> None:
         """TEI returns HTTP 429 'Model is overloaded' — must raise RuntimeError, not AssertionError."""
-        with patch("src.patterns.retriever.httpx.Client") as mock_client_cls:
+        with patch("src.patterns.safe_tei_rerank.httpx.Client") as mock_client_cls:
             mock_client = MagicMock()
             mock_resp = MagicMock()
             mock_resp.status_code = 429
@@ -480,7 +480,7 @@ class TestSafeTeiRerankCall:
 
     def test_raises_on_http_400_batch_size(self) -> None:
         """TEI returns HTTP 400 for oversized batch — must raise RuntimeError."""
-        with patch("src.patterns.retriever.httpx.Client") as mock_client_cls:
+        with patch("src.patterns.safe_tei_rerank.httpx.Client") as mock_client_cls:
             mock_client = MagicMock()
             mock_resp = MagicMock()
             mock_resp.status_code = 422
@@ -503,7 +503,7 @@ class TestSafeTeiRerankCall:
 
     def test_raises_on_non_list_body(self) -> None:
         """TEI returns HTTP 200 but with an error dict body — must raise RuntimeError."""
-        with patch("src.patterns.retriever.httpx.Client") as mock_client_cls:
+        with patch("src.patterns.safe_tei_rerank.httpx.Client") as mock_client_cls:
             mock_client = MagicMock()
             mock_resp = MagicMock()
             mock_resp.status_code = 200
@@ -524,7 +524,7 @@ class TestSafeTeiRerankCall:
 
     def test_passes_through_valid_list_response(self) -> None:
         """HTTP 200 with a valid list of scores — returns the list unchanged."""
-        with patch("src.patterns.retriever.httpx.Client") as mock_client_cls:
+        with patch("src.patterns.safe_tei_rerank.httpx.Client") as mock_client_cls:
             mock_client = MagicMock()
             mock_resp = MagicMock()
             mock_resp.status_code = 200
@@ -593,7 +593,7 @@ class TestChunkedReranking:
                 return sorted(nodes, key=lambda n: n.node.text, reverse=True)
 
         with patch(
-            "src.patterns.retriever.TextEmbeddingInference",
+            "src.patterns.retriever.SafeTEIReranker",
             return_value=_ChunkRecordingReranker(),
         ):
             result = retriever.retrieve(
@@ -647,7 +647,7 @@ class TestChunkedReranking:
                 return nodes
 
         with patch(
-            "src.patterns.retriever.TextEmbeddingInference",
+            "src.patterns.retriever.SafeTEIReranker",
             return_value=_CountingReranker(),
         ):
             result = retriever.retrieve(

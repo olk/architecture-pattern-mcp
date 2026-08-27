@@ -454,7 +454,7 @@ class TestT6RerankLossless:
         retriever._bm25_retriever = _MockBM25().as_retriever(2)
 
         mock_reranker = _MockReranker()
-        with patch("src.patterns.retriever.TextEmbeddingInference", return_value=mock_reranker):
+        with patch("src.patterns.retriever.SafeTEIReranker", return_value=mock_reranker):
             result = retriever.retrieve(
                 user_domain="microservices",
                 normalized_domain="microservices",
@@ -780,7 +780,7 @@ class TestRerankTopNCap:
                 self.input_count = len(ns)
                 return ns
 
-        with patch("src.patterns.retriever.TextEmbeddingInference") as mock_cls:
+        with patch("src.patterns.retriever.SafeTEIReranker") as mock_cls:
             mock_cls.return_value = _MockReranker()
             result = retriever.retrieve(user_domain="test", normalized_domain="test")
 
@@ -817,7 +817,7 @@ class TestRerankTopNCap:
             def postprocess_nodes(self, ns, query_bundle=None):
                 return ns
 
-        with patch("src.patterns.retriever.TextEmbeddingInference") as mock_cls:
+        with patch("src.patterns.retriever.SafeTEIReranker") as mock_cls:
             mock_cls.return_value = _MockReranker()
             result = retriever.retrieve(user_domain="test", normalized_domain="test")
 
@@ -875,7 +875,7 @@ class TestRerankTopNCap:
             def postprocess_nodes(self, ns, query_bundle=None):
                 return ns
 
-        with patch("src.patterns.retriever.TextEmbeddingInference") as mock_cls:
+        with patch("src.patterns.retriever.SafeTEIReranker") as mock_cls:
             mock_cls.return_value = _MockReranker()
             result = retriever.retrieve(user_domain="test", normalized_domain="test")
 
@@ -1007,7 +1007,7 @@ class TestT8RankFusionSelection:
         retriever._dense_retriever = dr
         retriever._bm25_retriever = br
         mock = _MR()
-        with patch("src.patterns.retriever.TextEmbeddingInference", return_value=mock):
+        with patch("src.patterns.retriever.SafeTEIReranker", return_value=mock):
             result = retriever.retrieve("microservices", "microservices")
         assert len(result.patterns) == 1
         assert result.patterns[0][0]["name"] == "slug-c"
@@ -1074,7 +1074,7 @@ class TestT8RankFusionSelection:
         retriever._dense_retriever = dr
         retriever._bm25_retriever = br
         mock = _MR()
-        with patch("src.patterns.retriever.TextEmbeddingInference", return_value=mock):
+        with patch("src.patterns.retriever.SafeTEIReranker", return_value=mock):
             result = retriever.retrieve("microservices", "microservices")
         assert len(result.patterns) == 1
         assert result.patterns[0][0]["name"] == "slug-a"
@@ -1136,7 +1136,7 @@ class TestT8RankFusionSelection:
         retriever._dense_retriever = dr
         retriever._bm25_retriever = br
         mock = _MR()
-        with patch("src.patterns.retriever.TextEmbeddingInference", return_value=mock):
+        with patch("src.patterns.retriever.SafeTEIReranker", return_value=mock):
             result = retriever.retrieve("microservices", "microservices")
         blend_a = 1.0 / 60 + 1.0 / 61
         blend_c = 1.0 / 62 + 1.0 / 60
@@ -1221,7 +1221,7 @@ class TestT8RankFusionSelection:
             retriever._bm25_retriever = bm25_retriever
             mock = _MockReranker()
             with patch(
-                "src.patterns.retriever.TextEmbeddingInference",
+                "src.patterns.retriever.SafeTEIReranker",
                 return_value=mock,
             ):
                 result = retriever.retrieve(
@@ -1279,7 +1279,7 @@ class TestT8RankFusionSelection:
             retriever._bm25_retriever = br
             mock = _MR()
             with patch(
-                "src.patterns.retriever.TextEmbeddingInference",
+                "src.patterns.retriever.SafeTEIReranker",
                 return_value=mock,
             ):
                 results[mode] = retriever.retrieve(
@@ -1327,7 +1327,7 @@ class TestT8RankFusionSelection:
         retriever._dense_retriever = dr
         retriever._bm25_retriever = br
         mock = _MR()
-        with patch("src.patterns.retriever.TextEmbeddingInference", return_value=mock):
+        with patch("src.patterns.retriever.SafeTEIReranker", return_value=mock):
             result = retriever.retrieve("microservices", "microservices")
         assert len(result.matched_domains) >= 1
         assert result.matched_domains[0].slug == "slug-a"
@@ -1428,7 +1428,7 @@ class TestT8RankFusionSelection:
         retriever._dense_retriever = dr
         retriever._bm25_retriever = br
         mock = _MR()
-        with patch("src.patterns.retriever.TextEmbeddingInference", return_value=mock):
+        with patch("src.patterns.retriever.SafeTEIReranker", return_value=mock):
             result = retriever.retrieve("microservices", "microservices")
         assert len(result.patterns) == 1
         pattern_dict = result.patterns[0][0]

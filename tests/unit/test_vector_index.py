@@ -109,8 +109,8 @@ class TestDomainVectorIndexInit:
         )
         index = DomainVectorIndex.from_embedder_config(cfg)
         assert index.model_name == "openai//data/qwen3-embedding-0.6b"
-        assert getattr(index._embedder, "query_instruction", "") == "Instruct: Query: "
-        assert getattr(index._embedder, "text_instruction", "") == "Instruct: Text: "
+        assert getattr(index._embedder, "_query_instruction", "") == "Instruct: Query: "
+        assert getattr(index._embedder, "_text_instruction", "") == "Instruct: Text: "
 
     def test_init_raises_without_provider(self):
         """Verify __init__ raises ValueError when provider is empty."""
@@ -289,8 +289,8 @@ class TestErrorHandling:
         )
 
         with patch.object(
-            index._embedder,
-            "_get_text_embeddings",
+            type(index._embedder),
+            "get_text_embedding_batch",
             side_effect=Exception("Connection refused"),
         ):
             with pytest.raises(Exception, match="Connection refused"):
@@ -326,8 +326,8 @@ class TestL2Normalization:
             return [raw_vectors.get(t, [0.0, 0.0, 0.0]) for t in texts]
 
         with patch.object(
-            index._embedder,
-            "_get_text_embeddings",
+            type(index._embedder),
+            "get_text_embedding_batch",
             side_effect=batched_embed,
         ), patch.object(
             index._embedder,

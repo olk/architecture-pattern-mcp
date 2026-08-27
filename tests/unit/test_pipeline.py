@@ -485,7 +485,7 @@ class TestPipelinePhases:
                 return nodes
 
         with patch(
-            "src.patterns.retriever.TextEmbeddingInference",
+            "src.patterns.retriever.SafeTEIReranker",
             return_value=_DummyReranker(),
         ):
             result = await pipeline.analyze(
@@ -960,7 +960,7 @@ class TestAnalyzeScoring:
                 return nodes
 
         with patch(
-            "src.patterns.retriever.TextEmbeddingInference",
+            "src.patterns.retriever.SafeTEIReranker",
             return_value=_DummyReranker(),
         ):
             result = await pipeline.analyze(
@@ -988,7 +988,7 @@ class TestAnalyzeScoring:
                 return nodes
 
         with patch(
-            "src.patterns.retriever.TextEmbeddingInference",
+            "src.patterns.retriever.SafeTEIReranker",
             return_value=_DummyReranker(),
         ):
             await pipeline.analyze(
@@ -1024,7 +1024,7 @@ class TestPatternFlow:
                 return nodes
 
         with patch(
-            "src.patterns.retriever.TextEmbeddingInference",
+            "src.patterns.retriever.SafeTEIReranker",
             return_value=_DummyReranker(),
         ):
             result = await pipeline.analyze(
@@ -1418,7 +1418,7 @@ class TestDomainNormalization:
                 return nodes
 
         with patch(
-            "src.patterns.retriever.TextEmbeddingInference",
+            "src.patterns.retriever.SafeTEIReranker",
             return_value=_DummyReranker(),
         ):
             await pipeline.analyze("Requirements", "Cloud Native")
@@ -1445,7 +1445,7 @@ class TestErrorHandling:
                 return nodes
 
         with patch(
-            "src.patterns.retriever.TextEmbeddingInference",
+            "src.patterns.retriever.SafeTEIReranker",
             return_value=_DummyReranker(),
         ):
             result = await pipeline.analyze(
@@ -1620,7 +1620,7 @@ class TestIntegration:
                 return nodes
 
         with patch(
-            "src.patterns.retriever.TextEmbeddingInference",
+            "src.patterns.retriever.SafeTEIReranker",
             return_value=_DummyReranker(),
         ):
             refined = await pipeline.run_design(

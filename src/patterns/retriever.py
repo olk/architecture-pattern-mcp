@@ -53,11 +53,11 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Callable, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
-import httpx
 from llama_index.core.schema import QueryBundle, NodeWithScore
-from llama_index.postprocessor.tei_rerank import TextEmbeddingInference
+
+from src.patterns.safe_tei_rerank import SafeTEIReranker
 
 if TYPE_CHECKING:
     from llama_index.core.retrievers import BaseRetriever
@@ -83,50 +83,6 @@ DEFAULT_FALLBACK_PATTERN_NAME = "layered-monolith"
 LOG_SUMMARY_CAP = 10
 
 DOMAIN_MATCH_REPORT_LIMIT = 5
-
-
-def _safe_tei_rerank_call(
-    base_url: str,
-    timeout: float,
-    auth_token: str | Callable[[str], str] | None,
-    query: str,
-    texts: list[str],
-) -> list[dict[str, Any]]:
-    """Call TEI /rerank with HTTP status validation and informative error messages.
-
-    Mirrors llama_index.postprocessor.tei_rerank.TextEmbeddingInference._call_api
-    but raises RuntimeError (instead of an AssertionError) when TEI returns an
-    error or a non-list response body.
-    """
-    headers: dict[str, str] = {"Content-Type": "application/json"}
-    if auth_token is not None:
-        if callable(auth_token):
-            headers["Authorization"] = auth_token(base_url)
-        else:
-            headers["Authorization"] = auth_token
-
-    payload = {"query": query, "texts": texts}
-    with httpx.Client() as client:
-        resp = client.post(
-            f"{base_url}/rerank",
-            headers=headers,
-            json=payload,
-            timeout=timeout,
-        )
-
-    if resp.status_code >= 400:
-        raise RuntimeError(
-            f"TEI reranker {base_url}/rerank returned HTTP {resp.status_code}: {resp.text[:500]}"
-        )
-
-    body = resp.json()
-    if not isinstance(body, list):
-        raise RuntimeError(  # noqa: TRY004
-            f"TEI reranker {base_url}/rerank returned non-list response "
-            f"(HTTP {resp.status_code}): {str(body)[:500]}"
-        )
-
-    return body
 
 
 @dataclass(frozen=True)
@@ -213,7 +169,7 @@ class HybridPatternRetriever:
         self._min_fusion_score = min_fusion_score
         self._rerank_top_n = rerank_top_n
         self._reranker_config = reranker_config
-        self._reranker: TextEmbeddingInference | None = None
+        self._reranker: SafeTEIReranker | None = None
         self._dense_retriever: BaseRetriever | None = None
         self._bm25_retriever: BaseRetriever | None = None
         self._rerank_selection: Literal["rerank", "rank_fusion"] = rerank_selection
@@ -269,21 +225,13 @@ class HybridPatternRetriever:
             raise RuntimeError(
                 "Reranking is mandatory but no reranker_config provided"
             )
-        self._reranker = TextEmbeddingInference(
+        self._reranker = SafeTEIReranker(
             base_url=self._reranker_config.base_url,
             model_name=TEI_RERANKER_MODEL,
             timeout=self._reranker_config.timeout,
             top_n=1,
         )
         self._reranker.keep_retrieval_score = True
-        max_batch = getattr(self._reranker_config, "max_batch_size", 48)
-        self._reranker._call_api = lambda q, t: _safe_tei_rerank_call(
-            self._reranker.base_url,
-            self._reranker.timeout,
-            self._reranker.auth_token,
-            q,
-            t,
-        )
 
     def _matched_domains_from_nodes(
         self, nodes: list[Any]
