@@ -204,6 +204,15 @@ ARCHITECTURE_EVALUATION_EXAMPLE = _fmt(
                 name="maintainability",
                 score=85.0,
                 description="Service separation and clean contracts support maintainability",
+                reasoning=(
+                    "Checked: (1) service boundaries — one bounded context per "
+                    "service (orders, payments, inventory), no shared databases; "
+                    "(2) contract-first coupling — OpenAPI schemas on every "
+                    "synchronous endpoint; (3) independent deployability — each "
+                    "service owns its pipeline; (4) testability hooks — no stated "
+                    "integration-test surface. Pattern best practices met on 3 of "
+                    "4 checks; docked for absent test strategy."
+                ),
                 findings=["Clear module boundaries", "API-first design"],
                 recommendations=["Add integration test coverage", "Document event schema registry"],
             ),
@@ -211,6 +220,15 @@ ARCHITECTURE_EVALUATION_EXAMPLE = _fmt(
                 name="scalability",
                 score=90.0,
                 description="Event-driven design enables horizontal scaling",
+                reasoning=(
+                    "Checked: (1) stateless services — order-service and "
+                    "inventory-service hold no session state; (2) consumer "
+                    "scale-out — Kafka consumers scale per topic; (3) partitioning "
+                    "strategy — no partition key defined, so parallelism is "
+                    "underutilized; (4) gateway scalability — Kong is stateless "
+                    "behind a load balancer. Strong baseline; docked for missing "
+                    "partition keys."
+                ),
                 findings=["Kafka allows independent consumer scaling", "Stateless services scale horizontally"],
                 recommendations=["Add Kafka partitioning by customer_id", "Configure HPA on order-service"],
             ),
@@ -218,6 +236,16 @@ ARCHITECTURE_EVALUATION_EXAMPLE = _fmt(
                 name="reliability",
                 score=75.0,
                 description="Missing retry policies and circuit breakers hurt reliability",
+                reasoning=(
+                    "Checked: (1) every async consumer has retry/DLQ — "
+                    "payment-service lacks manual ack so messages are lost on "
+                    "crash; (2) bulkhead isolation across services — none "
+                    "configured; (3) idempotent handlers — present in "
+                    "inventory-service but not payment-service; (4) circuit "
+                    "breakers for downstream calls — none. Event-driven pattern "
+                    "expectations require retry+DLQ; the design violates 1 of 4 "
+                    "critical items, hence 75 not 85."
+                ),
                 findings=["No retry queues for failed message processing", "No bulkhead isolation"],
                 recommendations=["Add retry DLQ for payment-service", "Implement circuit breakers"],
             ),
@@ -225,6 +253,14 @@ ARCHITECTURE_EVALUATION_EXAMPLE = _fmt(
                 name="security",
                 score=80.0,
                 description="JWT and TLS configured; WAF missing",
+                reasoning=(
+                    "Checked: (1) authn on external endpoints — JWT on all REST "
+                    "routes; (2) internal traffic encryption — TLS in transit for "
+                    "Kafka; (3) edge protection — no WAF or rate limiting on Kong; "
+                    "(4) payload encryption for PII — absent on event payloads. "
+                    "Two of four checks pass; edge protection gap is the main "
+                    "deduction."
+                ),
                 findings=["JWT auth on all endpoints", "TLS in transit for Kafka"],
                 recommendations=["Add WAF ahead of API gateway", "Enable request size limits on Kong"],
             ),
@@ -232,6 +268,14 @@ ARCHITECTURE_EVALUATION_EXAMPLE = _fmt(
                 name="performance",
                 score=88.0,
                 description="Low-latency Kafka processing meets SLA",
+                reasoning=(
+                    "Checked: (1) async decoupling — order placement returns "
+                    "before payment processing; (2) broker latency — Kafka median "
+                    "under 5ms supports the p99 budget; (3) database connection "
+                    "management — no pooling configured on PostgreSQL, exhaustion "
+                    "risk under load; (4) caching — no session or read cache. "
+                    "Strong async design; docked for unpooled connections."
+                ),
                 findings=["Kafka median latency <5ms", "Async processing decouples services"],
                 recommendations=["Add connection pooling for PostgreSQL", "Cache user sessions in Redis"],
             ),
@@ -239,7 +283,15 @@ ARCHITECTURE_EVALUATION_EXAMPLE = _fmt(
                 name="overall_quality",
                 score=82.5,
                 description="Weighted average across all quality dimensions",
-                findings=[],
+                reasoning=(
+                    "Aggregation: scalability (90) and performance (88) are "
+                    "strengths backed by concrete evidence; maintainability (85) "
+                    "and security (80) are solid; reliability (75) is pulled down "
+                    "by the missing retry/ack configuration, which also drives two "
+                    "critical findings. Weighted toward reliability and security "
+                    "because their gaps are production blockers: 82.5."
+                ),
+                findings=["Reliability gaps cap the overall score"],
                 recommendations=["Address critical findings before production launch"],
             ),
         ],

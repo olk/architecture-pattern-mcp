@@ -59,6 +59,16 @@ class MetricResult(BaseModel):
         default_factory=list,
         description="Recommendations to improve this metric"
     )
+    reasoning: str = Field(
+        default="",
+        description=(
+            "Step-by-step rubric application: enumerate which requirements, "
+            "components, and pattern expectations were checked, what was found, "
+            "and why the score is what it is. Written BEFORE findings/"
+            "recommendations — the model commits to a rubric interpretation "
+            "before producing the structured output."
+        ),
+    )
 
 
 class EvaluationSummary(BaseModel):

@@ -2337,3 +2337,313 @@ class TestWarmupIndexes:
             pipeline.warmup_indexes()
 
         assert call_count == 1
+
+
+class TestEvaluatePromptContract:
+    """New EVALUATE-phase prompt contract (XML-task structure + reasoning field).
+
+    Validates the rewritten _build_evaluate_system_prompt /
+    _build_evaluate_user_prompt / _retry_prompt, the MetricResult.reasoning
+    schema field, and the _select_refinement_pattern design_loop wiring.
+    """
+
+    # ── helpers ───────────────────────────────────────────────────────────
+
+    def _make_pattern(self, name: str = "microservices"):
+        from src.schemas.patterns import Pattern
+
+        return Pattern(
+            name=name,
+            context="Distributed systems with independent deployability needs",
+            category="structural",
+            quality_attributes={"scalability": 9.0, "maintainability": 7.0},
+            anti_patterns=["Shared database between services", "Distributed monolith"],
+            design_principles=["Single responsibility per service"],
+            best_practices=["Database per service", "API gateway for routing"],
+            tradeoffs=["Operational complexity", "Eventual consistency"],
+            component_types=["service", "gateway"],
+            technology_stack=["Kafka", "Docker"],
+        )
+
+    def _make_design(self) -> ArchitectureDesign:
+        return ArchitectureDesign(
+            overview={
+                "style": "microservices",
+                "category": "structural",
+                "principles": ["single responsibility"],
+                "constraints": [],
+            },
+            components=[
+                {"id": "svc", "name": "Service", "type": "service",
+                 "description": "Core service", "responsibilities": ["process"]},
+            ],
+        )
+
+    def _make_analysis_result(self):
+        from src.pipeline import RequirementWeights
+
+        return AnalysisResult(
+            strengths=["High scalability (avg: 9.0/10)"],
+            weaknesses=["Low security (avg: 6.0/10)"],
+            recommended_style="microservices",
+            requirement_weights=RequirementWeights(
+                scalability=1.0, performance=0.8, reliability=0.6,
+                maintainability=0.5, security=0.3, simplicity=0.2,
+            ),
+        )
+
+    # ── schema: MetricResult.reasoning ────────────────────────────────────
+
+    def test_metric_result_reasoning_defaults_empty(self):
+        m = MetricResult(name="x", score=50.0, description="d")
+        assert m.reasoning == ""
+
+    def test_evaluation_example_has_reasoning_on_all_metrics(self):
+        """Every example metric carries non-empty reasoning distinct from its
+        findings; overall_quality additionally carries findings."""
+        import json
+        from src.prompts.examples import ARCHITECTURE_EVALUATION_EXAMPLE
+
+        raw = ARCHITECTURE_EVALUATION_EXAMPLE.split("```json")[1].split("```")[0].strip()
+        data = json.loads(raw)
+        for metric in data["metrics"]:
+            assert metric["reasoning"].strip(), f"{metric['name']} missing reasoning"
+            assert metric["reasoning"] not in metric["findings"]
+        overall = next(m for m in data["metrics"] if m["name"] == "overall_quality")
+        assert overall["findings"], "overall_quality must carry findings in the example"
+
+    # ── system prompt: two-branch structure ───────────────────────────────
+
+    def test_evaluate_system_prompt_with_patterns_structure(self):
+        pipeline = create_test_pipeline()
+        prompt = pipeline._build_evaluate_system_prompt([self._make_pattern()])
+        for section in (
+            "<role>", "<task>", "<criteria_handling>", "<evaluation_rubric>",
+            "<pattern_expectations>", "<length_neutrality>", "<example>",
+            "<hard_constraints>", "<output>",
+        ):
+            assert section in prompt, f"missing {section}"
+        assert "microservices" in prompt
+        assert "Database per service" in prompt          # best practices surfaced
+        assert "Operational complexity" in prompt        # tradeoffs surfaced
+        assert "do NOT penalise" in prompt
+        assert "populate metric.reasoning FIRST" in prompt
+        assert "Only flag anti-patterns that appear in the supplied pattern list" in prompt
+        assert "70-85" in prompt                          # calibration anchors
+
+    def test_evaluate_system_prompt_without_patterns_omits_pattern_block(self):
+        pipeline = create_test_pipeline()
+        prompt = pipeline._build_evaluate_system_prompt(patterns=[])
+        assert "<pattern_expectations>" not in prompt
+        assert "No pattern list was supplied" in prompt
+        assert "<evaluation_rubric>" in prompt            # rubric stands alone
+        assert "Example evaluation response" in prompt
+        assert "```json" in prompt
+
+    # ── user prompt: structure, conditionals, backwards compat ────────────
+
+    def test_evaluate_user_prompt_contains_new_structure(self):
+        pipeline = create_test_pipeline()
+        prompt = pipeline._build_evaluate_user_prompt(
+            self._make_design(),
+            "quality,scalability",
+            "cloud-native",
+            [self._make_pattern()],
+            requirements="Support 1M users with 99.9% uptime",
+            analysis_result=self._make_analysis_result(),
+        )
+        # task + security sandwich (warning precedes the fenced data)
+        assert "<task>" in prompt
+        assert prompt.index("SECURITY:") < prompt.index("<requirements>")
+        assert "Support 1M users with 99.9% uptime" in prompt
+        assert "<architecture>" in prompt
+        # criteria interpretation + domain note
+        assert "INTERPRETATION: criteria names are additional metrics" in prompt
+        assert '"quality" maps to overall_quality' in prompt
+        assert "does NOT override stated requirements" in prompt
+        # shared analysis summary (evaluator framing)
+        assert "<analysis_summary>" in prompt
+        assert "let" in prompt and "bias scoring" in prompt
+        assert "scalability: 1.0" in prompt
+        # aggregated pattern blocks with evaluator-framed headers
+        assert "ANTI-PATTERNS — flag if present in the design:" in prompt
+        assert "BEST PRACTICES — verify where relevant:" in prompt
+        assert "PATTERN DETAILS (expected shape reference):" in prompt
+        # reasoning gate (9 checks) + output schema reminder
+        assert "<reasoning_gate>" in prompt
+        assert "9. Every metric's reasoning is populated" in prompt
+        assert "reasoning: str" in prompt
+        # f-string brace escaping leaves no literal double braces
+        assert "{{" not in prompt and "}}" not in prompt
+
+    def test_evaluate_user_prompt_without_requirements_falls_back(self):
+        pipeline = create_test_pipeline()
+        prompt = pipeline._build_evaluate_user_prompt(
+            self._make_design(), "quality", "cloud-native", []
+        )
+        # the tag name still appears inside the SECURITY warning text —
+        # assert on the fenced data block, not the bare tag
+        assert "\n<requirements>\n" not in prompt
+        assert "No original requirements were supplied" in prompt
+        assert "do not invent requirements" in prompt
+        assert "<selected_patterns>" not in prompt
+        assert "<analysis_summary>" not in prompt
+
+    def test_evaluate_user_prompt_without_analysis_result_omits_summary(self):
+        pipeline = create_test_pipeline()
+        prompt = pipeline._build_evaluate_user_prompt(
+            self._make_design(), "quality", "cloud-native",
+            [self._make_pattern()],
+            requirements="Build an API",
+        )
+        assert "<analysis_summary>" not in prompt
+        assert "<selected_patterns>" in prompt
+
+    def test_evaluate_user_prompt_backwards_compatible_positional_call(self):
+        """Legacy positional signature (architecture, criteria, domain,
+        patterns) still works — new params default to None."""
+        pipeline = create_test_pipeline()
+        prompt = pipeline._build_evaluate_user_prompt(
+            self._make_design(), "quality", "cloud-native", []
+        )
+        assert "EVALUATION CRITERIA: quality" in prompt
+
+    # ── shared analysis-summary helper ────────────────────────────────────
+
+    def test_render_analysis_summary_none_returns_empty(self):
+        from src.pipeline import _render_analysis_summary
+        assert _render_analysis_summary(
+            None, strengths_label="s:", weaknesses_label="w:", weights_header="h"
+        ) == ""
+
+    def test_generate_user_prompt_uses_shared_analysis_summary(self):
+        """GENERATE framing (preserve/address) still rendered via the helper."""
+        pipeline = create_test_pipeline()
+        pattern_sections = ("(anti)", "(best)", "(details)")
+        prompt = pipeline._build_generate_user_prompt(
+            "req", "cloud-native", "microservices",
+            pattern_sections, self._make_analysis_result(),
+        )
+        assert "Strengths to preserve:" in prompt
+        assert "Weaknesses to address:" in prompt
+        assert "QUALITY-ATTRIBUTE PRIORITIES" in prompt
+        assert "guide design trade-offs" in prompt
+
+    # ── retry prompt: reasoning + structure ───────────────────────────────
+
+    def _make_evaluation(self, low_reasoning: str = "Checked retries: none found") -> ArchitectureEvaluation:
+        return ArchitectureEvaluation(
+            summary=EvaluationSummary(
+                overall_score=65.0,
+                strengths=["Decomposition is sound"],
+                weaknesses=["payment-service lacks DLQ"],
+                critical_findings=["payment-service has no manual ack — message loss on crash"],
+            ),
+            metrics=[
+                MetricResult(
+                    name="reliability", score=65.0, description="r",
+                    findings=["no DLQ"], recommendations=["Add retry DLQ for payment-service"],
+                    reasoning=low_reasoning,
+                ),
+                MetricResult(
+                    name="overall_quality", score=65.0, description="q",
+                    findings=[], recommendations=[],
+                    reasoning="Aggregation dominated by reliability gap",
+                ),
+            ],
+            recommendations={},
+        )
+
+    def test_retry_prompt_includes_reasoning_for_low_scores_only(self):
+        pipeline = create_test_pipeline()
+        prompt = pipeline._retry_prompt(
+            design=self._make_design(),
+            evaluation=self._make_evaluation(),
+            requirements="Build API",
+            style="microservices",
+            domain="cloud-native",
+        )
+        assert "Reasoning for 'reliability' (score 65.0): Checked retries: none found" in prompt
+        assert "Aggregation dominated by reliability gap" in prompt
+
+    def test_retry_prompt_placeholder_when_no_low_metrics(self):
+        pipeline = create_test_pipeline()
+        evaluation = self._make_evaluation()
+        for m in evaluation.metrics:
+            m.score = 85.0
+        prompt = pipeline._retry_prompt(
+            design=self._make_design(),
+            evaluation=evaluation,
+            requirements="Build API",
+            style="microservices",
+            domain="cloud-native",
+        )
+        assert "(none — no metric scored below 70)" in prompt
+
+    def test_retry_prompt_xml_structure(self):
+        pipeline = create_test_pipeline()
+        prompt = pipeline._retry_prompt(
+            design=self._make_design(),
+            evaluation=self._make_evaluation(),
+            requirements="Build API",
+            style="microservices",
+            domain="cloud-native",
+            selected_pattern=self._make_pattern(),
+        )
+        for section in (
+            "<task>", "<requirements>", "<context>", "<current_design>",
+            "<evaluation_feedback>", "<selected_patterns>", "<preserve_contract>",
+            "<reasoning_gate>", "<output>",
+        ):
+            assert section in prompt, f"missing {section}"
+        assert prompt.index("SECURITY:") < prompt.index("<requirements>")
+        assert prompt.index("SECURITY:") < prompt.index("<current_design>")
+        assert "TARGET PATTERN: microservices" in prompt
+        assert "Every critical finding is resolved" in prompt
+        assert "Example architecture design response" in prompt  # design example kept
+
+    # ── refinement-pattern selection + design_loop wiring ─────────────────
+
+    def test_select_refinement_pattern_prefers_style_match(self):
+        pipeline = create_test_pipeline()
+        analysis = AnalysisResult(
+            selected_patterns=[
+                {"name": "layered-monolith", "context": "c", "category": "structural"},
+                {"name": "event-driven", "context": "c", "category": "messaging"},
+            ],
+        )
+        assert pipeline._select_refinement_pattern(analysis, "event-driven").name == "event-driven"
+        assert pipeline._select_refinement_pattern(analysis, "no-such-style").name == "layered-monolith"
+        assert pipeline._select_refinement_pattern(None, "microservices") is None
+        assert pipeline._select_refinement_pattern(AnalysisResult(), "microservices") is None
+
+    @pytest.mark.asyncio
+    async def test_design_loop_retry_wires_pattern_and_requirements(self):
+        """Retry attempt passes the style-matched pattern into _retry_prompt
+        and the original requirements into evaluate()."""
+        pipeline = create_test_pipeline(retrieval_config=RetrievalConfig(min_quality_score=90.0))
+        analysis = AnalysisResult(
+            selected_patterns=[
+                {"name": "microservices", "context": "Distributed systems",
+                 "category": "structural", "best_practices": ["Database per service"]},
+            ],
+        )
+
+        result = await pipeline.design_loop(
+            requirements="Build a scalable distributed system",
+            domain="cloud-native",
+            style="microservices",
+            selected_patterns=analysis.selected_patterns,
+            criteria="quality",
+            analysis_result=analysis,
+            max_tries=2,
+        )
+
+        assert result.attempts == 2
+        prompts = [c["user_prompt"] for c in pipeline._agent.generate_structured_calls]
+        # attempt 1: generate; attempt 2: refine prompt; + evaluate calls with requirements
+        assert any("TARGET PATTERN: microservices" in p for p in prompts)
+        assert any(
+            "<requirements>" in p and "Build a scalable distributed system" in p
+            for p in prompts
+        )
