@@ -116,6 +116,19 @@ sudo systemctl enable --now architecture-pattern-mcp.service
 The `.env` file lives **inside** `/etc/architecture-pattern-mcp/` alongside the
 compose file, keeping the entire deployment self-contained.
 
+### Generator LLM configuration
+
+The generator LLM inside the container is accessed via the **LlamaIndex
+LiteLLM** integration and follows **LiteLLM's model syntax**:
+`<provider>/<model>` (e.g. `openai/gpt-4o-mini`). It is configured through
+`config/config.json` (step 3 above) or the `GENERATOR_PROVIDER`,
+`GENERATOR_MODEL`, `GENERATOR_BASE_URL`, and `GENERATOR_API_KEY` settings —
+the API key in the `.env` file (step 4) must match the provider you configure.
+For the full list of providers and model names see the
+[LiteLLM Providers documentation](https://docs.litellm.ai/docs/providers) and
+the main README's
+[Generator LLM section](../README.md#generator-llm-llamaindex-litellm).
+
 ## Step 3 — Verify
 
 `systemctl status` reports `active (exited)` within seconds of boot, but the

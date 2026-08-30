@@ -46,6 +46,16 @@ PIPES_AND_FILTERS_REQUIREMENTS = "..."     # your own requirements text
 DOMAIN = "data-processing"                # e.g. "etl", "log-analysis"
 ```
 
+## Server LLM configuration
+
+The demo requires a running server whose generator LLM is configured in the
+**LlamaIndex LiteLLM** format — a LiteLLM model string of the form
+`<provider>/<model>` (e.g. `openai/gpt-4o-mini`), set via `GENERATOR_PROVIDER`
+and `GENERATOR_MODEL`. For the provider/model syntax reference see the
+[LiteLLM Providers documentation](https://docs.litellm.ai/docs/providers);
+for full configuration options see the main README's
+[Generator LLM section](../README.md#generator-llm-llamaindex-litellm).
+
 ## Tips
 
 Pipe the output to `jq` to inspect parts of the result:

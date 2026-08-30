@@ -326,7 +326,7 @@ Call design_architecture with:
 This server also exposes four user-invoked workflow prompts (slash commands
 in MCP clients). Unlike tools, the LLM does not autonomously invoke prompts —
 the user selects one and fills in its arguments. Each prompt encodes a tested
-tool-orchestration recipe (ADR-9).
+tool-orchestration recipe.
 
 | Prompt | Args | What it does |
 |---|---|---|
@@ -453,14 +453,32 @@ The server reads `~/.config/architecture-pattern-mcp/config.json` (override with
 
 `{env:VAR:-default}` syntax expands environment variables at load time.
 
+### Generator LLM (LlamaIndex LiteLLM)
+
+The generator LLM is accessed through the **LlamaIndex LiteLLM integration** ([`llama-index-llms-litellm`](https://docs.llamaindex.ai/en/stable/examples/llm/litellm/)). All provider settings therefore follow **LiteLLM's model syntax**: `<provider>/<model>` (e.g. `openai/gpt-4o-mini`, `anthropic/claude-sonnet-4-5`, `openrouter/minimax/minimax-m2`).
+
+The server composes the LiteLLM model string from your configuration as `generator.provider` + `generator.config.model`:
+
+| Config / env | Example | Resulting LiteLLM model string |
+|---|---|---|
+| `provider: "openai"`, `model: "gpt-4o-mini"` | `GENERATOR_PROVIDER=openai`, `GENERATOR_MODEL=gpt-4o-mini` | `openai/gpt-4o-mini` |
+| `provider: "anthropic"`, `model: "claude-sonnet-4-5"` | `GENERATOR_PROVIDER=anthropic`, `GENERATOR_MODEL=claude-sonnet-4-5` | `anthropic/claude-sonnet-4-5` |
+| `provider: "openrouter"`, `model: "minimax/minimax-m2"` | `GENERATOR_PROVIDER=openrouter`, `GENERATOR_MODEL=minimax/minimax-m2` | `openrouter/minimax/minimax-m2` |
+
+If the configured model already contains a provider prefix (e.g. `openai/gpt-4o-mini`), that prefix is stripped and replaced by the configured `provider`.
+
+- **Provider list, model names, and the exact `<provider>/<model>` syntax:** [LiteLLM Providers documentation](https://docs.litellm.ai/docs/providers)
+- Custom/OpenAI-compatible endpoints (proxies, vLLM, Ollama, …): set `GENERATOR_BASE_URL` (`generator.config.base_url`) — it is passed as the LiteLLM `api_base`
+- `GENERATOR_API_KEY` is passed as the LiteLLM `api_key`; `temperature`, `top_p`, `top_k`, and `stream` map to the corresponding LiteLLM parameters
+
 ### Key environment variables
 
 | Variable | Default | Description |
 |---|---|---|
-| `GENERATOR_API_KEY` | *(required)* | API key for your LLM provider |
-| `GENERATOR_PROVIDER` | `openai` | Provider: `openai`, `minimax`, `anthropic`, … |
-| `GENERATOR_BASE_URL` | `https://api.openai.com/v1` | API base URL |
-| `GENERATOR_MODEL` | `gpt-4o-mini` | Model name |
+| `GENERATOR_API_KEY` | *(required)* | API key for your LLM provider (passed to LiteLLM as `api_key`) |
+| `GENERATOR_PROVIDER` | `openai` | LiteLLM provider prefix: `openai`, `anthropic`, `openrouter`, … — see [LiteLLM Providers](https://docs.litellm.ai/docs/providers) |
+| `GENERATOR_BASE_URL` | `https://api.openai.com/v1` | API base URL (passed to LiteLLM as `api_base`) |
+| `GENERATOR_MODEL` | `gpt-4o-mini` | Model name; final model string is `<GENERATOR_PROVIDER>/<GENERATOR_MODEL>` (LiteLLM syntax) |
 | `GENERATOR_TEMPERATURE` | `0.1` | Sampling temperature |
 | `GENERATOR_TOP_P` | `1.0` | Top-p sampling |
 | `GENERATOR_TOP_K` | `20` | Top-k sampling |
