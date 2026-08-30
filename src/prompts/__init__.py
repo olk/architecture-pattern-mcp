@@ -23,6 +23,7 @@
 
 Modules:
     examples: Hand-crafted complete JSON examples for each response schema.
+    style_guidance: Per-style canonical-shape guidance for the GENERATE prompt.
 
 Drift detection: if a Pydantic schema changes, import-time instantiation
 in examples.py will raise a ValidationError, catching drift immediately.
@@ -33,9 +34,17 @@ from src.prompts.examples import (
     ARCHITECTURE_DESIGN_EXAMPLE,
     ARCHITECTURE_EVALUATION_EXAMPLE,
 )
+from src.prompts.style_guidance import (
+    DEFAULT_STYLE_GUIDANCE,
+    STYLE_GUIDANCE,
+    get_style_guidance,
+)
 
 __all__ = [
     "ANALYSIS_RESULT_EXAMPLE",
     "ARCHITECTURE_DESIGN_EXAMPLE",
     "ARCHITECTURE_EVALUATION_EXAMPLE",
+    "DEFAULT_STYLE_GUIDANCE",
+    "STYLE_GUIDANCE",
+    "get_style_guidance",
 ]

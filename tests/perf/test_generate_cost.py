@@ -102,7 +102,7 @@ def test_generate_prompt_sizes() -> None:
         requirements="Build an event-driven system",
         domain="e-commerce",
         style="event-driven",
-        pattern_context="Pattern 1: event-driven\n\nContext: Async communication...",
+        pattern_sections=("", "", "Pattern 1: event-driven\n\nContext: Async communication..."),
         analysis_result=None,
     )
 
@@ -155,14 +155,15 @@ def test_generate_subphase_timings_mocked() -> None:
 
     async def mock_generate_structured(system_prompt: str, user_prompt: str, response_schema: type) -> Any:
         """Return a minimal valid design response quickly."""
-        from src.schemas.design import ArchitectureOverview
+        from src.schemas.architecture import ArchitectureOverviewWire
         from src.schemas.enums import ArchitectureStyle, PatternCategory
         from src.schemas.components import Component
 
         from src.schemas.architecture import ArchitectureDesignResponse
 
         return ArchitectureDesignResponse(
-            overview=ArchitectureOverview(
+            overview=ArchitectureOverviewWire(
+                reasoning="test rationale",
                 style=ArchitectureStyle.EVENT_DRIVEN,
                 category=PatternCategory.MESSAGING,
                 principles=["async-first"],

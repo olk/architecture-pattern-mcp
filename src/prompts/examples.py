@@ -29,10 +29,12 @@ If you modify a Pydantic schema, you MUST update the corresponding example here.
 """
 
 from src.schemas.analysis import AnalysisResult
-from src.schemas.architecture import ArchitectureDesignResponse
+from src.schemas.architecture import (
+    ArchitectureDesignResponse,
+    ArchitectureOverviewWire,
+)
 from src.schemas.components import Component, Relationship
 from src.schemas.contracts import ApiContract, ApiEndpoint, DataModel, EventContract, ModelField
-from src.schemas.design import ArchitectureOverview
 from src.schemas.evaluation import ArchitectureEvaluation, EvaluationSummary, MetricResult
 from src.schemas.enums import ArchitectureDomain, ArchitectureStyle, PatternCategory
 from src.schemas.patterns import ScoredPattern
@@ -45,144 +47,129 @@ def _fmt(label: str, obj) -> str:
 
 
 # ─── ArchitectureDesignResponse ─────────────────────────────────────────────
-# Slimmed event-driven microservices design (2 components for brevity)
+# Deliberately domain- and style-neutral (layered monolith, generic user
+# registry): demonstrates schema shape, cross-reference integrity, and honest
+# quality scoring without injecting a specific domain or technology bias.
+# The GENERATE system prompt instructs the model to adapt — not copy — it.
 
 ARCHITECTURE_DESIGN_EXAMPLE = _fmt(
     "Example architecture design response",
     ArchitectureDesignResponse(
-        overview=ArchitectureOverview(
-            style=ArchitectureStyle.EVENT_DRIVEN,
-            category=PatternCategory.MESSAGING,
-            principles=["async-first communication via Kafka", "schema-first contract definition", "independent deployability"],
-            constraints=["PCI-DSS compliance", "10k orders/min"],
+        overview=ArchitectureOverviewWire(
+            reasoning=(
+                "Requirements describe a user registry with create/read access and "
+                "no explicit scale or integration demands. A layered monolith is the "
+                "simplest shape that satisfies them: one service owns validation and "
+                "user rules, one relational database owns persistence; dependencies "
+                "point downward only so modules can be extracted later. Trade-off "
+                "accepted: vertical-only scaling until read volume justifies replicas."
+            ),
+            style=ArchitectureStyle.LAYERED_MONOLITH,
+            category=PatternCategory.STRUCTURAL,
+            principles=[
+                "single deployable unit",
+                "layer dependencies point downward only",
+                "schema-first HTTP API",
+            ],
+            constraints=["single relational datastore", "stateless service tier"],
         ),
         components=[
             Component(
-                id="api-gateway",
-                name="API Gateway",
-                type="gateway",
-                description="Entry point for all client requests, handles auth and routing",
-                responsibilities=["authentication", "rate limiting", "request routing"],
-                interfaces=["REST", "HTTPS"],
-                technology_stack=["Kong", "Redis"],
-                api_contract=None,
-                data_models=[],
-                config_requirements=["KONG_ADMIN_API_KEY", "REDIS_URL"],
-            ),
-            Component(
-                id="order-service",
-                name="Order Service",
+                id="user-service",
+                name="User Service",
                 type="service",
-                description="Manages order lifecycle and emits order events",
-                responsibilities=["order creation", "status tracking", "event emission"],
-                interfaces=["REST", "Kafka Producer"],
-                technology_stack=["FastAPI", "Kafka", "PostgreSQL"],
+                description="Handles user registration, lookup, and profile updates",
+                responsibilities=[
+                    "validate registration input",
+                    "persist user records",
+                    "expose user REST endpoints",
+                ],
+                interfaces=["REST"],
+                technology_stack=["FastAPI"],
                 api_contract=ApiContract(
-                    component_id="order-service",
-                    base_path="/api/v1/orders",
-                    description="Order management API",
+                    component_id="user-service",
+                    base_path="/api/v1/users",
+                    description="User management API",
                     endpoints=[
                         ApiEndpoint(
                             method="POST",
                             path="/",
-                            summary="Create order",
+                            summary="Register a new user",
                             request_schema={
                                 "type": "object",
                                 "properties": {
-                                    "customer_id": {"type": "string"},
-                                    "items": {"type": "array"},
+                                    "email": {"type": "string", "format": "email"},
                                 },
-                                "required": ["customer_id", "items"],
+                                "required": ["email"],
                             },
+                            auth_required=False,
+                            tags=["users"],
+                        ),
+                        ApiEndpoint(
+                            method="GET",
+                            path="/{user_id}",
+                            summary="Fetch a user by id",
                             response_schema={
                                 "type": "object",
                                 "properties": {
-                                    "order_id": {"type": "string"},
-                                    "status": {"type": "string"},
+                                    "user_id": {"type": "string"},
+                                    "email": {"type": "string"},
+                                    "display_name": {"type": "string"},
                                 },
                             },
                             auth_required=True,
-                            tags=["orders"],
+                            tags=["users"],
                         ),
                     ],
                 ),
                 data_models=[],
-                config_requirements=["DATABASE_URL", "KAFKA_BROKERS"],
+                config_requirements=["DATABASE_URL"],
+            ),
+            Component(
+                id="user-database",
+                name="User Database",
+                type="database",
+                description="Relational store for user records",
+                responsibilities=[
+                    "persist user rows",
+                    "enforce unique email constraint",
+                ],
+                interfaces=["SQL"],
+                technology_stack=["PostgreSQL"],
+                api_contract=None,
+                data_models=[],
+                config_requirements=["POSTGRES_PASSWORD"],
             ),
         ],
         relationships=[
             Relationship(
-                source="api-gateway",
-                target="order-service",
-                type="http",
-                description="Proxies /api/v1/orders/* to order-service",
-            ),
-            Relationship(
-                source="order-service",
-                target="payment-service",
-                type="async",
-                description="Emits order.created events to payment-service",
+                source="user-service",
+                target="user-database",
+                type="data-flow",
+                description="Reads and writes user records over SQL",
             ),
         ],
         quality_attributes={
-            "maintainability": "8/10",
-            "scalability": "9/10",
-            "reliability": "8/10",
-            "security": "8/10",
-            "performance": "9/10",
+            "maintainability": "7/10",
+            "scalability": "5/10",
+            "reliability": "6/10",
+            "security": "6/10",
+            "performance": "6/10",
         },
-        api_contracts=[
-            ApiContract(
-                component_id="order-service",
-                base_path="/api/v1/orders",
-                description="Order API",
-                endpoints=[
-                    ApiEndpoint(
-                        method="POST",
-                        path="/",
-                        summary="Create order",
-                        request_schema={
-                            "type": "object",
-                            "properties": {"customer_id": {"type": "string"}, "items": {"type": "array"}},
-                            "required": ["customer_id", "items"],
-                        },
-                        response_schema={
-                            "type": "object",
-                            "properties": {"order_id": {"type": "string"}, "status": {"type": "string"}},
-                        },
-                        auth_required=True,
-                        tags=["orders"],
-                    ),
-                ],
-            ),
-        ],
+        api_contracts=[],
         shared_data_models=[
             DataModel(
-                name="Order",
-                description="Order entity shared across services",
+                name="User",
+                description="User entity shared between service logic and persistence",
                 is_shared=True,
                 fields=[
-                    ModelField(name="order_id", type="string", required=True, description="Unique order ID"),
-                    ModelField(name="customer_id", type="string", required=True, description="Customer reference"),
-                    ModelField(name="status", type="string", required=True, description="Order status"),
+                    ModelField(name="user_id", type="string", required=True, description="Unique user ID"),
+                    ModelField(name="email", type="string", required=True, description="Unique email address"),
+                    ModelField(name="display_name", type="string", required=False, description="Public display name"),
                 ],
             ),
         ],
-        event_contracts=[
-            EventContract(
-                event_name="order.created",
-                payload_schema={
-                    "type": "object",
-                    "properties": {
-                        "order_id": {"type": "string"},
-                        "customer_id": {"type": "string"},
-                    },
-                },
-                published_by="order-service",
-                consumed_by=["payment-service"],
-                description="Emitted when a new order is placed",
-            ),
-        ],
+        event_contracts=[],
     ),
 )
 

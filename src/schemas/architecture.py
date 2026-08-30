@@ -27,6 +27,11 @@ structured generation. All subfields are typed so the LLM sees the full JSON-sch
 field constraints (including Relationship.source, Component.id regex, etc.) at
 generation time — enabling self-healing retry on ValidationError for any field.
 
+``ArchitectureOverviewWire`` requires a non-empty ``overview.reasoning`` so the
+model emits its design rationale before committing to components (reason-before-
+commit). The base ``design.ArchitectureOverview`` keeps ``reasoning`` optional
+for external tool callers.
+
 For the fully-typed spec schema used at FastMCP tool I/O boundaries,
 see design.ArchitectureDesign and design.ArchitectureOverview.
 """
@@ -44,6 +49,29 @@ from src.schemas.design import ArchitectureOverview
 from src.schemas.components import Component, Relationship
 
 
+class ArchitectureOverviewWire(ArchitectureOverview):
+    """
+    LLM-facing overview with ``reasoning`` REQUIRED.
+
+    Overrides the base schema's optional ``reasoning`` with a required,
+    non-empty field so structured generation always emits the design rationale
+    first (reason-before-commit: reasoning tokens precede the committed
+    component/relationship fields). External tool callers keep validating
+    against the base ArchitectureOverview, whose ``reasoning`` defaults to "".
+    """
+
+    reasoning: str = Field(
+        ...,
+        min_length=1,
+        description=(
+            "Design rationale written BEFORE defining components: which "
+            "requirements drive which components, which selected patterns "
+            "apply, which anti-patterns were avoided, and the key trade-offs "
+            "accepted. Must be a non-empty concrete plan, not a platitude."
+        ),
+    )
+
+
 class ArchitectureDesignResponse(BaseModel):
     """
     Pydantic response schema for LLM structured generation.
@@ -54,7 +82,7 @@ class ArchitectureDesignResponse(BaseModel):
     are validated against Component (including the id regex ^[a-z][a-z0-9_-]*$).
     """
 
-    overview: ArchitectureOverview = Field(
+    overview: ArchitectureOverviewWire = Field(
         description="Architecture overview with style, category, and principles"
     )
     components: list[Component] = Field(
@@ -92,7 +120,7 @@ class ArchitectureDesignResponseWire(BaseModel):
     The pipeline converts omitted fields to [] when constructing ArchitectureDesign.
     """
 
-    overview: ArchitectureOverview = Field(
+    overview: ArchitectureOverviewWire = Field(
         description="Architecture overview with style, category, and principles"
     )
     components: list[Component] = Field(

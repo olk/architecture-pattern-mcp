@@ -34,7 +34,8 @@ Modules:
 - patterns: Pattern
 - design: ArchitectureOverview, ArchitectureDesign
 - analysis: AnalysisResult
-- architecture: ArchitectureDesignResponse (LLM wire schema — dict-based, lax validation)
+- architecture: ArchitectureOverviewWire (LLM-facing overview, reasoning required)
+              ArchitectureDesignResponse (LLM wire schema — dict-based, lax validation)
               ArchitectureDesignResponseWire (lean wire schema for generation)
 """
 
@@ -42,6 +43,7 @@ from src.schemas.analysis import AnalysisResult
 from src.schemas.architecture import (
     ArchitectureDesignResponse,
     ArchitectureDesignResponseWire,
+    ArchitectureOverviewWire,
 )
 from src.schemas.contracts import (
     ApiContract,
@@ -96,6 +98,7 @@ __all__ = [
     # analysis
     "AnalysisResult",
     # architecture (LLM wire schema)
+    "ArchitectureOverviewWire",
     "ArchitectureDesignResponse",
     "ArchitectureDesignResponseWire",
 ]

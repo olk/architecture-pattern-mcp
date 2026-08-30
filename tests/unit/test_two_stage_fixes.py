@@ -259,7 +259,7 @@ class TestT4MinQualityScoreEarlyStop:
         from src.schemas.architecture import ArchitectureDesignResponse
 
         design_response = ArchitectureDesignResponse(
-            overview={"style": "microservices", "category": "structural",
+            overview={"reasoning": "test rationale", "style": "microservices", "category": "structural",
                       "principles": ["single responsibility"], "constraints": []},
             components=[{"id": "c1", "name": "C1", "type": "service",
                          "description": "d", "responsibilities": ["r"],

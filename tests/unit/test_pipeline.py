@@ -73,6 +73,7 @@ class MockSoftwareArchitectAgent:
         if response_schema is ArchitectureDesignResponse:
             return ArchitectureDesignResponse(
                 overview={
+                    "reasoning": "test rationale",
                     "style": "microservices",
                     "category": "structural",
                     "principles": ["single responsibility", "autonomy"],
@@ -1242,6 +1243,7 @@ class _MockArchitectForDenormalization:
         if response_schema is ArchitectureDesignResponse:
             return ArchitectureDesignResponse(
                 overview={
+                    "reasoning": "test rationale",
                     "style": "microservices",
                     "category": "structural",
                     "principles": ["single responsibility"],
@@ -1501,6 +1503,7 @@ class TestInvalidCategoryRegression:
 
         resp = ArchitectureDesignResponse(
             overview={
+                "reasoning": "test rationale",
                 "style": "microservices",
                 "category": "structural",
                 "principles": ["single responsibility"],
@@ -1644,7 +1647,7 @@ class TestDesignLoopPhase:
             from src.schemas.evaluation import ArchitectureEvaluation, EvaluationSummary, MetricResult
             if response_schema is ArchitectureDesignResponse:
                 return ArchitectureDesignResponse(
-                    overview={"style": "microservices", "category": "structural", "principles": ["single responsibility"], "constraints": []},
+                    overview={"reasoning": "test rationale", "style": "microservices", "category": "structural", "principles": ["single responsibility"], "constraints": []},
                     components=[{"id": "s1", "name": "S1", "type": "service", "description": "svc", "responsibilities": ["serve"], "interfaces": [], "technology_stack": [], "api_contract": None, "data_models": [],  "config_requirements": []}],
                     relationships=[],
 
@@ -1688,7 +1691,7 @@ class TestDesignLoopPhase:
             from src.schemas.evaluation import ArchitectureEvaluation, EvaluationSummary, MetricResult
             if response_schema is ArchitectureDesignResponse:
                 return ArchitectureDesignResponse(
-                    overview={"style": "microservices", "category": "structural", "principles": ["single responsibility"], "constraints": []},
+                    overview={"reasoning": "test rationale", "style": "microservices", "category": "structural", "principles": ["single responsibility"], "constraints": []},
                     components=[{"id": "s1", "name": "S1", "type": "service", "description": "svc", "responsibilities": ["serve"], "interfaces": [], "technology_stack": [], "api_contract": None, "data_models": [],  "config_requirements": []}],
                     relationships=[],
                     quality_attributes={},
@@ -1745,7 +1748,7 @@ class TestDesignLoopPhase:
             from src.schemas.evaluation import ArchitectureEvaluation, EvaluationSummary, MetricResult
             if response_schema is ArchitectureDesignResponse:
                 return ArchitectureDesignResponse(
-                    overview={"style": "microservices", "category": "structural", "principles": ["single responsibility"], "constraints": []},
+                    overview={"reasoning": "test rationale", "style": "microservices", "category": "structural", "principles": ["single responsibility"], "constraints": []},
                     components=[{"id": "s1", "name": "S1", "type": "service", "description": "svc", "responsibilities": ["serve"], "interfaces": [], "technology_stack": [], "api_contract": None, "data_models": [],  "config_requirements": []}],
                     relationships=[],
                     quality_attributes={},
@@ -1788,7 +1791,7 @@ class TestDesignLoopPhase:
             if response_schema is ArchitectureDesignResponse:
                 generate_count += 1
                 return ArchitectureDesignResponse(
-                    overview={"style": "microservices", "category": "structural", "principles": ["single responsibility"], "constraints": []},
+                    overview={"reasoning": "test rationale", "style": "microservices", "category": "structural", "principles": ["single responsibility"], "constraints": []},
                     components=[{"id": "s1", "name": "S1", "type": "service", "description": "svc", "responsibilities": ["serve"], "interfaces": [], "technology_stack": [], "api_contract": None, "data_models": [],  "config_requirements": []}],
                     relationships=[],
 
@@ -1834,7 +1837,7 @@ class TestDesignLoopPhase:
             if response_schema is ArchitectureDesignResponse:
                 generate_count += 1
                 return ArchitectureDesignResponse(
-                    overview={"style": "microservices", "category": "structural", "principles": ["single responsibility"], "constraints": []},
+                    overview={"reasoning": "test rationale", "style": "microservices", "category": "structural", "principles": ["single responsibility"], "constraints": []},
                     components=[{"id": "s1", "name": "S1", "type": "service", "description": "svc", "responsibilities": ["serve"], "interfaces": [], "technology_stack": [], "api_contract": None, "data_models": [],  "config_requirements": []}],
                     relationships=[],
 
@@ -1885,7 +1888,7 @@ class TestDesignLoopPhase:
                 if attempt == 1:
                     raise MalformedArchitectureOverviewError(locator="overview", errors=[])
                 return ArchitectureDesignResponse(
-                    overview={"style": "microservices", "category": "structural", "principles": ["single responsibility"], "constraints": []},
+                    overview={"reasoning": "test rationale", "style": "microservices", "category": "structural", "principles": ["single responsibility"], "constraints": []},
                     components=[{"id": "s1", "name": "S1", "type": "service", "description": "svc", "responsibilities": ["serve"], "interfaces": [], "technology_stack": [], "api_contract": None, "data_models": [],  "config_requirements": []}],
                     relationships=[],
 
@@ -1931,7 +1934,8 @@ class TestPatternContextReduction:
         """benefits are sliced to config limit."""
         pipeline = self._make_pipeline_with_limits({"benefits": 2, "tradeoffs": 3, "best_practices": 3, "component_types": 5, "technology_stack": 5, "anti_patterns": 3, "suitable_domains": 5})
         patterns = [{"name": "p1", "context": "c", "benefits": ["b1", "b2", "b3"], "tradeoffs": [], "suitable_domains": [], "best_practices": [], "component_types": [], "technology_stack": [], "anti_patterns": []}]
-        ctx = pipeline._build_pattern_context(patterns)
+        anti, best, details = pipeline._build_pattern_context(patterns)
+        ctx = "\n".join((anti, best, details))
         assert ctx.count("b1") == 1
         assert ctx.count("b2") == 1
         assert "b3" not in ctx
@@ -1940,7 +1944,8 @@ class TestPatternContextReduction:
         """tradeoffs are sliced to config limit."""
         pipeline = self._make_pipeline_with_limits({"benefits": 3, "tradeoffs": 2, "best_practices": 3, "component_types": 5, "technology_stack": 5, "anti_patterns": 3, "suitable_domains": 5})
         patterns = [{"name": "p1", "context": "c", "benefits": [], "tradeoffs": ["t1", "t2", "t3"], "suitable_domains": [], "best_practices": [], "component_types": [], "technology_stack": [], "anti_patterns": []}]
-        ctx = pipeline._build_pattern_context(patterns)
+        anti, best, details = pipeline._build_pattern_context(patterns)
+        ctx = "\n".join((anti, best, details))
         assert ctx.count("t1") == 1
         assert ctx.count("t2") == 1
         assert "t3" not in ctx
@@ -1949,7 +1954,8 @@ class TestPatternContextReduction:
         """best_practices are sliced to config limit."""
         pipeline = self._make_pipeline_with_limits({"benefits": 3, "tradeoffs": 3, "best_practices": 1, "component_types": 5, "technology_stack": 5, "anti_patterns": 3, "suitable_domains": 5})
         patterns = [{"name": "p1", "context": "c", "benefits": [], "tradeoffs": [], "suitable_domains": [], "best_practices": ["bp1", "bp2"], "component_types": [], "technology_stack": [], "anti_patterns": []}]
-        ctx = pipeline._build_pattern_context(patterns)
+        anti, best, details = pipeline._build_pattern_context(patterns)
+        ctx = "\n".join((anti, best, details))
         assert ctx.count("bp1") == 1
         assert "bp2" not in ctx
 
@@ -1957,7 +1963,8 @@ class TestPatternContextReduction:
         """anti_patterns are sliced to config limit."""
         pipeline = self._make_pipeline_with_limits({"benefits": 3, "tradeoffs": 3, "best_practices": 3, "component_types": 5, "technology_stack": 5, "anti_patterns": 1, "suitable_domains": 5})
         patterns = [{"name": "p1", "context": "c", "benefits": [], "tradeoffs": [], "suitable_domains": [], "best_practices": [], "component_types": [], "technology_stack": [], "anti_patterns": ["ap1", "ap2"]}]
-        ctx = pipeline._build_pattern_context(patterns)
+        anti, best, details = pipeline._build_pattern_context(patterns)
+        ctx = "\n".join((anti, best, details))
         assert ctx.count("ap1") == 1
         assert "ap2" not in ctx
 
@@ -1965,7 +1972,8 @@ class TestPatternContextReduction:
         """suitable_domains are sliced to config limit."""
         pipeline = self._make_pipeline_with_limits({"benefits": 3, "tradeoffs": 3, "best_practices": 3, "component_types": 5, "technology_stack": 5, "anti_patterns": 3, "suitable_domains": 2})
         patterns = [{"name": "p1", "context": "c", "benefits": [], "tradeoffs": [], "suitable_domains": ["d1", "d2", "d3"], "best_practices": [], "component_types": [], "technology_stack": [], "anti_patterns": []}]
-        ctx = pipeline._build_pattern_context(patterns)
+        anti, best, details = pipeline._build_pattern_context(patterns)
+        ctx = "\n".join((anti, best, details))
         assert "d1" in ctx
         assert "d2" in ctx
         assert "d3" not in ctx
@@ -1977,7 +1985,8 @@ class TestPatternContextReduction:
             {"name": "p1", "context": "c", "benefits": [], "tradeoffs": [], "suitable_domains": [], "best_practices": [], "component_types": ["API Gateway", "Load Balancer"], "technology_stack": [], "anti_patterns": []},
             {"name": "p2", "context": "c", "benefits": [], "tradeoffs": [], "suitable_domains": [], "best_practices": [], "component_types": ["api gateway", "Cache"], "technology_stack": [], "anti_patterns": []},
         ]
-        ctx = pipeline._build_pattern_context(patterns)
+        anti, best, details = pipeline._build_pattern_context(patterns)
+        ctx = "\n".join((anti, best, details))
         assert ctx.count("API Gateway") == 1
         assert ctx.count("api gateway") == 0
         assert ctx.count("Load Balancer") == 1
@@ -1990,7 +1999,8 @@ class TestPatternContextReduction:
             {"name": "p1", "context": "c", "benefits": [], "tradeoffs": [], "suitable_domains": [], "best_practices": [], "component_types": [], "technology_stack": ["Kubernetes", "Docker"], "anti_patterns": []},
             {"name": "p2", "context": "c", "benefits": [], "tradeoffs": [], "suitable_domains": [], "best_practices": [], "component_types": [], "technology_stack": ["kubernetes", "Redis"], "anti_patterns": []},
         ]
-        ctx = pipeline._build_pattern_context(patterns)
+        anti, best, details = pipeline._build_pattern_context(patterns)
+        ctx = "\n".join((anti, best, details))
         assert ctx.count("Kubernetes") == 1
         assert ctx.count("kubernetes") == 0
         assert ctx.count("Docker") == 1
@@ -2000,14 +2010,16 @@ class TestPatternContextReduction:
         """design_principles section is not present in pattern context."""
         pipeline = self._make_pipeline_with_limits({"benefits": 3, "tradeoffs": 3, "best_practices": 3, "component_types": 5, "technology_stack": 5, "anti_patterns": 3, "suitable_domains": 5})
         patterns = [{"name": "p1", "context": "c", "benefits": [], "tradeoffs": [], "suitable_domains": [], "best_practices": [], "component_types": [], "technology_stack": [], "anti_patterns": [], "design_principles": ["Single Responsibility"]}]
-        ctx = pipeline._build_pattern_context(patterns)
+        anti, best, details = pipeline._build_pattern_context(patterns)
+        ctx = "\n".join((anti, best, details))
         assert "Design Principles" not in ctx
 
     def test_build_pattern_context_drops_unsuitable_domains_section(self):
         """unsuitable_domains section is not present in pattern context."""
         pipeline = self._make_pipeline_with_limits({"benefits": 3, "tradeoffs": 3, "best_practices": 3, "component_types": 5, "technology_stack": 5, "anti_patterns": 3, "suitable_domains": 5})
         patterns = [{"name": "p1", "context": "c", "benefits": [], "tradeoffs": [], "suitable_domains": [], "best_practices": [], "component_types": [], "technology_stack": [], "anti_patterns": [], "unsuitable_domains": ["domain1"]}]
-        ctx = pipeline._build_pattern_context(patterns)
+        anti, best, details = pipeline._build_pattern_context(patterns)
+        ctx = "\n".join((anti, best, details))
         assert "Unsuitable Domains" not in ctx
 
 
@@ -2035,7 +2047,7 @@ class TestQualityScoreFallback:
 
     def _make_design(self) -> ArchitectureDesignResponse:
         return ArchitectureDesignResponse(
-            overview={"style": "pipe-and-filter", "category": "dataflow",
+            overview={"reasoning": "test rationale", "style": "pipe-and-filter", "category": "dataflow",
                       "principles": ["test"], "constraints": []},
             components=[{"id": "s1", "name": "S1", "type": "service", "description": "svc",
                         "responsibilities": ["serve"], "interfaces": [], "technology_stack": [],

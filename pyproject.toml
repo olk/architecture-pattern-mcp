@@ -177,3 +177,7 @@ warn_unused_configs = true
 testpaths = ["tests"]
 asyncio_mode = "auto"
 filterwarnings = ["ignore::DeprecationWarning"]
+markers = [
+    "perf: performance benchmarks, opt-in via RUN_PERF=1",
+    "llm: live LLM benchmarks, opt-in via ARCH_BENCH_LLM=1 (requires config + endpoint)",
+]

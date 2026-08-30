@@ -40,6 +40,16 @@ class ArchitectureOverview(BaseModel):
     Summarises the style, category, guiding principles, and constraints.
     """
 
+    reasoning: str = Field(
+        default="",
+        description=(
+            "Design rationale: which requirements drive which components, which "
+            "selected patterns apply, which trade-offs were accepted. Written as "
+            "if planning BEFORE defining components (reason-before-commit). "
+            "Optional here so external tool callers and legacy payloads remain "
+            "valid; the LLM wire schema (ArchitectureOverviewWire) requires it."
+        ),
+    )
     style: ArchitectureStyle = Field(
         ...,
         description="Architecture style from ArchitectureStyle enum (§4.2.2)"
