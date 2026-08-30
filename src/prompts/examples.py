@@ -28,7 +28,7 @@ changes, import fails and CI breaks.
 If you modify a Pydantic schema, you MUST update the corresponding example here.
 """
 
-from src.schemas.analysis import AnalysisResult
+from src.schemas.analysis import AnalysisResult, RequirementWeights
 from src.schemas.architecture import (
     ArchitectureDesignResponse,
     ArchitectureOverviewWire,
@@ -402,4 +402,41 @@ ANALYSIS_RESULT_EXAMPLE = _fmt(
             ),
         ],
     ),
+)
+
+
+# ─── RequirementWeights ─────────────────────────────────────────────────────
+# Three contrasting examples for the ANALYZE-phase weight-extraction prompt:
+# peaked priorities / sparse low-signal / explicit anti-requirement.
+# Validated at import time via Pydantic instantiation — schema drift fails CI.
+# Rendered in the ANALYZE system prompt via model_dump_json (no markdown
+# fences, so the LLM never echoes fences into its structured output).
+# Invariant: the maximum weight equals 1.0 in every example, mirroring the
+# normalisation hard constraint in the prompt.
+
+REQUIREMENT_WEIGHTS_EXAMPLE_PEAKED = RequirementWeights(
+    scalability=1.0,
+    maintainability=0.3,
+    reliability=0.9,
+    security=0.9,
+    performance=0.7,
+    simplicity=0.4,
+)
+
+REQUIREMENT_WEIGHTS_EXAMPLE_SPARSE = RequirementWeights(
+    scalability=0.2,
+    maintainability=0.3,
+    reliability=0.2,
+    security=0.2,
+    performance=0.2,
+    simplicity=1.0,
+)
+
+REQUIREMENT_WEIGHTS_EXAMPLE_NEGATIVE = RequirementWeights(
+    scalability=0.0,
+    maintainability=0.4,
+    reliability=0.3,
+    security=0.3,
+    performance=0.3,
+    simplicity=1.0,
 )

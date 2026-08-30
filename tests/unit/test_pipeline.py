@@ -2161,11 +2161,30 @@ class TestPromptExamples:
         assert "```json" in prompt
 
     def test_analyze_system_prompt_contains_example(self):
-        """Analyze system prompt includes a RequirementWeights JSON example."""
+        """Analyze system prompt includes calibration anchors, hard
+        constraints, and fence-free RequirementWeights JSON examples."""
         pipeline = create_test_pipeline()
-        prompt = pipeline._build_analyze_system_prompt(domain="data-processing")
-        assert "Example RequirementWeights response" in prompt
-        assert "```json" in prompt
+        prompt = pipeline._build_analyze_system_prompt()
+        assert "<calibration>" in prompt
+        assert "<hard_constraints>" in prompt
+        assert "scalability" in prompt
+        assert "```json" not in prompt
+
+    def test_requirement_weights_examples_normalised(self):
+        """All RequirementWeights examples peak at exactly 1.0 (mirrors the
+        normalisation hard constraint in the analyze system prompt)."""
+        from src.prompts import (
+            REQUIREMENT_WEIGHTS_EXAMPLE_NEGATIVE,
+            REQUIREMENT_WEIGHTS_EXAMPLE_PEAKED,
+            REQUIREMENT_WEIGHTS_EXAMPLE_SPARSE,
+        )
+
+        for example in (
+            REQUIREMENT_WEIGHTS_EXAMPLE_PEAKED,
+            REQUIREMENT_WEIGHTS_EXAMPLE_SPARSE,
+            REQUIREMENT_WEIGHTS_EXAMPLE_NEGATIVE,
+        ):
+            assert max(example.model_dump().values()) == 1.0
 
     def test_evaluate_system_prompt_contains_example(self):
         """Evaluate system prompt includes evaluation example."""

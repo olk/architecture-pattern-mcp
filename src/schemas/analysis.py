@@ -20,15 +20,52 @@
 # SOFTWARE.
 
 """
-Architecture analysis result schema.
+Architecture analysis result schemas.
 
-Output from the ANALYZE phase of the pipeline.
+Output from the ANALYZE phase of the pipeline, including requirement-priority
+weights extracted from the requirements text.
 """
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from src.schemas.patterns import ScoredPattern
 from src.schemas.quality import QualityMetrics
+
+# Canonical quality-attribute keys present in every pattern's quality_attributes.
+# Verified uniform across the 35-pattern catalogue. Used for deterministic
+# requirements-aware scoring of candidates in the analyze phase.
+QUALITY_ATTRIBUTE_KEYS: tuple[str, ...] = (
+    "scalability",
+    "maintainability",
+    "reliability",
+    "security",
+    "performance",
+    "simplicity",
+)
+
+
+class RequirementWeights(BaseModel):
+    """Requirement priority weights (0.0-1.0) extracted from requirements.
+
+    Produced by a single LLM call in the analyze phase. Each weight expresses
+    how strongly the requirements emphasise that quality attribute. Consumed
+    by the analyze phase's deterministic pattern scoring, and surfaced in the
+    GENERATE user prompt so the model can weigh design trade-offs against
+    the stated priorities.
+    """
+
+    model_config = ConfigDict(extra="allow")
+
+    scalability: float = Field(default=0.0, ge=0.0, le=1.0)
+    maintainability: float = Field(default=0.0, ge=0.0, le=1.0)
+    reliability: float = Field(default=0.0, ge=0.0, le=1.0)
+    security: float = Field(default=0.0, ge=0.0, le=1.0)
+    performance: float = Field(default=0.0, ge=0.0, le=1.0)
+    simplicity: float = Field(default=0.0, ge=0.0, le=1.0)
+
+    def as_dict(self) -> dict[str, float]:
+        """Return the weights keyed by quality-attribute name."""
+        return {k: float(getattr(self, k)) for k in QUALITY_ATTRIBUTE_KEYS}
 
 
 class MatchedDomain(BaseModel):

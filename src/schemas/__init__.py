@@ -33,13 +33,17 @@ Modules:
 - evaluation: MetricResult, EvaluationSummary, ArchitectureEvaluation, PipelineResult
 - patterns: Pattern
 - design: ArchitectureOverview, ArchitectureDesign
-- analysis: AnalysisResult
+- analysis: AnalysisResult, RequirementWeights, QUALITY_ATTRIBUTE_KEYS
 - architecture: ArchitectureOverviewWire (LLM-facing overview, reasoning required)
               ArchitectureDesignResponse (LLM wire schema — dict-based, lax validation)
               ArchitectureDesignResponseWire (lean wire schema for generation)
 """
 
-from src.schemas.analysis import AnalysisResult
+from src.schemas.analysis import (
+    AnalysisResult,
+    QUALITY_ATTRIBUTE_KEYS,
+    RequirementWeights,
+)
 from src.schemas.architecture import (
     ArchitectureDesignResponse,
     ArchitectureDesignResponseWire,
@@ -97,6 +101,8 @@ __all__ = [
     "ArchitectureOverview",
     # analysis
     "AnalysisResult",
+    "QUALITY_ATTRIBUTE_KEYS",
+    "RequirementWeights",
     # architecture (LLM wire schema)
     "ArchitectureOverviewWire",
     "ArchitectureDesignResponse",
