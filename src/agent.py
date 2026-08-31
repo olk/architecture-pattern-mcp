@@ -35,6 +35,7 @@ from typing import Any, cast
 
 from llama_index.core.base.llms.types import ChatMessage, MessageRole
 from llama_index.llms.litellm import LiteLLM
+import litellm
 from pydantic import BaseModel, ValidationError
 
 from src.config import ServerConfig
@@ -93,6 +94,8 @@ class SoftwareArchitectAgent:
             config: ServerConfig instance containing LLM configuration.
                    Must have generator.provider, generator.config.model, generator.config.temperature, etc.
         """
+        litellm.suppress_debug_info = True
+        logging.getLogger("LiteLLM").setLevel(logging.INFO)
         self._generator = config.generator
         _model = self._generator.config.model
         if "/" in _model:

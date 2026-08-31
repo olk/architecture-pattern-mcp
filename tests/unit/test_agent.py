@@ -118,6 +118,22 @@ class TestSoftwareArchitectAgentInit:
         assert agent._generator.config.base_url == "https://api.openai.com/v1"
 
 
+class TestLitellmDebugSilence:
+    """Construction must silence litellm's DEBUG channel so our reasoning
+    logs stay readable at LOGGING_LEVEL=DEBUG without prompt-echo noise."""
+
+    def test_litellm_logger_silenced_on_agent_init(self):
+        import logging as logging_mod
+
+        config = ServerConfig(
+            generator={"provider": "openai", "config": {"model": "gpt-4", "temperature": 0.1}},
+            embedder={"provider": "tei", "config": {"base_url": "http://localhost:8080"}},
+        )
+        SoftwareArchitectAgent(config)
+        assert logging_mod.getLogger("litellm").getEffectiveLevel() >= logging_mod.INFO
+        assert logging_mod.getLogger("LiteLLM").level >= logging_mod.INFO
+
+
 class TestGenerateStructured:
     """
     # AC-175: Verify generate_structured method exists with correct signature
