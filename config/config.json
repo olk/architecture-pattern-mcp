@@ -59,6 +59,16 @@
     "max_retries": "{env:VALIDATION_MAX_RETRIES:-2}",
     "retry_on_fail": "{env:VALIDATION_RETRY_ON_FAIL:-true}"
   },
+  "reasoning": {
+    "enabled": "{env:REASONING_ENABLED:-true}",
+    "shannonthinking_cmd": "{env:REASONING_SHANNONTHINKING_CMD:-}",
+    "code_reasoning_cmd": "{env:REASONING_CODE_REASONING_CMD:-}",
+    "spawn_timeout_seconds": "{env:REASONING_SPAWN_TIMEOUT_SECONDS:-10.0}",
+    "step_timeout_seconds": "{env:REASONING_STEP_TIMEOUT_SECONDS:-20.0}",
+    "max_total_steps": "{env:REASONING_MAX_TOTAL_STEPS:-8}",
+    "quiet_stderr": "{env:REASONING_QUIET_STDERR:-true}",
+    "fail_fast": "{env:REASONING_FAIL_FAST:-false}"
+  },
   "tool_timeout_seconds": "{env:TOOL_TIMEOUT_SECONDS:-}",
   "tasks": {
     "heartbeat_enabled": "{env:TASKS_HEARTBEAT_ENABLED:-true}",

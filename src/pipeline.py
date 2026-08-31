@@ -64,9 +64,12 @@ from src.patterns.bm25_index import DomainBM25Index
 from src.patterns.loader import PatternLoader
 from src.patterns.retriever import DEFAULT_FALLBACK_PATTERN_NAME, HybridPatternRetriever
 from src.patterns.vector_index import DomainVectorIndex
+from src.reasoning.client import ReasoningClient
+from src.reasoning.prompts import render_degraded_context, render_reasoning_context
 from src.prompts import (
     ARCHITECTURE_DESIGN_EXAMPLE,
     ARCHITECTURE_EVALUATION_EXAMPLE,
+    REQUIREMENT_WEIGHTS_EXAMPLE_CONFLICT,
     REQUIREMENT_WEIGHTS_EXAMPLE_NEGATIVE,
     REQUIREMENT_WEIGHTS_EXAMPLE_PEAKED,
     REQUIREMENT_WEIGHTS_EXAMPLE_SPARSE,
@@ -330,6 +333,17 @@ def _analyze_system_prompt_cached() -> str:
                 'Fast delivery to a single client."\n'
                 f"{REQUIREMENT_WEIGHTS_EXAMPLE_NEGATIVE.model_dump_json(indent=2)}"
             ),
+            (
+                'Example 4 — conflict resolution (a concrete numeric SLO wins '
+                'over a vague adjective; "small team / ship MVP" does NOT '
+                'outweigh "10M daily active users / horizontal scale-out", so '
+                'simplicity drops to the baseline despite being mentioned):\n'
+                'Requirements excerpt: "Global e-commerce platform, 10M daily '
+                'active users, horizontal scale-out required, p99 checkout '
+                'latency < 200ms. Small startup team of 4 engineers; ship MVP '
+                'in 3 months."\n'
+                f"{REQUIREMENT_WEIGHTS_EXAMPLE_CONFLICT.model_dump_json(indent=2)}"
+            ),
         )
     )
     return f"""<role>
@@ -512,6 +526,7 @@ class ArchitecturePipeline(Workflow):
         bm25_index: DomainBM25Index,
         retrieval_config: RetrievalConfig | None = None,
         reranker_config: RerankerConfig | None = None,
+        reasoning_client: ReasoningClient | None = None,
     ) -> None:
         """
         Initialize ArchitecturePipeline with injected dependencies.
@@ -526,6 +541,10 @@ class ArchitecturePipeline(Workflow):
             retrieval_config: Retrieval tuning parameters (defaults to RetrievalConfig())
             reranker_config: Reranker parameters — TEI connection and post-fusion slug-cut
                 settings (defaults to RerankerConfig() with default base_url).
+            reasoning_client: Optional ReasoningClient for server-side
+                shannonthinking / code-reasoning pre-LLM traces (Plan v5).
+                When None or disabled, phase prompts receive the degraded
+                in-prompt thinking scaffold instead of an external trace.
         """
         super().__init__(timeout=1200)
         self._agent = agent
@@ -534,6 +553,7 @@ class ArchitecturePipeline(Workflow):
         self._bm25_index = bm25_index
         self._retrieval_config = retrieval_config or RetrievalConfig()
         self._reranker_config = reranker_config or RerankerConfig()
+        self._reasoning = reasoning_client
         self._pattern_context_cache: OrderedDict[tuple, tuple[str, str, str]] = OrderedDict()
         self._pattern_context_cache_max: int = self.PATTERN_CONTEXT_CACHE_MAX
         self._cancellation_token: CancellationToken | None = None
@@ -545,8 +565,44 @@ class ArchitecturePipeline(Workflow):
                 "pattern_loader_loaded": pattern_loader.is_loaded,
                 "retrieval_config": self._retrieval_config.model_dump(),
                 "reranker_config": self._reranker_config.model_dump(),
+                "reasoning_enabled": reasoning_client.enabled if reasoning_client else False,
             }
         )
+
+    async def _reasoning_block(self, phase: str, task_inputs: dict[str, str]) -> str:
+        """Produce the <reasoning_context> block for one phase call.
+
+        With an enabled ReasoningClient, runs the ThoughtGenerator loop
+        (each thought = 1 LLM completion + 1 MCP tool call; silent per-call
+        degradation). Without one — or when the trace comes back empty —
+        renders the degraded in-prompt thinking scaffold so every phase
+        prompt still carries structured pre-emit guidance (Plan v5
+        amendment 4). Never raises.
+        """
+        if self._reasoning is None or not self._reasoning.enabled:
+            return render_degraded_context(phase)
+        try:
+            trace = await self._reasoning.run_pre_llm(phase, task_inputs)
+        except Exception as exc:  # noqa: BLE001 — degradation contract: never block a phase
+            logger.warning(
+                "Reasoning client failed unexpectedly; using degraded scaffold",
+                extra={"phase": phase, "error": str(exc)},
+            )
+            return render_degraded_context(phase)
+        if not trace.steps:
+            return render_degraded_context(phase)
+        logger.info(
+            "Reasoning trace ready",
+            extra={
+                "phase": phase,
+                "steps": len(trace.steps),
+                "duration_ms": trace.duration_ms,
+                "aborted_reason": trace.aborted_reason or "",
+                "tools_called": trace.tool_call_counts,
+                "cached": trace.cached,
+            },
+        )
+        return render_reasoning_context(phase, trace)
 
     # ──────────────────────────────────────────────────────────────────────────
     # Public entry points (mirrors original API for tool compatibility)
@@ -665,8 +721,15 @@ class ArchitecturePipeline(Workflow):
 
             # ── Stage 2a (extract priorities): one lightweight LLM call ──
             # Calibration-anchored prompt carries requirements + the 6
-            # attribute names only; no pattern data is sent.
-            weights = await self._extract_requirement_weights(requirements, domain)
+            # attribute names only; no pattern data is sent. A server-side
+            # reasoning trace (shannonthinking / code-reasoning) grounds the
+            # extraction; without one the degraded scaffold applies.
+            reasoning_context = await self._reasoning_block(
+                "analyze", {"requirements": requirements}
+            )
+            weights = await self._extract_requirement_weights(
+                requirements, domain, reasoning_context=reasoning_context
+            )
 
             # ── Stage 2b (deterministic score): requirements-aware ranking ──
             scored = self._score_patterns(candidates, weights)
@@ -751,10 +814,14 @@ class ArchitecturePipeline(Workflow):
                 user_prompt = override_user_prompt
                 system_prompt = self._build_generate_system_prompt(style)
             else:
+                reasoning_context = await self._reasoning_block(
+                    "generate", {"requirements": requirements}
+                )
                 pattern_sections = self._build_pattern_context(selected_patterns)
                 system_prompt = self._build_generate_system_prompt(style)
                 user_prompt = self._build_generate_user_prompt(
-                    requirements, domain, style, pattern_sections, analysis_result
+                    requirements, domain, style, pattern_sections, analysis_result,
+                    reasoning_context=reasoning_context,
                 )
 
             use_lean = self._retrieval_config.use_lean_wire_schema
@@ -848,9 +915,17 @@ class ArchitecturePipeline(Workflow):
                 ]
 
             system_prompt = self._build_evaluate_system_prompt(patterns)
+            reasoning_context = await self._reasoning_block(
+                "evaluate",
+                {
+                    "requirements": requirements or "(not supplied)",
+                    "criteria": criteria,
+                },
+            )
             user_prompt = self._build_evaluate_user_prompt(
                 architecture, criteria, domain, patterns,
                 requirements=requirements, analysis_result=analysis_result,
+                reasoning_context=reasoning_context,
             )
 
             llm_eval = await self._agent.generate_structured(
@@ -869,6 +944,42 @@ class ArchitecturePipeline(Workflow):
                 llm_eval.recommendations.setdefault(area, []).extend(recs)
 
             return llm_eval
+
+    async def _build_retry_attempt_prompt(
+        self,
+        design: ArchitectureDesign,
+        evaluation: ArchitectureEvaluation,
+        requirements: str,
+        style: str,
+        domain: str,
+        analysis_result: AnalysisResult | None,
+    ) -> str:
+        """Build the refinement user prompt for one retry attempt.
+
+        Runs the 'retry' ThoughtGenerator loop over the evaluation findings
+        (silent degradation applies) and renders the refinement prompt with
+        the trace/scaffold injected.
+        """
+        reasoning_context = await self._reasoning_block(
+            "retry",
+            {
+                "critical_findings": "\n".join(
+                    evaluation.summary.critical_findings
+                ) or "(none)",
+                "weaknesses": "\n".join(
+                    evaluation.summary.weaknesses
+                ) or "(none)",
+            },
+        )
+        return self._retry_prompt(
+            design=design,
+            evaluation=evaluation,
+            requirements=requirements,
+            style=style,
+            domain=domain,
+            selected_pattern=self._select_refinement_pattern(analysis_result, style),
+            reasoning_context=reasoning_context,
+        )
 
     async def design_loop(
         self,
@@ -930,15 +1041,13 @@ class ArchitecturePipeline(Workflow):
                         )
                     else:
                         assert best_design is not None and best_evaluation is not None
-                        feedback_prompt = self._retry_prompt(
+                        feedback_prompt = await self._build_retry_attempt_prompt(
                             design=best_design,
                             evaluation=best_evaluation,
                             requirements=requirements,
                             style=style,
                             domain=domain,
-                            selected_pattern=self._select_refinement_pattern(
-                                analysis_result, style
-                            ),
+                            analysis_result=analysis_result,
                         )
                         design = await self.generate(
                             requirements=requirements,
@@ -1326,6 +1435,7 @@ class ArchitecturePipeline(Workflow):
         style: str,
         pattern_sections: tuple[str, str, str],
         analysis_result: AnalysisResult | None,
+        reasoning_context: str = "",
     ) -> str:
         """Build user prompt for generate phase.
 
@@ -1333,7 +1443,10 @@ class ArchitecturePipeline(Workflow):
         tuple produced by ``_build_pattern_context``. Anti-patterns are placed
         first as an explicit forbidden list; requirement quality-attribute
         weights (from the analyze phase) are surfaced so the model can weigh
-        design trade-offs against the stated priorities.
+        design trade-offs against the stated priorities. ``reasoning_context``
+        carries the pre-rendered <reasoning_context> block (external trace or
+        degraded scaffold), injected after the analysis summary and before the
+        pattern blocks.
         """
         anti_patterns_block, best_practices_block, details_block = pattern_sections
 
@@ -1356,6 +1469,8 @@ Design a {style} architecture for the {domain} domain that satisfies the require
                 "central to the design):"
             ),
         )
+
+        user_prompt += reasoning_context
 
         user_prompt += f"""
 <selected_patterns>
@@ -1407,7 +1522,10 @@ Emit a single JSON object matching the response schema.
     # ──────────────────────────────────────────────────────────────────────────
 
     async def _extract_requirement_weights(
-        self, requirements: str, domain: str
+        self,
+        requirements: str,
+        domain: str,
+        reasoning_context: str = "",
     ) -> RequirementWeights:
         """Stage-2a: one lightweight LLM call to extract requirement priorities.
 
@@ -1416,17 +1534,24 @@ Emit a single JSON object matching the response schema.
         quality-attribute names — no pattern data. The returned weights drive
         the deterministic scoring in ``_score_patterns``.
 
+        ``reasoning_context`` carries the <reasoning_context> block (external
+        trace or degraded scaffold) rendered by ``_reasoning_block``.
+
         Issue #17: if the LLM returns all-zero weights, retry once before
         falling back to unweighted mean — a silent all-zero result is the
         opposite of the commit's intent.
         """
-        weights = await self._extract_requirement_weights_once(requirements, domain)
+        weights = await self._extract_requirement_weights_once(
+            requirements, domain, reasoning_context=reasoning_context
+        )
         if sum(weights.as_dict().values()) == 0.0:
             logger.warning(
                 "All-zero RequirementWeights from LLM; retrying once...",
                 extra={"phase": "analyze", "domain": domain},
             )
-            weights = await self._extract_requirement_weights_once(requirements, domain)
+            weights = await self._extract_requirement_weights_once(
+                requirements, domain, reasoning_context=reasoning_context
+            )
             if sum(weights.as_dict().values()) == 0.0:
                 logger.warning(
                     "RequirementWeights still all-zero after retry; using unweighted mean",
@@ -1435,11 +1560,16 @@ Emit a single JSON object matching the response schema.
         return weights
 
     async def _extract_requirement_weights_once(
-        self, requirements: str, domain: str
+        self,
+        requirements: str,
+        domain: str,
+        reasoning_context: str = "",
     ) -> RequirementWeights:
         """Single LLM call to extract requirement weights (no retry)."""
         system_prompt = self._build_analyze_system_prompt()
-        user_prompt = self._build_analyze_user_prompt(requirements, domain)
+        user_prompt = self._build_analyze_user_prompt(
+            requirements, domain, reasoning_context=reasoning_context
+        )
         llm_result = await self._agent.generate_structured(
             system_prompt=system_prompt,
             user_prompt=user_prompt,
@@ -1617,6 +1747,7 @@ Emit a single JSON object matching the response schema.
         self,
         requirements: str,
         domain: str,
+        reasoning_context: str = "",
     ) -> str:
         """Build user prompt for the ANALYZE phase (requirements → weights).
 
@@ -1626,6 +1757,12 @@ Emit a single JSON object matching the response schema.
         critical rules after the data block so the last thing the model reads
         is the rule, not the data. No pattern data is embedded (enforced by
         tests).
+
+        ``reasoning_context`` carries the pre-rendered <reasoning_context>
+        block (external reasoning trace or the degraded in-prompt scaffold)
+        and is injected between the domain block and the reasoning gate. Its
+        content is LLM-generated from untrusted requirements, so it inherits
+        the untrusted-data treatment inside its own tags.
         """
         return f"""<task>
 Extract the priority weight (0.0-1.0) for each of the six quality attributes
@@ -1647,7 +1784,7 @@ The domain label is context only — do not infer priorities from it
 ("fintech" does not imply high security unless the requirements say so).
 </domain>
 
-<reasoning_gate>
+{reasoning_context}<reasoning_gate>
 Before emitting, verify (do not output this gate):
 1. The maximum weight equals 1.0.
 2. Every non-baseline weight traces to a phrase inside <requirements>.
@@ -1863,6 +2000,7 @@ summary.weaknesses, metric.reasoning, and per-metric recommendations
         patterns: list[Pattern],
         requirements: str | None = None,
         analysis_result: AnalysisResult | None = None,
+        reasoning_context: str = "",
     ) -> str:
         """Build user prompt for the EVALUATE phase (XML-task structure).
 
@@ -1876,6 +2014,9 @@ summary.weaknesses, metric.reasoning, and per-metric recommendations
         ``requirements`` is optional: the MCP evaluate tool path supplies no
         requirements, in which case the prompt degrades traceability to
         architecture elements only and forbids inventing requirements.
+        ``reasoning_context`` carries the pre-rendered <reasoning_context>
+        block (external trace or degraded scaffold), injected after the
+        pattern section and before the reasoning gate.
         Literal braces in the schema reminder are escaped for the f-string.
         """
         arch_json = architecture.model_dump_json(indent=2)
@@ -1946,12 +2087,11 @@ INTERPRETATION: criteria names are additional metrics beyond the
 canonical five. "quality" maps to overall_quality. Unknown names are
 added as-is.
 
-DOMAIN: {domain}
+        DOMAIN: {domain}
 NOTE: domain is context for typical concerns (e.g. fintech implies
 higher security scrutiny); it does NOT override stated requirements
 or add requirements the user did not state.
-{analysis_summary_block}{pattern_section}
-<reasoning_gate>
+{analysis_summary_block}{pattern_section}{reasoning_context}<reasoning_gate>
 Before emitting (do NOT output this gate), verify:
 1. Each summary.critical_finding cites a specific requirement phrase
    or component id.
@@ -2012,6 +2152,29 @@ For each metric: reasoning first (rubric application), then findings
             return Pattern.model_validate(match)
         return match
 
+    def _render_retry_pattern_section(self, selected_pattern: Pattern | None) -> str:
+        """Render the TARGET PATTERN block for the retry prompt (empty when None)."""
+        if not selected_pattern:
+            return ""
+        limits = self._retrieval_config.pattern_context_limits
+        bp_limit = limits.get("best_practices", 3)
+        ap_limit = limits.get("anti_patterns", 3)
+        tradeoffs_limit = limits.get("tradeoffs", 3)
+        return f"""
+<selected_patterns>
+TARGET PATTERN: {selected_pattern.name}
+
+PATTERN BEST PRACTICES FOR REFINEMENT:
+{chr(10).join(f"- {bp}" for bp in (selected_pattern.best_practices or [])[:bp_limit])}
+
+ANTI-PATTERNS TO AVOID:
+{chr(10).join(f"- {ap}" for ap in (selected_pattern.anti_patterns or [])[:ap_limit])}
+
+PATTERN TRADEOFFS (acceptable compromises):
+{chr(10).join(f"- {t}" for t in (selected_pattern.tradeoffs or [])[:tradeoffs_limit])}
+</selected_patterns>
+"""
+
     def _retry_prompt(
         self,
         design: ArchitectureDesign,
@@ -2020,6 +2183,7 @@ For each metric: reasoning first (rubric application), then findings
         style: str,
         domain: str,
         selected_pattern: Pattern | None = None,
+        reasoning_context: str = "",
     ) -> str:
         """Build a refinement prompt from evaluation feedback (XML-task structure).
 
@@ -2027,9 +2191,10 @@ For each metric: reasoning first (rubric application), then findings
         sandwich around the untrusted requirement/design blocks, structured
         evaluation feedback (critical findings / weaknesses / per-metric
         guidance including evaluator reasoning for low-scored metrics), an
-        optional TARGET PATTERN block, a preserve-contract block, a silent
-        reasoning gate, and an explicit output contract anchored by the
-        design example.
+        optional TARGET PATTERN block, the optional <reasoning_context> block
+        (external trace or degraded scaffold), a preserve-contract block, a
+        silent reasoning gate, and an explicit output contract anchored by
+        the design example.
 
         Args:
             design: The current architecture design
@@ -2039,6 +2204,8 @@ For each metric: reasoning first (rubric application), then findings
             domain: Application domain
             selected_pattern: Optional pattern for targeted refinement guidance
                 (derived by ``_select_refinement_pattern`` in ``design_loop``)
+            reasoning_context: Pre-rendered <reasoning_context> block
+                (external trace or degraded scaffold)
 
         Returns:
             Refinement prompt string
@@ -2056,26 +2223,7 @@ For each metric: reasoning first (rubric application), then findings
                         f"(score {metric_result.score}): {metric_result.reasoning}"
                     )
 
-        pattern_section = ""
-        if selected_pattern:
-            limits = self._retrieval_config.pattern_context_limits
-            bp_limit = limits.get("best_practices", 3)
-            ap_limit = limits.get("anti_patterns", 3)
-            tradeoffs_limit = limits.get("tradeoffs", 3)
-            pattern_section = f"""
-<selected_patterns>
-TARGET PATTERN: {selected_pattern.name}
-
-PATTERN BEST PRACTICES FOR REFINEMENT:
-{chr(10).join(f"- {bp}" for bp in (selected_pattern.best_practices or [])[:bp_limit])}
-
-ANTI-PATTERNS TO AVOID:
-{chr(10).join(f"- {ap}" for ap in (selected_pattern.anti_patterns or [])[:ap_limit])}
-
-PATTERN TRADEOFFS (acceptable compromises):
-{chr(10).join(f"- {t}" for t in (selected_pattern.tradeoffs or [])[:tradeoffs_limit])}
-</selected_patterns>
-"""
+        pattern_section = self._render_retry_pattern_section(selected_pattern)
         return f"""<task>
 Refine the architecture below to resolve the evaluation findings while
 preserving its verified strengths. Address every critical finding; fix
@@ -2111,8 +2259,7 @@ PER-METRIC GUIDANCE (metrics scoring below 70 — evaluator reasoning
 follows each set of recommendations):
 {chr(10).join(f"- {g}" for g in refinement_guidance) or "- (none — no metric scored below 70)"}
 </evaluation_feedback>
-{pattern_section}
-<preserve_contract>
+{pattern_section}{reasoning_context}<preserve_contract>
 Preserve the populated api_contracts, shared_data_models, and
 event_contracts from the current design. Preserve and refine
 overview.reasoning so it continues to explain the actual design. Add

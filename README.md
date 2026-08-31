@@ -26,6 +26,7 @@ An MCP (Model Context Protocol) server that provides architecture design experti
   - [Docker (manual)](#docker-manual)
   - [Local Development (uv)](#local-development-uv)
 - [Configuration](#configuration)
+- [Structured Reasoning (shannonthinking / code-reasoning)](#structured-reasoning-shannonthinking--code-reasoning)
 - [Extending with Custom Patterns](#extending-with-custom-patterns)
 - [Long-running tools & timeouts](#long-running-tools--timeouts)
 - [Troubleshooting](#troubleshooting)
@@ -497,6 +498,14 @@ If the configured model already contains a provider prefix (e.g. `openai/gpt-4o-
 | `RETRIEVAL_RERANK_SELECTION` | `rerank` | Slug-cut strategy: `rerank` (CE-only) or `rank_fusion` (Vespa-style RR blend) |
 | `RETRIEVAL_USE_LEAN_WIRE_SCHEMA` | `false` | Use lean response schema |
 | `RETRIEVAL_STYLE_SCORE_THRESHOLD` | `50.0` | Min analysis score for style recommendation |
+| `REASONING_ENABLED` | `true` | Server-side reasoning MCP integration (see [Structured Reasoning](#structured-reasoning-shannonthinking--code-reasoning)) |
+| `REASONING_SPAWN_TIMEOUT_SECONDS` | `10` | Subprocess spawn timeout per reasoning tool |
+| `REASONING_STEP_TIMEOUT_SECONDS` | `20` | Per-thought tool-call timeout |
+| `REASONING_MAX_TOTAL_STEPS` | `8` | Hard cap on reasoning steps per phase |
+| `REASONING_QUIET_STDERR` | `true` | Silence reasoning-subprocess stderr (ASCII progress boxes, `[info]` banners); set `false` to debug spawn failures |
+| `REASONING_FAIL_FAST` | `false` | Fail server startup when a reasoning tool is unreachable |
+| `REASONING_SHANNONTHINKING_CMD` | *(embedded)* | JSON list command for shannonthinking (e.g. `["npx","-y","server-shannon-thinking@latest"]`) |
+| `REASONING_CODE_REASONING_CMD` | *(embedded)* | JSON list command for code-reasoning |
 | `RETRIEVAL_ANALYSIS_BLEND_WEIGHT` | `0.7` | Weight on analysis score in blend |
 | `RETRIEVAL_FUSION_BLEND_WEIGHT` | `0.3` | Weight on fusion score in blend |
 | `RETRIEVAL_WEIGHT_SMOOTHING_ALPHA` | `0.7` | Weight smoothing alpha |
@@ -509,6 +518,59 @@ If the configured model already contains a provider prefix (e.g. `openai/gpt-4o-
 | `PATTERN_DIRECTORY` | `~/.config/architecture-pattern-mcp/pattern` | Pattern files directory |
 | `VALIDATION_MAX_RETRIES` | `2` | Max self-healing retry attempts |
 | `VALIDATION_RETRY_ON_FAIL` | `true` | Retry on validation failure |
+
+---
+
+## Structured Reasoning (shannonthinking / code-reasoning)
+
+Before each LLM phase call (ANALYZE / GENERATE / EVALUATE / RETRY), the server
+optionally runs a bounded **ThoughtGenerator loop**: it authors each reasoning
+step with the generator's own LLM (LlamaIndex LiteLLM; one completion per
+step) and submits it to the
+[shannonthinking](https://github.com/olaservo/shannon-thinking) and/or
+[code-reasoning](https://github.com/mettamatt/code-reasoning) MCP servers —
+structured thinking scratchpads that validate, number, and record each step.
+The resulting trace is injected into the phase prompt as a
+`<reasoning_context>` block. Contract: **each thought = 1 LLM completion + 1
+MCP tool call**, capped by `REASONING_MAX_TOTAL_STEPS` (default 8).
+
+Key properties:
+
+- **Embedded in Docker** — the `build-mcps` stage bakes both npm packages
+  (`server-shannon-thinking@0.1.1`, `@mettamatt/code-reasoning@0.8.1`) into
+  the image at `/usr/local/lib/node_modules/...`; the runtime invokes them
+  directly via `node` (no network, no npx).
+- **Auto-fallback to npx** outside Docker — when the embedded entry points
+  are missing, the client falls back to `npx -y <pkg>` (first call downloads).
+- **Process-per-call isolation** — each tool call runs in a fresh subprocess
+  (`keep_alive=False`); nothing persists between calls.
+- **Silent per-call degradation** — any spawn/timeout/tool failure logs a
+  WARNING and the phase proceeds with a degraded in-prompt thinking scaffold
+  (decompose → classify → calibrate → resolve → verify); it never raises.
+- **Loud startup** — the lifespan health-check probes both tools and logs an
+  ERROR (with resolution hints) if one is unreachable; set
+  `REASONING_FAIL_FAST=true` to make startup fail instead.
+- **Trace caching** — ANALYZE and GENERATE traces are computed once per
+  design request and reused across design-loop attempts.
+
+### Opting out / tuning
+
+```bash
+export REASONING_ENABLED=false          # disable entirely
+export REASONING_FAIL_FAST=true         # refuse to start with broken MCPs
+```
+
+Local (non-Docker) development needs Node.js; either install the packages
+globally (`npm install -g server-shannon-thinking @mettamatt/code-reasoning`)
+or let the npx fallback download them on first use.
+
+Latency note: expect roughly +1–6 s per reasoning step. Worst case adds a
+couple of minutes per design run; the trace cache keeps typical overhead
+well below that.
+
+Set `LOGGING_LEVEL=DEBUG` to capture the authored `thought` and tool response
+for every per-step reasoning call. Docker/systemd stacks default to INFO;
+export `LOGGING_LEVEL=DEBUG` before `make docker-up`.
 | `ARCHITECTURE_PATTERN_JOBS_DB` | `~/.config/architecture-pattern-mcp/jobs.db` | SQLite path for async job trio. Override for test isolation |
 | `TASKS_HEARTBEAT_ENABLED` | `true` | Emit progress notifications during long tool calls |
 | `TASKS_HEARTBEAT_INTERVAL_SECONDS` | `30` | Heartbeat interval in seconds (keep below client idle timeout) |

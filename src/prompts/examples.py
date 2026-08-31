@@ -458,8 +458,9 @@ ANALYSIS_RESULT_EXAMPLE = _fmt(
 
 
 # ─── RequirementWeights ─────────────────────────────────────────────────────
-# Three contrasting examples for the ANALYZE-phase weight-extraction prompt:
-# peaked priorities / sparse low-signal / explicit anti-requirement.
+# Four contrasting examples for the ANALYZE-phase weight-extraction prompt:
+# peaked priorities / sparse low-signal / explicit anti-requirement /
+# conflict resolution (concrete numeric SLO dominates vague adjective).
 # Validated at import time via Pydantic instantiation — schema drift fails CI.
 # Rendered in the ANALYZE system prompt via model_dump_json (no markdown
 # fences, so the LLM never echoes fences into its structured output).
@@ -491,4 +492,23 @@ REQUIREMENT_WEIGHTS_EXAMPLE_NEGATIVE = RequirementWeights(
     security=0.3,
     performance=0.3,
     simplicity=1.0,
+)
+
+# Conflict resolution: a concrete numeric SLO wins over a vague adjective.
+# Requirements excerpt: "Global e-commerce platform, 10M daily active users,
+# horizontal scale-out required, p99 checkout latency < 200ms. Small startup
+# team of 4 engineers; ship MVP in 3 months."
+# Rationale: scalability carries hard numeric signals ("10M daily active
+# users", "horizontal scale-out"); simplicity carries only vague signals
+# ("small team", "ship in 3 months"). Per the conflict rule, the concrete
+# signal dominates: scalability peaks at 1.0 and simplicity drops to the
+# baseline despite being mentioned. The design phase reconciles the tension
+# (e.g. managed services, automation) — the weights must not blur it.
+REQUIREMENT_WEIGHTS_EXAMPLE_CONFLICT = RequirementWeights(
+    scalability=1.0,
+    maintainability=0.2,
+    reliability=0.3,
+    security=0.2,
+    performance=0.7,
+    simplicity=0.2,
 )

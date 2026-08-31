@@ -61,7 +61,7 @@ services:
       - TRANSPORT=streamable-http
       - HOST=0.0.0.0
       - PORT=8050
-      - LOGGING_LEVEL=INFO
+      - LOGGING_LEVEL=${LOGGING_LEVEL:-INFO}
       - LOGGING_FORMAT=json
     ports:
       - "${MCP_HOST_PORT:-8050}:8050"

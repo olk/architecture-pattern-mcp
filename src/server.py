@@ -63,6 +63,8 @@ from fastmcp.server.transforms import GetToolNext, PromptsAsTools, VersionSpec
 from fastmcp.tools.base import Tool, ToolAnnotations
 
 from src.agent import SoftwareArchitectAgent
+from src.reasoning import ReasoningConfig
+from src.reasoning.client import ReasoningClient
 from src.tools.jobs import JobsStore
 from src.config import ConfigManager, ServerConfig
 from src.patterns.loader import PatternLoader
@@ -329,6 +331,8 @@ class MCPArchitectServer:
         self._mcp.add_transform(AnnotatedPromptsAsTools(self._mcp))
         self._agent: SoftwareArchitectAgent | None = None
         self._pipeline: ArchitecturePipeline | None = None
+        self._reasoning_client: ReasoningClient | None = None
+        self._reasoning_health: dict[str, str] = {}
         self._tools: dict[str, Any] = {}
         self._tools_registered: set[str] = set()
         self._resources_registered: bool = False
@@ -363,6 +367,16 @@ class MCPArchitectServer:
 
             logger.info("SoftwareArchitectAgent initialized")
 
+            # Server-side reasoning integration (Plan v5): the pipeline
+            # authors each reasoning thought with an LLM and submits it to
+            # the shannonthinking / code-reasoning MCP scratchpads. Enabled
+            # by default (Docker images embed both packages); process-per-
+            # call isolation means no persistent subprocesses to manage.
+            self._reasoning_client = self._build_reasoning_client()
+
+            if self._reasoning_client is not None and self._reasoning_client.enabled:
+                await self._check_reasoning_health(self._reasoning_client)
+
             # Initialize PatternLoader and DomainVectorIndex
             # Stored on self so resource handlers can reach it via lifespan_context
             self._pattern_loader = PatternLoader(
@@ -384,6 +398,7 @@ class MCPArchitectServer:
                 bm25_index=bm25_index,
                 retrieval_config=self._config.retrieval,
                 reranker_config=self._config.reranker,
+                reasoning_client=self._reasoning_client,
             )
 
             logger.info("ArchitecturePipeline initialized")
@@ -446,6 +461,51 @@ class MCPArchitectServer:
             )
             raise
 
+    def _build_reasoning_client(self) -> ReasoningClient | None:
+        """Build the ReasoningClient from config (None when disabled).
+
+        Thoughts are authored with the generator's own LLM (the same
+        LlamaIndex LiteLLM instance behind GENERATOR_*); there is no
+        separate reasoning model.
+        """
+        reasoning_config: ReasoningConfig = self._config.reasoning
+        if not reasoning_config.enabled:
+            logger.info("Reasoning MCP integration disabled (REASONING_ENABLED=false)")
+            return None
+        return ReasoningClient(reasoning_config, self._agent)
+
+    async def _check_reasoning_health(self, client: ReasoningClient) -> None:
+        """LOUD startup health check for the reasoning MCP tools (Plan v5 §9).
+
+        Per-call behaviour stays silently degrading, but startup must not:
+        an unreachable tool is logged at ERROR with the resolved command so
+        a broken embedding (wrong path, renamed tool) is visible immediately.
+        """
+        self._reasoning_health = await client.health_check()
+        for tool_name, status in self._reasoning_health.items():
+            if status == "ok":
+                logger.info(f"Reasoning MCP '{tool_name}' reachable")
+            else:
+                logger.error(
+                    f"Reasoning MCP '{tool_name}' NOT reachable: {status}",
+                    extra={
+                        "reasoning_mcps": self._reasoning_health,
+                        "hint": (
+                            "Traces degrade to the in-prompt scaffold. Check the "
+                            "embedded entry points (/usr/local/lib/node_modules/...) "
+                            "or override REASONING_SHANNONTHINKING_CMD / "
+                            "REASONING_CODE_REASONING_CMD."
+                        ),
+                    },
+                )
+        if client.config.fail_fast and any(
+            s != "ok" for s in self._reasoning_health.values()
+        ):
+            raise RuntimeError(
+                f"REASONING_FAIL_FAST=true and reasoning MCPs unreachable: "
+                f"{self._reasoning_health}"
+            )
+
     async def _cleanup(self) -> None:
         """
         Cleanup server resources.
@@ -456,6 +516,12 @@ class MCPArchitectServer:
             # Cleanup agent resources if needed
             if self._agent:
                 logger.debug("Cleaning up SoftwareArchitectAgent")
+
+            # Cleanup reasoning client (cancels in-flight traces; no
+            # persistent subprocesses to stop — keep_alive=False)
+            if self._reasoning_client:
+                await self._reasoning_client.close()
+                logger.debug("Cleaned up ReasoningClient")
 
             # Cleanup pipeline resources if needed
             if self._pipeline:
@@ -541,6 +607,8 @@ class MCPArchitectServer:
                 "config": self._config,
                 "pattern_loader": self._pattern_loader,
                 "component_blueprints": component_blueprints,
+                "reasoning_client": self._reasoning_client,
+                "reasoning_health": dict(self._reasoning_health),
             }
 
             logger.debug(

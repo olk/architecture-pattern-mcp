@@ -48,6 +48,7 @@ from dotenv import load_dotenv
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
 from src.config_expansion import expand_env_in_obj
+from src.reasoning.config import ReasoningConfig
 
 # Error codes for logging
 ERROR_CONFIG_NOT_FOUND = "ERR_010"
@@ -340,6 +341,11 @@ class ServerConfig(BaseModel):
 
     # Validation: self-healing retry loop settings for LLM structured generation
     validation: ValidationConfig = Field(default_factory=lambda: ValidationConfig())
+
+    # Server-side reasoning MCP integration (shannonthinking / code-reasoning).
+    # Enabled by default: Docker images embed both packages at build time;
+    # outside Docker the client auto-falls back to npx.
+    reasoning: ReasoningConfig = Field(default_factory=lambda: ReasoningConfig())
 
     # Foreground wall-clock cap on every tool (seconds). None = no cap.
     tool_timeout_seconds: int | None = Field(default=None, ge=1)

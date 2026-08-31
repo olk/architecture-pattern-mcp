@@ -12,7 +12,7 @@
 # Docker files: docker/Dockerfile, docker/docker-compose.yml
 # =============================================================================
 
-.PHONY: help install lint lint-fix typecheck unit-tests \
+.PHONY: help install install-mcps lint lint-fix typecheck unit-tests \
 	client docker-build docker-build-tei \
 	docker-build-all docker-publish docker-publish-tei \
 	docker-publish-all \
@@ -41,6 +41,9 @@ help: ## Show this help
 
 install: ## Sync dependencies into .venv (dev group included by default)
 	$(UV) sync
+
+install-mcps: ## Install reasoning MCP servers globally (local dev; Docker embeds them at build time)
+	npm install -g server-shannon-thinking@0.1.1 @mettamatt/code-reasoning@0.8.1
 
 ##@ Quality
 lint: ## Run ruff check
