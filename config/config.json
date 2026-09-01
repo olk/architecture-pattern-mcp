@@ -78,5 +78,6 @@
   "host": "{env:HOST:-0.0.0.0}",
   "port": "{env:PORT:-8050}",
   "logging_level": "{env:LOGGING_LEVEL:-INFO}",
-  "logging_format": "{env:LOGGING_FORMAT:-json}"
+  "logging_format": "{env:LOGGING_FORMAT:-json}",
+  "litellm_log_level": "{env:LITELLM_LOG_LEVEL:-WARNING}"
 }

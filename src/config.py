@@ -339,6 +339,11 @@ class ServerConfig(BaseModel):
     # CPARA-17: Logging format (json|text)
     logging_format: str = "json"
 
+    # Log level applied to the LiteLLM SDK and its transport loggers (litellm,
+    # LiteLLM, httpcore, httpx, openai, aiosqlite, asyncio) so DEBUG-level root
+    # operation does not flood the log with prompt bodies and HTTP frames.
+    litellm_log_level: str = "WARNING"
+
     # Validation: self-healing retry loop settings for LLM structured generation
     validation: ValidationConfig = Field(default_factory=lambda: ValidationConfig())
 
@@ -356,6 +361,17 @@ class ServerConfig(BaseModel):
         if v == "":
             return None
         return v
+
+    @field_validator("litellm_log_level")
+    @classmethod
+    def _validate_litellm_log_level(cls, v: str) -> str:
+        valid = {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}
+        v_up = v.upper().strip()
+        if v_up not in valid:
+            raise ValueError(
+                f"litellm_log_level must be one of {sorted(valid)}, got {v!r}"
+            )
+        return v_up
 
     @model_validator(mode="after")
     def _check_reranker_configured(self) -> "ServerConfig":

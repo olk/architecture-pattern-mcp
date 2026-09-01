@@ -95,7 +95,11 @@ class SoftwareArchitectAgent:
                    Must have generator.provider, generator.config.model, generator.config.temperature, etc.
         """
         litellm.suppress_debug_info = True
-        logging.getLogger("LiteLLM").setLevel(logging.INFO)
+        litellm_level = getattr(logging, config.litellm_log_level)
+        for _name in ("litellm", "LiteLLM", "httpcore", "httpcore.http11",
+                      "httpx", "openai", "openai._base_client",
+                      "aiosqlite", "asyncio"):
+            logging.getLogger(_name).setLevel(litellm_level)
         self._generator = config.generator
         _model = self._generator.config.model
         if "/" in _model:

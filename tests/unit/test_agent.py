@@ -119,10 +119,25 @@ class TestSoftwareArchitectAgentInit:
 
 
 class TestLitellmDebugSilence:
-    """Construction must silence litellm's DEBUG channel so our reasoning
-    logs stay readable at LOGGING_LEVEL=DEBUG without prompt-echo noise."""
+    """Construction must silence litellm and its transport loggers so our
+    reasoning logs stay readable at LOGGING_LEVEL=DEBUG without prompt-echo
+    or HTTP-body noise."""
 
-    def test_litellm_logger_silenced_on_agent_init(self):
+    @pytest.mark.parametrize(
+        "logger_name",
+        [
+            "litellm",
+            "LiteLLM",
+            "httpcore",
+            "httpcore.http11",
+            "httpx",
+            "openai",
+            "openai._base_client",
+            "aiosqlite",
+            "asyncio",
+        ],
+    )
+    def test_logger_silenced_on_agent_init(self, logger_name):
         import logging as logging_mod
 
         config = ServerConfig(
@@ -130,8 +145,43 @@ class TestLitellmDebugSilence:
             embedder={"provider": "tei", "config": {"base_url": "http://localhost:8080"}},
         )
         SoftwareArchitectAgent(config)
-        assert logging_mod.getLogger("litellm").getEffectiveLevel() >= logging_mod.INFO
-        assert logging_mod.getLogger("LiteLLM").level >= logging_mod.INFO
+        assert logging_mod.getLogger(logger_name).getEffectiveLevel() >= logging_mod.INFO
+
+    def test_default_litellm_log_level_is_warning(self):
+        config = ServerConfig(
+            generator={"provider": "openai", "config": {"model": "gpt-4", "temperature": 0.1}},
+            embedder={"provider": "tei", "config": {"base_url": "http://localhost:8080"}},
+        )
+        assert config.litellm_log_level == "WARNING"
+
+    def test_custom_litellm_log_level_applied(self):
+        import logging as logging_mod
+
+        config = ServerConfig(
+            generator={"provider": "openai", "config": {"model": "gpt-4", "temperature": 0.1}},
+            embedder={"provider": "tei", "config": {"base_url": "http://localhost:8080"}},
+            litellm_log_level="DEBUG",
+        )
+        SoftwareArchitectAgent(config)
+        assert (
+            logging_mod.getLogger("litellm").getEffectiveLevel() == logging_mod.DEBUG
+        )
+
+    def test_litellm_log_level_validated_and_uppercased(self):
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            ServerConfig(
+                generator={"provider": "openai", "config": {"model": "gpt-4", "temperature": 0.1}},
+                embedder={"provider": "tei", "config": {"base_url": "http://localhost:8080"}},
+                litellm_log_level="bogus",
+            )
+        config = ServerConfig(
+            generator={"provider": "openai", "config": {"model": "gpt-4", "temperature": 0.1}},
+            embedder={"provider": "tei", "config": {"base_url": "http://localhost:8080"}},
+            litellm_log_level="debug",
+        )
+        assert config.litellm_log_level == "DEBUG"
 
 
 class TestGenerateStructured:

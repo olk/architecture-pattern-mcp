@@ -69,6 +69,7 @@ services:
       - PORT=8050
       - LOGGING_LEVEL=INFO
       - LOGGING_FORMAT=json
+      - LITELLM_LOG_LEVEL=WARNING
 
     depends_on:
       pattern-tei-embed:
