@@ -34,7 +34,7 @@ from src.schemas.architecture import (
     ArchitectureOverviewWire,
 )
 from src.schemas.components import Component, Relationship
-from src.schemas.contracts import ApiContract, ApiEndpoint, DataModel, EventContract, ModelField
+from src.schemas.contracts import ApiContract, ApiEndpoint, DataModel, ModelField
 from src.schemas.evaluation import ArchitectureEvaluation, EvaluationSummary, MetricResult
 from src.schemas.enums import ArchitectureDomain, ArchitectureStyle, PatternCategory
 from src.schemas.patterns import ScoredPattern

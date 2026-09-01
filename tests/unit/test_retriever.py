@@ -42,7 +42,7 @@ from src.patterns.retriever import (
     DEFAULT_FALLBACK_PATTERN_NAME,
     HybridPatternRetriever,
 )
-from src.patterns.safe_tei_rerank import SafeTEIReranker, _safe_tei_rerank_call
+from src.patterns.safe_tei_rerank import _safe_tei_rerank_call
 
 MOCK_FUSION_SCORE = 1 / 60
 

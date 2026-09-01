@@ -102,10 +102,14 @@ class TestLoadConfig:
 
     @pytest.fixture
     def clear_config_cache(self):
-        """Clear ConfigManager cache before and after tests."""
-        ConfigManager.clear_cache()
+        """Reset ConfigManager cache before and after tests.
+
+        Resets the private singleton state directly — ConfigManager has no
+        public cache-invalidation API (config is static per process).
+        """
+        ConfigManager._config = None
         yield
-        ConfigManager.clear_cache()
+        ConfigManager._config = None
 
     def test_load_config_valid_json(
         self, valid_config_file: Path, clear_config_cache: None
@@ -270,17 +274,6 @@ class TestLoadConfig:
 class TestConfigManager:
     """Test suite for ConfigManager class methods."""
 
-    def test_clear_cache(self) -> None:
-        """
-        Test that clear_cache properly resets cached configuration.
-
-        # Validates: ConfigManager.clear_cache
-        """
-        assert ConfigManager._config is None
-
-        ConfigManager.clear_cache()
-        assert ConfigManager._config is None
-
     def test_default_config_path_constant(self) -> None:
         """
         AC-271: Default CONFIG_PATH
@@ -384,21 +377,6 @@ class TestRetrievalConfig:
         """Test that bm25_top_k > 1000 raises ValidationError."""
         with pytest.raises(ValidationError):
             RetrievalConfig(bm25_top_k=1001)
-
-    def test_retrieval_config_dense_top_k_zero_means_full_corpus(self) -> None:
-        """Test that dense_top_k=0 is accepted (means "full corpus")."""
-        config = RetrievalConfig(dense_top_k=0)
-        assert config.dense_top_k == 0
-
-    def test_retrieval_config_dense_top_k_too_low(self) -> None:
-        """Test that dense_top_k < 0 raises ValidationError."""
-        with pytest.raises(ValidationError):
-            RetrievalConfig(dense_top_k=-1)
-
-    def test_retrieval_config_dense_top_k_too_high(self) -> None:
-        """Test that dense_top_k > 1000 raises ValidationError."""
-        with pytest.raises(ValidationError):
-            RetrievalConfig(dense_top_k=1001)
 
     def test_retrieval_config_dense_top_k_zero_means_full_corpus(self) -> None:
         """Test that dense_top_k=0 is accepted (means "full corpus")."""

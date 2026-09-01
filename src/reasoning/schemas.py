@@ -29,8 +29,6 @@ formats. ReasoningStep / ReasoningTrace are the structured output injected
 into the phase prompts as <reasoning_context>.
 """
 
-from typing import Any
-
 from pydantic import BaseModel, Field
 
 from src.reasoning.config import ReasoningTool
@@ -76,11 +74,6 @@ class ThoughtDraft(BaseModel):
     branch_id: str | None = Field(
         default=None,
         description="Branch identifier for alternative lines of reasoning (code tool).",
-    )
-    branch_from: int | None = Field(
-        default=None,
-        ge=1,
-        description="Step number this branch diverges from (code tool).",
     )
 
 
@@ -149,8 +142,3 @@ class ReasoningTrace(BaseModel):
             if step.tool_response:
                 lines.append(f"      tool: {step.tool_response}")
         return lines
-
-
-def step_to_payload(step: ReasoningStep) -> dict[str, Any]:
-    """Dict view of a step for structured logging."""
-    return step.model_dump()

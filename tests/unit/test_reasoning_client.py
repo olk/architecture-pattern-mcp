@@ -156,7 +156,7 @@ class TestToolContracts:
 
     def test_code_adapter_uses_snake_case(self):
         draft = ThoughtDraft(
-            thought="step", branch_id="AltA", branch_from=1,
+            thought="step", branch_id="AltA",
         )
         params = draft_to_code_params(draft, step_number=1, total=3)
         assert params["thought_number"] == 1
@@ -250,7 +250,7 @@ class TestCrossThoughtReferenceStripping:
     def test_code_payload_is_exactly_four_fields(self):
         draft = ThoughtDraft(
             thought="t", is_revision=True, revises=1,
-            branch_id="alt", branch_from=1,
+            branch_id="alt",
         )
         params = draft_to_code_params(draft, 2, 3)
         assert set(params) == {
@@ -666,3 +666,29 @@ class TestPipelineReasoningSummaryLog:
         assert len(records) == 1
         assert records[0].tools_called == {"shannonthinking": 1}
         assert records[0].cached is False
+
+
+class TestPackageLazyExport:
+    """PEP 562 lazy export of ReasoningClient via src/reasoning/__init__.py.
+
+    The facade resolves ``ReasoningClient`` on attribute access because an
+    eager import would create a cycle (client → src.agent → src.config →
+    this package). These tests pin that contract.
+    """
+
+    def test_lazy_export_resolves_reasoning_client(self):
+        import src.reasoning as reasoning_pkg
+
+        assert reasoning_pkg.ReasoningClient is ReasoningClient
+
+    def test_lazy_export_rejects_unknown_attribute(self):
+        import src.reasoning as reasoning_pkg
+
+        with pytest.raises(AttributeError, match="no attribute"):
+            _ = reasoning_pkg.no_such_attribute
+
+    def test_all_exports_resolve(self):
+        import src.reasoning as reasoning_pkg
+
+        for name in reasoning_pkg.__all__:
+            assert getattr(reasoning_pkg, name) is not None

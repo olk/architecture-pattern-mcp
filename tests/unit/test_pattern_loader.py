@@ -47,7 +47,6 @@ from pathlib import Path
 
 # Import the PatternLoader class
 from src.patterns.loader import (
-    QUALITY_ATTRIBUTES,
     PatternLoader,
 )
 

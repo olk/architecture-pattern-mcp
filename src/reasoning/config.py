@@ -74,7 +74,6 @@ SHANNON_NPX_CMD: list[str] = ["npx", "-y", "server-shannon-thinking@0.1.1"]
 CODE_REASONING_NPX_CMD: list[str] = ["npx", "-y", "@mettamatt/code-reasoning@0.8.1"]
 
 ReasoningTool = Literal["shannon", "code"]
-ReasoningPhase = Literal["analyze", "generate", "evaluate", "retry"]
 
 
 class ReasoningStrategy(BaseModel):

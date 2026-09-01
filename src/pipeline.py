@@ -112,9 +112,6 @@ class CancellationToken:
     def cancelled(self) -> bool:
         return self._event.is_set()
 
-    async def wait(self) -> None:
-        await self._event.wait()
-
 
 def _phase_extra(phase: str, domain: str, duration_s: float) -> dict[str, Any]:
     """Build a fresh dict per call to avoid mutating a shared one across log calls."""
@@ -583,7 +580,7 @@ class ArchitecturePipeline(Workflow):
             return render_degraded_context(phase)
         try:
             trace = await self._reasoning.run_pre_llm(phase, task_inputs)
-        except Exception as exc:  # noqa: BLE001 — degradation contract: never block a phase
+        except Exception as exc:
             logger.warning(
                 "Reasoning client failed unexpectedly; using degraded scaffold",
                 extra={"phase": phase, "error": str(exc)},

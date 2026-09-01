@@ -35,7 +35,7 @@ Test Scenarios:
 - SCEN-16: DomainVectorIndex search returns similar domains
 """
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import numpy as np
 import pytest
@@ -77,18 +77,6 @@ class TestDomainVectorIndexInit:
         assert index is not None
         assert isinstance(index, DomainVectorIndex)
 
-    def test_domain_vector_index_model_name_from_config(self):
-        """Verify model_name is set from the config."""
-        index = DomainVectorIndex(
-            base_url="http://localhost:8080",
-            api_key=None,
-            embed_batch_size=16,
-            query_instruction="Instruct: ",
-            text_instruction="",
-            provider="tei",
-        )
-        assert index.model_name == "openai//data/qwen3-embedding-0.6b"
-
     def test_domain_vector_index_not_built_initially(self):
         """Verify is_built returns False before build_index is called."""
         index = DomainVectorIndex(
@@ -101,14 +89,13 @@ class TestDomainVectorIndexInit:
         )
         assert index.is_built is False
 
-    def test_from_embedder_config_sets_all_fields(self):
-        """Verify from_embedder_config populates model_name and embedder."""
+    def test_from_embedder_config_sets_embedder_fields(self):
+        """Verify from_embedder_config populates the embedder with config instructions."""
         cfg = _tei_config(
             query_instruction="Instruct: Query: ",
             text_instruction="Instruct: Text: ",
         )
         index = DomainVectorIndex.from_embedder_config(cfg)
-        assert index.model_name == "openai//data/qwen3-embedding-0.6b"
         assert getattr(index._embedder, "_query_instruction", "") == "Instruct: Query: "
         assert getattr(index._embedder, "_text_instruction", "") == "Instruct: Text: "
 
@@ -183,30 +170,6 @@ class TestDomainVectorIndexBuildIndex:
             index.build_index([])
 
         assert index.is_built is False
-
-    def test_rebuild_index_resets_and_rebuilds(self):
-        """Verify rebuild_index resets and rebuilds with new domains."""
-        index = DomainVectorIndex(
-            base_url="http://localhost:8080",
-            api_key=None,
-            embed_batch_size=16,
-            query_instruction="Instruct: ",
-            text_instruction="",
-            provider="tei",
-        )
-        domains1 = ["domain1", "domain2"]
-        domains2 = ["domain3", "domain4", "domain5"]
-
-        with patch.object(index, "_embed", return_value=np.random.rand(2, 1024).astype(np.float32)):
-            index.build_index(domains1)
-
-        assert len(index._domains) == 2
-
-        with patch.object(index, "_embed", return_value=np.random.rand(3, 1024).astype(np.float32)):
-            index.rebuild_index(domains2)
-
-        assert len(index._domains) == 3
-        assert index._domains == domains2
 
 
 class TestDomainVectorIndexSearch:

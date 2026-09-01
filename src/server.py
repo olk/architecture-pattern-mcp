@@ -96,13 +96,9 @@ async def server_main(
         host: Optional host override for HTTP transport
         port: Optional port override for HTTP transport
     """
-    import logging
-    import os
-    import sys
-
     logger = logging.getLogger(__name__)
 
-    resolved_config = os.environ.get("CONFIG_PATH") or config_path or "~/.config/architecture-pattern-mcp/config.json"
+    resolved_config = os.environ.get("CONFIG_PATH") or config_path or ConfigManager.DEFAULT_CONFIG_PATH
     resolved_config = os.path.abspath(os.path.expanduser(resolved_config))
 
     try:
@@ -685,7 +681,7 @@ class MCPArchitectServer:
             name="architecture-pattern",
             mime_type="application/json",
         )
-        async def _get_pattern(name: str, ctx: Context) -> str:
+        async def _get_pattern(name: str, _ctx: Context) -> str:
             data = pattern_resource.load_pattern(name)
             if data is None:
                 raise ToolError(f"Pattern not found: {name}")
@@ -696,7 +692,7 @@ class MCPArchitectServer:
             name="architecture-template",
             mime_type="application/json",
         )
-        async def _get_template(name: str, ctx: Context) -> str:
+        async def _get_template(name: str, _ctx: Context) -> str:
             template = RESOURCES.get(name)
             if template is None:
                 raise ToolError(f"Template not found: {name}")

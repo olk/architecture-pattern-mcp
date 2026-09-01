@@ -120,24 +120,6 @@ class TestJobsStoreLifecycle:
         assert await jobs_store.is_cancelled(job_id) is False
 
     @pytest.mark.asyncio
-    async def test_list_jobs_returns_recent_first(self, jobs_store: JobsStore):
-        """list_jobs returns jobs ordered by created_at descending."""
-        id1 = await jobs_store.create_job(requirements="req1", domain="dom")
-        id2 = await jobs_store.create_job(requirements="req2", domain="dom")
-        jobs = await jobs_store.list_jobs(limit=10)
-        assert len(jobs) == 2
-        assert jobs[0]["id"] == id2
-        assert jobs[1]["id"] == id1
-
-    @pytest.mark.asyncio
-    async def test_list_jobs_respects_limit(self, jobs_store: JobsStore):
-        """list_jobs respects the limit parameter."""
-        for i in range(5):
-            await jobs_store.create_job(requirements=f"req{i}", domain="dom")
-        jobs = await jobs_store.list_jobs(limit=3)
-        assert len(jobs) == 3
-
-    @pytest.mark.asyncio
     async def test_reset_for_test_creates_fresh_db(self, tmp_path, monkeypatch):
         """reset_for_test deletes the old DB file and opens a fresh one at the new path."""
         import os

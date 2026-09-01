@@ -147,7 +147,7 @@ class HybridPatternRetriever:
     to all retrievers, which would lose the normalisation benefit for BM25.
     """
 
-    def __init__(  # noqa: PLR0913
+    def __init__(
         self,
         bm25_index: DomainBM25Index,
         vector_index: DomainVectorIndex,

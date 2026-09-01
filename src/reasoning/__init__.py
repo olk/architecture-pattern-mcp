@@ -41,7 +41,6 @@ from typing import TYPE_CHECKING
 
 from src.reasoning.config import (
     ReasoningConfig,
-    ReasoningPhase,
     ReasoningStrategy,
     ReasoningTool,
 )
@@ -53,7 +52,6 @@ if TYPE_CHECKING:
 __all__ = [
     "ReasoningClient",
     "ReasoningConfig",
-    "ReasoningPhase",
     "ReasoningStep",
     "ReasoningStrategy",
     "ReasoningTool",

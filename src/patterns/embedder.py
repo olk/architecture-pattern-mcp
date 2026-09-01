@@ -91,7 +91,7 @@ class InstructionAwareEmbedding(LiteLLMEmbedding):
 TEI_RERANKER_MODEL = "Alibaba-NLP/gte-reranker-modernbert-base"
 
 
-def build_embedder(  # noqa: PLR0913
+def build_embedder(
     provider: str,
     base_url: str,
     api_key: str | None,

@@ -38,11 +38,7 @@ from src.prompts.examples import (
     REQUIREMENT_WEIGHTS_EXAMPLE_PEAKED,
     REQUIREMENT_WEIGHTS_EXAMPLE_SPARSE,
 )
-from src.prompts.style_guidance import (
-    DEFAULT_STYLE_GUIDANCE,
-    STYLE_GUIDANCE,
-    get_style_guidance,
-)
+from src.prompts.style_guidance import get_style_guidance
 
 __all__ = [
     "ANALYSIS_RESULT_EXAMPLE",
@@ -52,7 +48,5 @@ __all__ = [
     "REQUIREMENT_WEIGHTS_EXAMPLE_NEGATIVE",
     "REQUIREMENT_WEIGHTS_EXAMPLE_PEAKED",
     "REQUIREMENT_WEIGHTS_EXAMPLE_SPARSE",
-    "DEFAULT_STYLE_GUIDANCE",
-    "STYLE_GUIDANCE",
     "get_style_guidance",
 ]

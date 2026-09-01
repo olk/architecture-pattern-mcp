@@ -15,11 +15,8 @@ Validates:
 from __future__ import annotations
 
 import json
-import logging
 from pathlib import Path
-from typing import Any
 
-import pytest
 
 from src.patterns.loader import PatternLoader
 
@@ -29,7 +26,6 @@ class TestMigrationRefConsistency:
 
     def test_all_migration_refs_are_valid(self) -> None:
         """Every migration_from/to entry is a catalog name or well-formed external ref."""
-        import re
 
         from src.schemas.enums import ArchitectureStyle
 

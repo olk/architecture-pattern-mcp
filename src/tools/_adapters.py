@@ -61,12 +61,10 @@ from src.schemas import (
     EventContract,
     ModelField,
     Relationship,
-    QualityMetrics as QualityMetricsPD,
 )
 from src.schemas.analysis import AnalysisResult, MatchedDomain
 from src.schemas.patterns import ScoredPattern
 from src.schemas.contracts import ApiContract, ApiEndpoint
-from src.schemas.quality import QualityMetrics as QualityMetricsDC
 
 logger = logging.getLogger(__name__)
 
@@ -87,23 +85,6 @@ def _safe_preview(data: dict[str, Any], max_len: int = 200) -> dict[str, Any]:
     return preview
 
 
-# ─── QualityMetrics ────────────────────────────────────────────────────────────
-
-
-def quality_metrics_to_pydantic(dc: QualityMetricsDC | None) -> QualityMetricsPD | None:
-    """Convert pipeline QualityMetrics dataclass to typed Pydantic model."""
-    if dc is None:
-        return None
-    return QualityMetricsPD(
-        maintainability=dc.maintainability,
-        scalability=dc.scalability,
-        reliability=dc.reliability,
-        security=dc.security,
-        performance=dc.performance,
-        testability=dc.testability,
-    )
-
-
 # ─── AnalysisResult ───────────────────────────────────────────────────────────
 
 
@@ -112,12 +93,13 @@ def analysis_to_pydantic(dc: AnalysisResultDC) -> AnalysisResult:
     Convert pipeline AnalysisResult dataclass to typed AnalysisResult Pydantic model.
 
     Handles:
-    - quality_metrics: QualityMetrics | None → QualityMetricsPD | None
+    - quality_metrics: passed through directly (pipeline and boundary share the
+      same typed QualityMetrics model)
     - selected_patterns: list[dict] → list[ScoredPattern] (preserves analysis_score
       and fusion_score metadata injected by the two-stage analyze phase)
     - All other fields passed through directly (names match between DC and Pydantic)
     """
-    qm = quality_metrics_to_pydantic(dc.quality_metrics)
+    qm = dc.quality_metrics
 
     patterns: list[ScoredPattern] = []
     for p in dc.selected_patterns:

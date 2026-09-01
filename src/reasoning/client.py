@@ -291,7 +291,7 @@ class ReasoningClient:
             try:
                 await self._call_tool(kind, contract.probe_payload)
                 statuses[contract.name] = "ok"
-            except Exception as exc:  # noqa: BLE001 — deliberate: report, don't raise
+            except Exception as exc:
                 statuses[contract.name] = f"unreachable: {exc}"
         return statuses
 
@@ -329,7 +329,7 @@ class ReasoningClient:
                     response_schema=ThoughtDraft,
                 )
                 draft = _validate_draft(draft, step_number)
-            except Exception as exc:  # noqa: BLE001 — silent degradation contract
+            except Exception as exc:
                 logger.warning(
                     "Thought generation failed; trace ends here",
                     extra={"phase": phase, "step": step_number, "error": str(exc)},
@@ -376,7 +376,7 @@ class ReasoningClient:
                             "ok": True,
                         },
                     )
-                except Exception as exc:  # noqa: BLE001 — silent degradation contract
+                except Exception as exc:
                     elapsed_ms = round((time.perf_counter() - call_started) * 1000.0, 1)
                     logger.debug(
                         "reasoning tool '%s' failed in %.1f ms",

@@ -25,7 +25,6 @@ Unit tests for src/config_expansion module.
 Tests expand_env and expand_env_in_obj functions.
 """
 
-import pytest
 
 from src.config_expansion import expand_env, expand_env_in_obj
 

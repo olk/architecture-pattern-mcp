@@ -184,7 +184,7 @@ class AnalyzeArchitectureTool:
             openWorldHint=False,
         ),
     )
-    async def analyze(  # noqa: PLR0912
+    async def analyze(
         self,
         requirements: Annotated[PrintableText, Field(description="Architecture requirements description (1-100000 chars, must contain visible text)")],
         domain: Annotated[DomainName, Field(description="Target architecture domain (1-200 chars, must contain visible text)")],

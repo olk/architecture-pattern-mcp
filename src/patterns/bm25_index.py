@@ -124,29 +124,6 @@ class DomainBM25Index:
         )
         return results
 
-    def get_scores(self, query: str) -> dict[str, float]:
-        if not self.is_built:
-            return {}
-
-        query_tokens = bm25s.tokenize(
-            [query],
-            stopwords=self._language,
-            stemmer=self._stemmer,
-            return_ids=False,  # return string tokens, not local int ids
-        )
-        if not query_tokens or not query_tokens[0]:
-            return {}
-
-        assert self._bm25_engine is not None
-        # Pass list[str] — bm25s remaps them through the index's vocabulary.
-        raw_scores = self._bm25_engine.get_scores(query_tokens[0])
-
-        return {
-            domain: float(score)
-            for domain, score in zip(self._domains, raw_scores, strict=True)
-            if score > 0
-        }
-
     def as_retriever(self, top_k: int = 20) -> "DomainBM25Retriever":  # type: ignore[valid-type]  # noqa: F821, UP037
         """Build a DomainBM25Retriever backed by our search() method.
 
@@ -162,7 +139,7 @@ class DomainBM25Index:
         Raises:
             RuntimeError: If the index has not been built yet.
         """
-        from src.patterns.bm25_retriever import DomainBM25Retriever  # noqa: PLC0415
+        from src.patterns.bm25_retriever import DomainBM25Retriever
 
         if not self.is_built:
             raise RuntimeError("Index must be built before retrieving")

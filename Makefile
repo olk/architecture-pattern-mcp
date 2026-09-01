@@ -12,7 +12,7 @@
 # Docker files: docker/Dockerfile, docker/docker-compose.yml
 # =============================================================================
 
-.PHONY: help install install-mcps lint lint-fix typecheck unit-tests \
+.PHONY: help install install-mcps lint lint-fix typecheck deadcode depcheck unit-tests \
 	client docker-build docker-build-tei \
 	docker-build-all docker-publish docker-publish-tei \
 	docker-publish-all \
@@ -55,6 +55,18 @@ lint-fix: install ## Auto-fix linting issues
 
 typecheck: install ## Run pyright for type checking
 	$(UV) run pyright
+
+# Decorators that register callables with a framework (llama-index Workflow,
+# pydantic validation, FastMCP resources/prompts): the decorated symbol is
+# live even without a static call site. Keep in sync with whitelist.py.
+VULTURE_IGNORE_DECORATORS := "@step,@field_validator,@model_validator,@*.resource,@*.prompt"
+
+deadcode: ## Run vulture dead-code scan on src/ and examples/
+	$(UV) run vulture src examples whitelist.py --min-confidence 80 \
+		--ignore-decorators $(VULTURE_IGNORE_DECORATORS)
+
+depcheck: ## Run deptry dependency-hygiene scan
+	$(UV) run deptry .
 
 ##@ Tests
 unit-tests: install ## Run unit tests with uv (tests/unit/)

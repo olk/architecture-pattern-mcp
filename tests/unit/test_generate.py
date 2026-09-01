@@ -38,7 +38,6 @@ import pytest
 from src.agent import LLMError, SoftwareArchitectAgent
 
 # Import for mocking the pipeline
-from src.pipeline import ArchitecturePipeline
 from src.schemas.contracts import ApiContract, ApiEndpoint, DataModel, EventContract, ModelField
 
 from src.schemas.design import ArchitectureDesign, ArchitectureOverview
@@ -172,7 +171,7 @@ class TestGenerateArchitectureToolInit:
         import logging
         caplog.set_level(logging.DEBUG)
 
-        tool = GenerateArchitectureTool(agent=mock_agent, pipeline=mock_pipeline)
+        GenerateArchitectureTool(agent=mock_agent, pipeline=mock_pipeline)
 
         assert "GenerateArchitectureTool initialized" in caplog.text
 
@@ -279,7 +278,7 @@ class TestGenerateArchitectureToolGenerate:
         ctx.error = AsyncMock()
 
         tool = GenerateArchitectureTool(agent=mock_agent, pipeline=mock_pipeline)
-        result = await tool.generate(
+        await tool.generate(
             requirements="Build a scalable web application",
             style="microservices",
             domain="web applications",

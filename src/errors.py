@@ -48,7 +48,6 @@ class MalformedArchitectureOverviewError(ValueError):
     cannot be validated against ArchitectureOverview schema.
 
     Attributes:
-        code:           Always ERROR_INVALID_ARCHITECTURE ("ERR_012")
         locator:        Dot-path to the failing node (e.g. "overview")
         errors:         Pydantic ValidationError.errors() list
     """
@@ -59,6 +58,5 @@ class MalformedArchitectureOverviewError(ValueError):
         errors: list[Any],
     ) -> None:
         super().__init__(f"{ERROR_INVALID_ARCHITECTURE}: {locator} failed validation: {errors}")
-        self.code = ERROR_INVALID_ARCHITECTURE
         self.locator = locator
         self.errors = errors

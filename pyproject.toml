@@ -50,7 +50,6 @@ dependencies = [
     "python-dotenv>=1.0.0",
     "llama-index-postprocessor-tei-rerank>=0.5.0,<0.6",
     "faiss-cpu>=1.14.3",
-    "boto3>=1.34.0",
     "httpx>=0.27.0",
     "aiosqlite>=0.20.0",
     "click>=8.0.0",
@@ -80,6 +79,8 @@ dev = [
     "mypy>=1.8.0",
     "pyright>=1.1.300",
     "pre-commit>=3.6.0",
+    "vulture>=2.14",
+    "deptry>=0.23.0",
 ]
 
 [project.urls]
@@ -106,6 +107,8 @@ include = [
 [tool.ruff]
 line-length = 120
 target-version = "py312"
+# Vulture whitelist contains intentional bare-name references (see whitelist.py).
+extend-exclude = ["whitelist.py"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B", "C4", "DTZ", "T10", "ISC", "PIE", "PT", "RET", "SIM", "ARG", "PL", "TRY", "RUF"]
@@ -130,9 +133,6 @@ ignore = [
     "W291",
     "W292",
     "I001",
-    "F401",
-    "F811",
-    "F841",
     "RUF012",
     "RUF013",
     "RUF022",
@@ -181,3 +181,22 @@ markers = [
     "perf: performance benchmarks, opt-in via RUN_PERF=1",
     "llm: live LLM benchmarks, opt-in via ARCH_BENCH_LLM=1 (requires config + endpoint)",
 ]
+
+[tool.deptry]
+known_first_party = ["src"]
+# Treat the docs extras (sphinx toolchain) as build-time-only, not runtime deps.
+optional_dependencies_dev_groups = ["docs"]
+
+[tool.deptry.package_module_name_map]
+# Import-name to package-name mappings deptry cannot infer automatically.
+"python-dotenv" = ["dotenv"]
+"faiss-cpu" = ["faiss"]
+"PyStemmer" = ["Stemmer"]
+"llama-index-core" = ["llama_index"]
+
+[tool.deptry.per_rule_ignores]
+# litellm (src/agent.py) and workflows (src/pipeline.py) are imported directly
+# but provided transitively via llama-index-llms-litellm and llama-index-core
+# (which vendors llama-index-workflows). Ignored under both DEP001 and DEP003.
+DEP001 = ["litellm", "workflows"]
+DEP003 = ["litellm", "workflows"]

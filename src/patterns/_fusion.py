@@ -40,11 +40,9 @@ Supported modes:
 
 from __future__ import annotations
 
-from typing import Literal
-
 from llama_index.core.schema import NodeWithScore
 
-FusionMode = Literal["simple", "reciprocal_rerank"]
+from src.config import FusionMode
 
 RRF_K: float = 60.0
 

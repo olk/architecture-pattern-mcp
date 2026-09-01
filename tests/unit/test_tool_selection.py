@@ -35,7 +35,6 @@ Mechanism:
 """
 
 import re
-from collections import Counter
 
 import pytest
 

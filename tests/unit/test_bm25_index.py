@@ -30,7 +30,6 @@ Test Scenarios:
 - SCEN-BM25-2: DomainBM25Index builds from domain list
 - SCEN-BM25-3: DomainBM25Index search returns (slug, score) tuples
 - SCEN-BM25-4: DomainBM25Index search on unbuilt returns empty
-- SCEN-BM25-5: DomainBM25Index get_scores returns dict of all domain scores
 - SCEN-BM25-6: DomainBM25Index as_retriever returns BM25Retriever when built
 - SCEN-BM25-7: DomainBM25Index as_retriever raises when not built
 - SCEN-BM25-8: DomainBM25Index handles empty domain list
@@ -91,23 +90,6 @@ class TestDomainBM25IndexSearch:
         index.build_index(domains)
         results = index.search("event", k=3)
         assert len(results) == 3
-
-
-class TestDomainBM25IndexGetScores:
-    def test_get_scores_returns_dict(self):
-        index = DomainBM25Index()
-        domains = ["event-driven", "cloud-native"]
-        index.build_index(domains)
-        scores = index.get_scores("event driven")
-        assert isinstance(scores, dict)
-        for slug, score in scores.items():
-            assert isinstance(slug, str)
-            assert isinstance(score, float)
-
-    def test_get_scores_on_unbuilt_returns_empty(self):
-        index = DomainBM25Index()
-        scores = index.get_scores("event")
-        assert scores == {}
 
 
 class TestDomainBM25IndexAsRetriever:

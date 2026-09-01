@@ -84,7 +84,7 @@ class TestParseOverviewInvalidInput:
         with pytest.raises(MalformedArchitectureOverviewError) as exc_info:
             _parse_overview(data)
         exc = exc_info.value
-        assert exc.code == ERROR_INVALID_ARCHITECTURE
+        assert ERROR_INVALID_ARCHITECTURE in str(exc)
         assert exc.locator == expected_locator
         assert exc.errors is not None
         assert len(exc.errors) > 0
@@ -162,7 +162,7 @@ class TestDesignFromDict:
         with pytest.raises(MalformedArchitectureOverviewError) as exc_info:
             design_from_dict(data)
         exc = exc_info.value
-        assert exc.code == ERROR_INVALID_ARCHITECTURE
+        assert ERROR_INVALID_ARCHITECTURE in str(exc)
 
     def test_rejects_malformed_overview_in_design(self):
         """An overview that fails validation surfaces ERR_012."""

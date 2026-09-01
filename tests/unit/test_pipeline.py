@@ -350,11 +350,6 @@ class MockDomainVectorIndex:
             ("distributed", 0.75)
         ]
 
-    def rebuild_index(self, domains: list[str]) -> None:
-        self._index = None
-        self._domains = []
-        self.build_index(domains)
-
     def as_retriever(self, similarity_top_k: int = 20):
         class MockDenseRetriever:
             def __init__(self, top_k):
@@ -1046,7 +1041,7 @@ class TestPatternFlow:
             }
         ]
 
-        design = await pipeline.generate(
+        await pipeline.generate(
             requirements="Build distributed system",
             domain="cloud-native",
             style="microservices",
@@ -1498,8 +1493,7 @@ class TestInvalidCategoryRegression:
 
         Validates that Option A does not break the valid path.
         """
-        from src.schemas.design import ArchitectureOverview
-        from src.schemas.enums import ArchitectureStyle, PatternCategory
+        from src.schemas.enums import PatternCategory
 
         resp = ArchitectureDesignResponse(
             overview={
@@ -2287,7 +2281,6 @@ class TestWarmupIndexes:
 
     def _make_pipeline(self, vector: _FakeIndex, bm25: _FakeIndex) -> ArchitecturePipeline:
         """Build a minimal ArchitecturePipeline stub that intercepts warmup_indexes."""
-        from unittest.mock import MagicMock
 
         agent = MagicMock()
         loader = MagicMock()

@@ -55,9 +55,6 @@ class JobStatus:
     CANCELLED = "cancelled"
 
 
-_TERMINAL_STATUSES = {JobStatus.COMPLETED, JobStatus.FAILED, JobStatus.CANCELLED}
-
-
 class JobsStore:
     """Singleton async SQLite store for design_architecture job state."""
 
@@ -152,14 +149,6 @@ class JobsStore:
         if row is None:
             return None
         return dict(row)
-
-    async def list_jobs(self, limit: int = 10) -> list[dict[str, Any]]:
-        """Return recent jobs ordered by created_at desc."""
-        cursor = await self._db.execute(
-            "SELECT * FROM jobs ORDER BY created_at DESC LIMIT ?", (limit,)
-        )
-        rows = await cursor.fetchall()
-        return [dict(r) for r in rows]
 
     async def set_running(self, job_id: str) -> None:
         now = self._now()

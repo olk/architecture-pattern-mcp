@@ -30,24 +30,20 @@ T5: All 36 catalogue JSONs have 6 QA keys; PAC loads (issue #8)
 T6: rerank_enabled recall is lossless (issue #5)
 T7: min_fusion_score gate no longer drops single-leg rank-7 hit (issue #3)
 T8: simple fusion does not let BM25 dominate dense (issue #15)
-T9: BM25 get_scores returns correct per-domain scores (issue #13)
 T10: All-zero weights logs WARNING and retries (issue #17)
 """
 
 import asyncio
-import logging
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from llama_index.core.schema import NodeWithScore, TextNode
 
 from src.patterns._fusion import _fuse_simple
-from src.patterns.bm25_index import DomainBM25Index
 from src.patterns.retriever import (
     DEFAULT_FALLBACK_PATTERN_NAME,
     HybridPatternRetriever,
 )
-from src.config import RetrievalConfig
 from src.pipeline import (
     AnalysisResult as PipelineAR,
 )
@@ -626,34 +622,6 @@ class TestT8SimpleFusionRankUnion:
         # 'b' at rank 1 (dense) → 1/2 = 0.5; rank 0 (bm25) → 1/1 = 1.0 → best=1.0
         # Tied — but 'a' should be first OR 'b' should be first; both 1.0
         assert fused[0].score == pytest.approx(1.0)
-
-
-# ─── T9 ────────────────────────────────────────────────────────────────────────
-
-
-class TestT9BM25GetScoresCorrectness:
-    """T9: BM25 get_scores returns correct per-domain scores
-    (issue #13: was passing query-local int ids to the index — wrong vocab).
-    """
-
-    def test_get_scores_returns_known_per_domain_scores(self):
-        index = DomainBM25Index()
-        domains = ["event-driven-architecture", "cloud-native", "microservices"]
-        index.build_index(domains)
-
-        scores = index.get_scores("event driven")
-        assert isinstance(scores, dict)
-        # event-driven-architecture should score higher than unrelated domains.
-        assert "event-driven-architecture" in scores
-        assert scores["event-driven-architecture"] > scores.get("cloud-native", 0.0)
-
-    def test_get_scores_with_stemmer(self):
-        """Stemming 'processing' should still hit 'data-processing'."""
-        index = DomainBM25Index()
-        domains = ["data-processing", "data-pipelines", "cloud-native"]
-        index.build_index(domains)
-        scores = index.get_scores("processing data")
-        assert "data-processing" in scores or "data-pipelines" in scores
 
 
 # ─── T10 ───────────────────────────────────────────────────────────────────────

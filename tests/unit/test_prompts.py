@@ -174,7 +174,6 @@ class TestPromptRendering:
     @pytest.mark.asyncio
     async def test_explore_prompt_empty_loader_fallback(self):
         """FR-249 edge case: explore_pattern_catalog shows error when loader is empty."""
-        from unittest.mock import MagicMock
 
         server = MCPArchitectServer()
         async with server._mcp.lifespan():

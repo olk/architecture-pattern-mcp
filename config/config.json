@@ -69,7 +69,6 @@
     "quiet_stderr": "{env:REASONING_QUIET_STDERR:-true}",
     "fail_fast": "{env:REASONING_FAIL_FAST:-false}"
   },
-  "tool_timeout_seconds": "{env:TOOL_TIMEOUT_SECONDS:-}",
   "tasks": {
     "heartbeat_enabled": "{env:TASKS_HEARTBEAT_ENABLED:-true}",
     "heartbeat_interval_seconds": "{env:TASKS_HEARTBEAT_INTERVAL_SECONDS:-30}"

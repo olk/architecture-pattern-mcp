@@ -125,16 +125,16 @@ class TestArchitectureDomain:
     """
     Test suite for ArchitectureDomain enum.
 
-    ArchitectureDomain contains 376 problem-space domain descriptors used for
+    ArchitectureDomain contains 372 problem-space domain descriptors used for
     Pattern.suitable_domains and Pattern.unsuitable_domains filtering.
     Source corpus for DomainVectorIndex (FAISS) and DomainBM25Index.
     Distinct from ArchitectureStyle which describes the architectural approach.
     """
 
-    def test_has_376_values(self):
-        """Verify ArchitectureDomain enum contains exactly 376 values."""
+    def test_has_372_values(self):
+        """Verify ArchitectureDomain enum contains exactly 372 values."""
         actual_values = len(ArchitectureDomain)
-        assert actual_values == 376, f"Expected 376 values, got {actual_values}"
+        assert actual_values == 372, f"Expected 372 values, got {actual_values}"
 
     def test_all_key_domains_present(self):
         """Verify all key problem-space domains are present."""

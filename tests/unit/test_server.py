@@ -235,7 +235,7 @@ class TestMCPArchitectServerErrorHandling:
         """E-11: Verify FileNotFoundError has correct error code in logging"""
         # Test that when ConfigManager.load_config raises FileNotFoundError,
         # the error code ERR_011 is used for logging
-        server = MCPArchitectServer(config_path="/nonexistent/path/config.json")
+        MCPArchitectServer(config_path="/nonexistent/path/config.json")
 
         with patch('src.server.ConfigManager.load_config') as mock_load:
             mock_load.side_effect = FileNotFoundError("Configuration file not found at path: /nonexistent/path/config.json")
@@ -246,7 +246,7 @@ class TestMCPArchitectServerErrorHandling:
 
     def test_initialize_value_error_for_invalid_config(self):
         """E-11: Verify ValueError has correct error code in logging"""
-        server = MCPArchitectServer(config_path="/invalid/config.json")
+        MCPArchitectServer(config_path="/invalid/config.json")
 
         with patch('src.server.ConfigManager.load_config') as mock_load:
             mock_load.side_effect = ValueError("Invalid JSON configuration")
@@ -410,7 +410,6 @@ class TestJSONFormatterIncludesExtra:
         import io
         import json
         import logging
-        import sys
 
         from src.server import configure_logging
 

@@ -352,16 +352,6 @@ class ServerConfig(BaseModel):
     # outside Docker the client auto-falls back to npx.
     reasoning: ReasoningConfig = Field(default_factory=lambda: ReasoningConfig())
 
-    # Foreground wall-clock cap on every tool (seconds). None = no cap.
-    tool_timeout_seconds: int | None = Field(default=None, ge=1)
-
-    @field_validator("tool_timeout_seconds", mode="before")
-    @classmethod
-    def _empty_string_to_none(cls, v: Any) -> Any:
-        if v == "":
-            return None
-        return v
-
     @field_validator("litellm_log_level")
     @classmethod
     def _validate_litellm_log_level(cls, v: str) -> str:
@@ -417,9 +407,6 @@ class ConfigManager:
 
     # Class variable for caching loaded configuration
     _config: ClassVar[dict[str, Any] | None] = None
-
-    # Track which path was used for caching
-    _config_path: ClassVar[str | None] = None
 
     @classmethod
     def load_config(cls, config_path: str | None = None) -> dict[str, Any]:
@@ -520,25 +507,10 @@ class ConfigManager:
             raise
 
         cls._config = validated_config.model_dump()
-        cls._config_path = abs_path
 
         logger.info(
             "Configuration loaded successfully",
-            extra={"config_path": cls._config_path}
+            extra={"config_path": abs_path}
         )
 
         return cls._config
-
-    @classmethod
-    def clear_cache(cls) -> None:
-        """
-        Clear the cached configuration.
-
-        Useful for testing or when configuration file changes.
-
-        Returns:
-            None
-        """
-        cls._config = None
-        cls._config_path = None
-        logger.debug("Configuration cache cleared")

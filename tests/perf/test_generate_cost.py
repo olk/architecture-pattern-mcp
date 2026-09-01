@@ -29,7 +29,7 @@ Opt-in live LLM timing via ARCHITECTURE_LIVE_BENCH=1 with a real config.
 import json
 import os
 import time
-from typing import Any, cast
+from typing import Any
 
 import pytest
 
@@ -206,7 +206,7 @@ def test_generate_subphase_timings_mocked() -> None:
             selected_patterns=[p.model_dump() for p in selected_patterns],
         )
 
-    result = asyncio.run(timed_phase("generate_total", run()))
+    asyncio.run(timed_phase("generate_total", run()))
 
     print(f"\n{'Local CPU subphase timings (ms)':<40} {'Duration':>12}")
     print(f"{'=' * 52}")
@@ -272,7 +272,7 @@ def test_generate_live_llm_timing() -> None:
             selected_patterns=analysis.selected_patterns,
         )
 
-    result = asyncio.run(timed_phase("generate_total", run()))
+    asyncio.run(timed_phase("generate_total", run()))
 
     print(f"\n{'End-to-end timing with live LLM (s)':<40} {'Duration':>12}")
     print(f"{'=' * 52}")

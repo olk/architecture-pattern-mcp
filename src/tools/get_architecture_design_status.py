@@ -72,7 +72,7 @@ class GetArchitectureDesignStatusTool:
     async def get_status(
         self,
         job_id: Annotated[str, Field(description="Job ID returned by submit_architecture_design_job")],
-        ctx: Context | None = None,
+        _ctx: Context | None = None,
     ) -> dict[str, Any]:
         store = await JobsStore.get_instance()
         job = await store.get_job(job_id)

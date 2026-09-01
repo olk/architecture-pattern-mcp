@@ -58,7 +58,7 @@ class DomainVectorIndex:
         _faiss_index: faiss.IndexFlatIP instance.
     """
 
-    def __init__(  # noqa: PLR0913
+    def __init__(
         self,
         base_url: str,
         api_key: str | None,
@@ -105,10 +105,6 @@ class DomainVectorIndex:
             query_instruction=cfg.query_instruction,
             text_instruction=cfg.text_instruction,
         )
-
-    @property
-    def model_name(self) -> str:
-        return self._embedder.model_name
 
     @property
     def is_built(self) -> bool:
@@ -194,13 +190,6 @@ class DomainVectorIndex:
                 results.append((self._domains[int(idx)], float(score)))
 
         return results
-
-    def rebuild_index(self, domains: list[str]) -> None:
-        """Rebuild the FAISS index with new domains."""
-        self._faiss_index = None
-        self._vector_store = None
-        self._domains = []
-        self.build_index(domains)
 
     @property
     def domains(self) -> list[str]:

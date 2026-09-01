@@ -50,8 +50,6 @@ from fastmcp.exceptions import ToolError
 
 from src.tools.evaluate import (
     ERROR_LLM_PROVIDER,
-    ERROR_INVALID_ARCHITECTURE,
-    ERROR_MIN_REQUIREMENTS,
     EvaluateArchitectureOutput,
     EvaluateArchitectureTool,
     evaluate_architecture_tool,
