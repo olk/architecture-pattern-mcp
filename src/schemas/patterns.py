@@ -123,7 +123,7 @@ class Pattern(BaseModel):
     )
     version: str | None = Field(
         default=None,
-        description="Pattern catalog version, e.g. '1.0.18'"
+        description="Pattern catalog version, e.g. '1.0.19'"
     )
     sources: list[str] = Field(
         default_factory=list,

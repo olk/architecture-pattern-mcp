@@ -196,7 +196,7 @@ wheels = [
 
 [[package]]
 name = "architecture-pattern-mcp"
-version = "1.0.18"
+version = "1.0.19"
 source = { editable = "." }
 dependencies = [
     { name = "aiosqlite" },
