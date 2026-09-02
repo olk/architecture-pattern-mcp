@@ -403,25 +403,52 @@ class TestRetrievalConfig:
         with pytest.raises(ValidationError):
             RetrievalConfig(top_k_patterns=101)
 
-    @pytest.mark.parametrize("mode", [
-        "reciprocal_rerank",
-        "relative_score",
-        "dist_based_score",
-    ])
-    def test_all_fusion_modes_accepted(self, mode: str) -> None:
-        """Test that all supported fusion modes are accepted."""
-        config = RetrievalConfig(mode=mode)
-        assert config.mode == mode
-
-    def test_simple_mode_rejected(self) -> None:
-        """The legacy "simple" rank-union fusion mode was removed."""
+    def test_legacy_mode_field_rejected(self) -> None:
+        """The fusion mode is no longer config-exposable: RetrievalConfig's
+        extra="forbid" rejects the removed `mode` key (hard operator failure)."""
         with pytest.raises(ValidationError):
-            RetrievalConfig(mode="simple")
+            RetrievalConfig(mode="reciprocal_rerank")  # type: ignore[call-arg]
 
-    def test_unknown_mode_rejected(self) -> None:
-        """Test that an unknown mode string raises ValidationError."""
+
+class TestMinFusionScoreScaleInteraction:
+    """Stage-1 + slug-cut are locked: gate always sees the blend
+    (max ≈ 2/60).  Any positive min_fusion_score above the blend's
+    theoretical maximum would reject every query.  The
+    ServerConfig validator (and the field's `le=RANK_FUSION_BLEND_MAX`
+    constraint) catch this."""
+
+    @staticmethod
+    def _server(**overrides) -> "ServerConfig":
+        kwargs = {
+            "generator": {"provider": "openai", "config": {"model": "gpt-4"}},
+            "embedder": {"provider": "tei", "config": {"base_url": "http://x"}},
+            "reranker": {"config": {"base_url": "http://x"}},
+            "retrieval": {"min_fusion_score": 0.25},
+        }
+        kwargs.update(overrides)
+        return ServerConfig(**kwargs)
+
+    def test_field_validator_rejects_floor_above_blend_max(self) -> None:
+        """Field-level le=RANK_FUSION_BLEND_MAX rejects values like 0.25."""
+        from src.config import RANK_FUSION_BLEND_MAX
         with pytest.raises(ValidationError):
-            RetrievalConfig(mode="bogus")
+            RetrievalConfig(min_fusion_score=RANK_FUSION_BLEND_MAX + 1e-9)
+
+    def test_default_floor_is_zero(self) -> None:
+        """Default min_fusion_score is 0.0 (gate disabled)."""
+        assert RetrievalConfig().min_fusion_score == 0.0
+
+    def test_floor_at_blend_max_accepted(self) -> None:
+        """Floor exactly at RANK_FUSION_BLEND_MAX (theoretical max) is the upper bound."""
+        from src.config import RANK_FUSION_BLEND_MAX
+        cfg = RetrievalConfig(min_fusion_score=RANK_FUSION_BLEND_MAX)
+        assert cfg.min_fusion_score == RANK_FUSION_BLEND_MAX
+
+    def test_floor_just_above_blend_max_rejected(self) -> None:
+        """One ulp above the blend maximum fails the field validator."""
+        from src.config import RANK_FUSION_BLEND_MAX
+        with pytest.raises(ValidationError):
+            RetrievalConfig(min_fusion_score=RANK_FUSION_BLEND_MAX + 1e-9)
 
 
 class TestExtraForbid:
@@ -485,7 +512,8 @@ class TestExtraForbid:
     def test_server_config_accepts_top_level_reranker_block(self) -> None:
         """
         Test that ServerConfig accepts a valid top-level reranker block
-        with config, rerank_top_n, and rerank_selection.
+        with config and rerank_top_n (rerank_selection is no longer
+        configurable — locked to rank_fusion).
         """
         config = ServerConfig(
             generator={"provider": "openai", "config": {"model": "gpt-4"}},
@@ -493,7 +521,6 @@ class TestExtraForbid:
             reranker={
                 "config": {"base_url": "http://rerank:8080", "timeout": 60.0},
                 "rerank_top_n": 20,
-                "rerank_selection": "rank_fusion",
             },
         )
         assert config.reranker is not None
@@ -501,7 +528,6 @@ class TestExtraForbid:
         assert config.reranker.config.base_url == "http://rerank:8080"
         assert config.reranker.config.timeout == 60.0
         assert config.reranker.rerank_top_n == 20
-        assert config.reranker.rerank_selection == "rank_fusion"
 
     def test_server_config_reranker_defaults(self) -> None:
         """
@@ -514,20 +540,20 @@ class TestExtraForbid:
             reranker={"config": {"base_url": "http://rerank:8080"}},
         )
         assert config.reranker.rerank_top_n == 10
-        assert config.reranker.rerank_selection == "rerank"
 
-    def test_server_config_reranker_validator_rejects_empty_base_url(self) -> None:
+    def test_server_config_reranker_legacy_selection_key_rejected(self) -> None:
         """
-        Test that the _check_reranker_configured validator on ServerConfig
-        rejects an empty reranker.config.base_url.
+        The removed ``rerank_selection`` key is rejected by extra='forbid'.
         """
-        with pytest.raises(ValidationError) as exc_info:
+        with pytest.raises(ValidationError):
             ServerConfig(
                 generator={"provider": "openai", "config": {"model": "gpt-4"}},
                 embedder={"provider": "tei", "config": {"base_url": "http://localhost:8080"}},
-                reranker={"config": {"base_url": ""}},
+                reranker={
+                    "config": {"base_url": "http://rerank:8080"},
+                    "rerank_selection": "rerank",
+                },
             )
-        assert "reranker.config.base_url" in str(exc_info.value)
 
 
 class TestRerankerConfig:
@@ -539,21 +565,19 @@ class TestRerankerConfig:
         """
         config = RerankerConfig(config=RerankerInnerConfig(base_url="http://rerank:8080"))
         assert config.rerank_top_n == 10
-        assert config.rerank_selection == "rerank"
         assert config.config is not None
         assert config.config.base_url == "http://rerank:8080"
 
     def test_reranker_config_custom_values(self) -> None:
         """
-        Test that RerankerConfig accepts valid custom values.
+        Test that RerankerConfig accepts valid custom values (rerank_selection
+        is no longer configurable).
         """
         config = RerankerConfig(
             config=RerankerInnerConfig(base_url="http://rerank:8080", timeout=60.0),
             rerank_top_n=25,
-            rerank_selection="rank_fusion",
         )
         assert config.rerank_top_n == 25
-        assert config.rerank_selection == "rank_fusion"
         assert config.config.timeout == 60.0
 
     def test_reranker_config_boundary_top_n(self) -> None:
@@ -581,14 +605,6 @@ class TestRerankerConfig:
             RerankerConfig(
                 config=RerankerInnerConfig(base_url="http://rerank:8080"),
                 rerank_top_n=101,
-            )
-
-    def test_reranker_config_invalid_selection(self) -> None:
-        """Test that invalid rerank_selection raises ValidationError."""
-        with pytest.raises(ValidationError):
-            RerankerConfig(
-                config=RerankerInnerConfig(base_url="http://rerank:8080"),
-                rerank_selection="invalid",
             )
 
     def test_reranker_config_rejects_extra_fields(self) -> None:

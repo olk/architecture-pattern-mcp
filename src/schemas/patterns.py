@@ -197,7 +197,6 @@ class ScoredPattern(Pattern):
         default=None,
         description=(
             "Cross-encoder rerank logit for this pattern's source slug.  "
-            "None when reranking did not run (e.g. single-candidate path, "
-            "or rerank_selection=\"rerank\" mode)."
+            "None when reranking did not run (e.g. single-candidate path)."
         ),
     )

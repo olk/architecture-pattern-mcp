@@ -62,7 +62,11 @@ from src.config import EmbedderConfig, RetrievalConfig, RerankerConfig
 from src.design_normalization import denormalize_contracts
 from src.errors import MalformedArchitectureOverviewError
 from src.patterns.loader import PatternLoader
-from src.patterns.retriever import DEFAULT_FALLBACK_PATTERN_NAME, HybridPatternRetriever
+from src.patterns.retriever import (
+    DEFAULT_FALLBACK_PATTERN_NAME,
+    RETRIEVAL_FUSION_MODE,
+    HybridPatternRetriever,
+)
 from src.reasoning.client import ReasoningClient
 from src.reasoning.prompts import render_degraded_context, render_reasoning_context
 from src.prompts import (
@@ -677,11 +681,9 @@ class ArchitecturePipeline(Workflow):
                 dense_retriever=self._dense_retriever,
                 bm25_retriever=self._bm25_retriever,
                 pattern_loader=self._pattern_loader,
-                mode=self._retrieval_config.mode,
                 min_fusion_score=self._retrieval_config.min_fusion_score,
                 rerank_top_n=self._reranker_config.rerank_top_n,
                 reranker_config=self._reranker_config.config,
-                rerank_selection=self._reranker_config.rerank_selection,
                 fusion_top_k=self._fusion_top_k,
             )
 
@@ -1267,7 +1269,7 @@ class ArchitecturePipeline(Workflow):
 
         logger.debug(
             "Retrieval legs built: mode=%s, dense_k=%d, bm25_k=%d (corpus=%d)",
-            self._retrieval_config.mode,
+            RETRIEVAL_FUSION_MODE.value,
             dense_k,
             bm25_k,
             corpus_n,

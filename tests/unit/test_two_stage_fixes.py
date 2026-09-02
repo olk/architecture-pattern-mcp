@@ -28,7 +28,7 @@ T3: generate tool resolves pattern names end-to-end (issue #12)
 T4: min_quality_score=50 + mocked overall_quality=60 stops after attempt 1 (issue #2)
 T5: All 36 catalogue JSONs have 6 QA keys; PAC loads (issue #8)
 T6: rerank_enabled recall is lossless (issue #5)
-T7: min_fusion_score gate no longer drops single-leg rank-7 hit (issue #3)
+T7: min_fusion_score gate does not drop a single-leg hit (issue #3 lineage)
 T10: All-zero weights logs WARNING and retries (issue #17)
 """
 
@@ -435,6 +435,7 @@ class TestT6RerankLossless:
             dense_retriever=MagicMock(),
             bm25_retriever=MagicMock(),
             pattern_loader=_MockLoader(),
+            min_fusion_score=0.0,
             rerank_top_n=1,
             reranker_config=MagicMock(base_url="http://localhost:8080", timeout=30.0, max_batch_size=48),
         )
@@ -469,8 +470,8 @@ class TestT7MinFusionScoreGateDisabled:
     """
 
     def test_low_fusion_score_not_dropped_with_zero_threshold(self):
-        """With min_fusion_score=0.0 (the new default), a low score is not
-        demoted to fallback."""
+        """With min_fusion_score=0.0 (explicitly disabled), a low raw dense
+        score is not demoted to fallback."""
         pattern = {
             "name": "microservices", "context": "Distributed system.",
             "category": "architectural", "benefits": ["Scalability"],
@@ -518,13 +519,13 @@ class TestT7MinFusionScoreGateDisabled:
             user_domain="microservices",
             normalized_domain="microservices",
         )
-        # Raw dense score was 1/67; after RRF (rank=1, k=60) the fused
-        # score becomes 1/(1+60-1) = 1/60 ≈ 0.01667. The key invariant:
-        # the recall set is NOT demoted to fallback (was the old 0.015 bug).
+        # Raw dense score was 1/67; under relative_score the single-leg hit
+        # min-max normalizes to 1.0 and the dense leg weight (0.7) makes the
+        # fused score 0.7.  The key invariant: the recall set is NOT demoted
+        # to fallback (the old issue-#3 RRF fragility does not carry over).
         assert len(result.patterns) == 1
         assert result.patterns[0][0]["name"] == "microservices"
-        assert result.patterns[0][1] > 0.015  # would have been demoted under old threshold
-        assert result.patterns[0][1] == pytest.approx(1/60, abs=1e-4)
+        assert result.patterns[0][1] == pytest.approx(0.7)
         assert len(result.matched_domains) == 1
         assert result.matched_domains[0].slug == "microservices"
 
@@ -652,6 +653,7 @@ class TestRerankTopNCap:
             dense_retriever=MagicMock(),
             bm25_retriever=MagicMock(),
             pattern_loader=loader,
+            min_fusion_score=0.0,  # cap semantics under test, not the gate
             rerank_top_n=rerank_top_n,
             reranker_config=MagicMock(base_url="http://localhost:8080", timeout=30.0, max_batch_size=48),
         )
@@ -803,16 +805,17 @@ class TestRerankTopNCap:
 
 
 class TestT8RankFusionSelection:
-    """T8: rank_fusion slug-cut (Vespa-style) blends RRF consensus rank
-    with cross-encoder rank, protecting consensus-backed slugs from CE outliers
-    on short domain-slug inputs."""
+    """T8: rank_fusion slug-cut (Vespa-style) blends the stage-1 fused rank
+    with the cross-encoder rank, protecting consensus-backed slugs from CE
+    outliers on short domain-slug inputs."""
 
     def _make_fused_nodes(self, rrf_scores_and_slugs):
         """Build a fused list where each node has:
-        - score = RRF score (descending position = RRF rank)
+        - score = stage-1 fused score (descending position = fused rank;
+          fixture values use RRF-era numbers — only the ORDER matters)
         - node.hash = unique per node
         - node.metadata["slug"] = slug
-        - node.metadata["retrieval_score"] = RRF score (for restore)
+        - node.metadata["retrieval_score"] = fused score (for restore)
 
         The caller (retriever) mutates .score and metadata on these objects,
         so the same objects must be returned by the mock postprocess_nodes.
@@ -857,13 +860,12 @@ class TestT8RankFusionSelection:
 
         return _MockReranker(fused_nodes, ce_scores_by_slug)
 
-    def test_rerank_mode_discards_rrf_consensus_slug(self):
-        """rerank mode keeps cross-encoder top-1 slug (CE-only ordering).
-
-        slug-a is RRF rank 1, CE rank 2 (CE score 0.05).
-        slug-b is RRF rank 2, CE rank 3 (CE score 0.01).
-        slug-c is RRF rank 3, CE rank 1 (CE score 0.95).
-        With top_n=1, rerank mode keeps slug-c (CE #1) and discards slug-a (RRF #1).
+    def test_blend_consensus_holds_against_ce_outlier(self):
+        """Under the locked rank_fusion blend, a CE outlier alone cannot
+        overturn consensus.  Stage-1 ranking favors slug-a (best fused
+        score 1/60), slug-b (1/61), slug-c (1/62); CE prefers slug-c
+        (0.95); the blend keeps slug-a at rank 1 because its fused and
+        CE reciprocals outweigh the others combined.
         """
         fused = self._make_fused_nodes([
             (1.0 / 60, "slug-a"),
@@ -913,9 +915,9 @@ class TestT8RankFusionSelection:
         br = _CR([])
         retriever = HybridPatternRetriever(
             bm25_retriever=br, dense_retriever=dr, pattern_loader=_ML(),
+            min_fusion_score=0.0,
             rerank_top_n=1,
             reranker_config=MagicMock(base_url="http://x", timeout=30.0, max_batch_size=48),
-            rerank_selection="rerank",
         )
         retriever._dense_retriever = dr
         retriever._bm25_retriever = br
@@ -923,13 +925,14 @@ class TestT8RankFusionSelection:
         with patch("src.patterns.retriever.SafeTEIReranker", return_value=mock):
             result = retriever.retrieve("microservices", "microservices")
         assert len(result.patterns) == 1
-        assert result.patterns[0][0]["name"] == "slug-c"
+        assert result.patterns[0][0]["name"] == "slug-a"
 
-    def test_rank_fusion_keeps_rrf_consensus_slug(self):
-        """rank_fusion keeps RRF top-1 slug instead of CE top-1.
+    def test_blend_keeps_fused_consensus_slug(self):
+        """Slug-cut (locked to rank_fusion blend) keeps the fused top-1 slug
+        even when CE prefers a different slug.
 
-        slug-a is RRF rank 1, CE rank 2 (blended = 1/60 + 1/61 ≈ 0.033).
-        slug-c is RRF rank 3, CE rank 1 (blended = 1/62 + 1/60 ≈ 0.033).
+        slug-a is fused rank 1, CE rank 2 (blended = 1/60 + 1/61 ≈ 0.033).
+        slug-c is fused rank 3, CE rank 1 (blended = 1/62 + 1/60 ≈ 0.033).
         slug-a wins the blend and survives the top-1 cut.
         """
         fused = self._make_fused_nodes([
@@ -980,9 +983,9 @@ class TestT8RankFusionSelection:
         br = _CR([])
         retriever = HybridPatternRetriever(
             bm25_retriever=br, dense_retriever=dr, pattern_loader=_ML(),
+            min_fusion_score=0.0,
             rerank_top_n=1,
             reranker_config=MagicMock(base_url="http://x", timeout=30.0, max_batch_size=48),
-            rerank_selection="rank_fusion",
         )
         retriever._dense_retriever = dr
         retriever._bm25_retriever = br
@@ -992,8 +995,8 @@ class TestT8RankFusionSelection:
         assert len(result.patterns) == 1
         assert result.patterns[0][0]["name"] == "slug-a"
 
-    def test_rank_fusion_reports_blended_scores(self):
-        """In rank_fusion mode, fusion_score IS the blended RR(rrf)+RR(ce) score."""
+    def test_blend_reports_reports_blended_scores(self):
+        """Slug-cut reports the blend ``RR(fused) + RR(ce)`` per slug."""
         fused = self._make_fused_nodes([
             (1.0 / 60, "slug-a"),
             (1.0 / 61, "slug-b"),
@@ -1042,9 +1045,9 @@ class TestT8RankFusionSelection:
         br = _CR([])
         retriever = HybridPatternRetriever(
             bm25_retriever=br, dense_retriever=dr, pattern_loader=_ML(),
+            min_fusion_score=0.0,
             rerank_top_n=3,
             reranker_config=MagicMock(base_url="http://x", timeout=30.0, max_batch_size=48),
-            rerank_selection="rank_fusion",
         )
         retriever._dense_retriever = dr
         retriever._bm25_retriever = br
@@ -1069,8 +1072,12 @@ class TestT8RankFusionSelection:
         assert result.patterns[0][1] == pytest.approx(blend_a)
         assert result.patterns[0][0]["rerank_logit"] == pytest.approx(0.05)
 
-    def test_rerank_mode_default_unchanged(self):
-        """Default rerank_selection='rerank' produces CE-only ordering (regression)."""
+    def test_rerank_top_n_cap_keeps_top_blend_candidate(self):
+        """Slug-cut (locked to rank_fusion blend) keeps the survivor whose
+        stage-1 fused rank + CE rank dominate; this is the post-removal
+        single-selection-mode regression (formerly
+        ``test_rerank_mode_default_unchanged`` looping over a now-removed
+        ``selection_mode`` knob)."""
         fused = self._make_fused_nodes([
             (1.0 / 60, "slug-a"),
             (1.0 / 75, "slug-b"),
@@ -1119,31 +1126,32 @@ class TestT8RankFusionSelection:
         dense_retriever = _ConcreteRetriever(fused)
         bm25_retriever = _ConcreteRetriever([])
 
-        for selection_mode in ("rerank", "rank_fusion"):
-            retriever = HybridPatternRetriever(
-                bm25_retriever=bm25_retriever,
-                dense_retriever=dense_retriever,
-                pattern_loader=_MockLoader(),
-                rerank_top_n=1,
-                reranker_config=MagicMock(
-                    base_url="http://localhost:8080", timeout=30.0, max_batch_size=48
-                ),
-                rerank_selection=selection_mode,
+        retriever = HybridPatternRetriever(
+            bm25_retriever=bm25_retriever,
+            dense_retriever=dense_retriever,
+            pattern_loader=_MockLoader(),
+            min_fusion_score=0.0,
+            rerank_top_n=1,
+            reranker_config=MagicMock(
+                base_url="http://localhost:8080", timeout=30.0, max_batch_size=48
+            ),
+        )
+        retriever._dense_retriever = dense_retriever
+        retriever._bm25_retriever = bm25_retriever
+        mock = _MockReranker()
+        with patch(
+            "src.patterns.retriever.SafeTEIReranker",
+            return_value=mock,
+        ):
+            result = retriever.retrieve(
+                user_domain="microservices", normalized_domain="microservices"
             )
-            retriever._dense_retriever = dense_retriever
-            retriever._bm25_retriever = bm25_retriever
-            mock = _MockReranker()
-            with patch(
-                "src.patterns.retriever.SafeTEIReranker",
-                return_value=mock,
-            ):
-                result = retriever.retrieve(
-                    user_domain="microservices", normalized_domain="microservices"
-                )
-            assert result.patterns[0][0]["name"] == "slug-a"
+        assert result.patterns[0][0]["name"] == "slug-a"
 
-    def test_rank_fusion_noop_when_pool_le_topn(self):
-        """When pool size <= rerank_top_n, rank_fusion produces identical survivors to rerank mode (cut is a no-op)."""
+    def test_blend_pool_under_topn_orders_by_ce(self):
+        """When the pool is under rerank_top_n, the blend reciprocals are
+        constant across positions so the order matches CE-only on the
+        same pool.  CE scores 0.95 vs 0.05 produce slug-b first."""
         fused = self._make_fused_nodes([
             (1.0 / 60, "slug-a"),
             (1.0 / 61, "slug-b"),
@@ -1174,34 +1182,35 @@ class TestT8RankFusionSelection:
                          "benefits": [], "tradeoffs": [], "quality_attributes": {}, "suitable_domains": []}]
             def get_by_name(self, _n): return None
 
-        results = {}
-        for mode in ("rerank", "rank_fusion"):
-            dr = _CR(fused)
-            br = _CR([])
-            retriever = HybridPatternRetriever(
-                bm25_retriever=br,
-                dense_retriever=dr,
-                pattern_loader=_ML(),
-                rerank_top_n=10,
-                reranker_config=MagicMock(
-                    base_url="http://localhost:8080", timeout=30.0, max_batch_size=48
-                ),
-                rerank_selection=mode,
+        dr = _CR(fused)
+        br = _CR([])
+        retriever = HybridPatternRetriever(
+            bm25_retriever=br,
+            dense_retriever=dr,
+            pattern_loader=_ML(),
+            min_fusion_score=0.0,
+            rerank_top_n=10,
+            reranker_config=MagicMock(
+                base_url="http://localhost:8080", timeout=30.0, max_batch_size=48
+            ),
+        )
+        retriever._dense_retriever = dr
+        retriever._bm25_retriever = br
+        mock = _MR()
+        with patch(
+            "src.patterns.retriever.SafeTEIReranker",
+            return_value=mock,
+        ):
+            result = retriever.retrieve(
+                user_domain="microservices", normalized_domain="microservices"
             )
-            retriever._dense_retriever = dr
-            retriever._bm25_retriever = br
-            mock = _MR()
-            with patch(
-                "src.patterns.retriever.SafeTEIReranker",
-                return_value=mock,
-            ):
-                results[mode] = retriever.retrieve(
-                    user_domain="microservices", normalized_domain="microservices"
-                )
-        assert results["rerank"].patterns == results["rank_fusion"].patterns
+        # With the blend, slug-b's tie-breaker on ce (0.95 > 0.05)
+        # outranks slug-a's tie-breaker on fused (1/60 > 1/61).  This
+        # is consistent with CE-only ordering under a small pool.
+        assert [p[0]["name"] for p in result.patterns] == ["slug-b", "slug-a"]
 
     def test_domain_match_carries_rerank_score(self):
-        """After reranking, matched_domains entries carry rerank_score (CE logit) alongside fusion_score (RRF)."""
+        """After reranking, matched_domains entries carry rerank_score (CE logit) alongside fusion_score (stage-1 fused)."""
         rrf_a = 1.0 / 60
         rrf_b = 1.0 / 61
         fused = self._make_fused_nodes([(rrf_a, "slug-a"), (rrf_b, "slug-b")])
@@ -1233,9 +1242,9 @@ class TestT8RankFusionSelection:
         br = _CR([])
         retriever = HybridPatternRetriever(
             bm25_retriever=br, dense_retriever=dr, pattern_loader=_ML(),
+            min_fusion_score=0.0,
             rerank_top_n=1,
             reranker_config=MagicMock(base_url="http://x", timeout=30.0, max_batch_size=48),
-            rerank_selection="rerank",
         )
         retriever._dense_retriever = dr
         retriever._bm25_retriever = br
@@ -1244,7 +1253,7 @@ class TestT8RankFusionSelection:
             result = retriever.retrieve("microservices", "microservices")
         assert len(result.matched_domains) >= 1
         assert result.matched_domains[0].slug == "slug-a"
-        assert result.matched_domains[0].fusion_score == pytest.approx(rrf_a)
+        assert result.matched_domains[0].fusion_score == pytest.approx(2.0 / 60)
         assert result.matched_domains[0].rerank_score == pytest.approx(ce_logit)
 
     def test_domain_match_rerank_score_none_without_rerank(self):
@@ -1334,9 +1343,9 @@ class TestT8RankFusionSelection:
         br = _CR([])
         retriever = HybridPatternRetriever(
             bm25_retriever=br, dense_retriever=dr, pattern_loader=_ML(),
+            min_fusion_score=0.0,
             rerank_top_n=1,
             reranker_config=MagicMock(base_url="http://x", timeout=30.0, max_batch_size=48),
-            rerank_selection="rerank",
         )
         retriever._dense_retriever = dr
         retriever._bm25_retriever = br

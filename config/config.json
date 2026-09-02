@@ -27,14 +27,12 @@
       "timeout": "{env:RERANKER_TIMEOUT:-30.0}",
       "max_batch_size": "{env:RERANKER_MAX_BATCH_SIZE:-48}"
     },
-    "rerank_top_n": "{env:RETRIEVAL_RERANK_TOP_N:-10}",
-    "rerank_selection": "{env:RETRIEVAL_RERANK_SELECTION:-rerank}"
+    "rerank_top_n": "{env:RETRIEVAL_RERANK_TOP_N:-10}"
   },
   "retrieval": {
     "bm25_top_k": "{env:RETRIEVAL_BM25_TOP_K:-0}",
     "dense_top_k": "{env:RETRIEVAL_DENSE_TOP_K:-0}",
     "top_k_patterns": "{env:RETRIEVAL_TOP_K_PATTERNS:-5}",
-    "mode": "{env:RETRIEVAL_MODE:-reciprocal_rerank}",
     "min_fusion_score": "{env:RETRIEVAL_MIN_FUSION_SCORE:-0.0}",
     "max_tries": "{env:RETRIEVAL_MAX_TRIES:-3}",
     "min_quality_score": "{env:RETRIEVAL_MIN_QUALITY_SCORE:-50.0}",

@@ -43,9 +43,11 @@ services:
       - RETRIEVAL_BM25_TOP_K=20
       - RETRIEVAL_DENSE_TOP_K=20
       - RETRIEVAL_TOP_K_PATTERNS=5
-      - RETRIEVAL_MODE=reciprocal_rerank
+      # Slug-cut strategy is locked to rank_fusion (Vespa-style RR blend).
+      # The reported fusion_score lies in [0, 2/60] ≈ [0, 0.033];
+      # top-of-pool blends sit around 0.030-0.033, so 0.015 gates only
+      # long-tail candidates (consensus rises through rerank_top_n).
       - RETRIEVAL_MIN_FUSION_SCORE=0.015
-      - RETRIEVAL_RERANK_SELECTION=rank_fusion
       - RETRIEVAL_RERANK_TOP_N=10
       - RETRIEVAL_USE_LEAN_WIRE_SCHEMA=false
       - RETRIEVAL_STYLE_SCORE_THRESHOLD=50.0

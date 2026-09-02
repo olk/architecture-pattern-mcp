@@ -440,7 +440,6 @@ The server reads `~/.config/architecture-pattern-mcp/config.json` (override with
     "bm25_top_k": 0,
     "dense_top_k": 0,
     "top_k_patterns": 5,
-    "mode": "reciprocal_rerank",
     "min_quality_score": 50.0
   },
   "pattern_directory": "~/.config/architecture-pattern-mcp/pattern",
@@ -492,10 +491,8 @@ If the configured model already contains a provider prefix (e.g. `openai/gpt-4o-
 | `RETRIEVAL_BM25_TOP_K` | `0` | BM25 stage-1 recall cap (0=full corpus) |
 | `RETRIEVAL_DENSE_TOP_K` | `0` | Dense stage-1 recall cap (0=full corpus) |
 | `RETRIEVAL_TOP_K_PATTERNS` | `5` | Number of patterns to select |
-| `RETRIEVAL_MODE` | `reciprocal_rerank` | Fusion mode: `reciprocal_rerank`, `relative_score`, `dist_based_score` |
-| `RETRIEVAL_MIN_FUSION_SCORE` | `0.0` | Minimum RRF fusion score |
-| `RETRIEVAL_RERANK_TOP_N` | `10` | Rerank top N |
-| `RETRIEVAL_RERANK_SELECTION` | `rerank` | Slug-cut strategy: `rerank` (CE-only) or `rank_fusion` (Vespa-style RR blend) |
+| `RETRIEVAL_MIN_FUSION_SCORE` | `0.0` | Relevance floor on the rank_fusion blend value (range [0, 2/60] ≈ [0, 0.033]). Default 0.0 (gate disabled). Values above the blend maximum are rejected at startup. |
+| `RETRIEVAL_RERANK_TOP_N` | `10` | Rerank top N (slug-cut after CE) |
 | `RETRIEVAL_USE_LEAN_WIRE_SCHEMA` | `false` | Use lean response schema |
 | `RETRIEVAL_STYLE_SCORE_THRESHOLD` | `50.0` | Min analysis score for style recommendation |
 | `REASONING_ENABLED` | `true` | Server-side reasoning MCP integration (see [Structured Reasoning](#structured-reasoning-shannonthinking--code-reasoning)) |

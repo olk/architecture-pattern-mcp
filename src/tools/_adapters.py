@@ -119,7 +119,7 @@ def analysis_to_pydantic(dc: AnalysisResultDC) -> AnalysisResult:
         for d in dc.matched_domains
     ]
 
-    return AnalysisResult(
+    result = AnalysisResult(
         strengths=list(dc.strengths),
         weaknesses=list(dc.weaknesses),
         recommendations=list(dc.recommendations),
@@ -129,6 +129,15 @@ def analysis_to_pydantic(dc: AnalysisResultDC) -> AnalysisResult:
         matched_domains=matched_domains,
         is_fallback=bool(dc.is_fallback),
     )
+    if result.is_fallback:
+        logger.warning(
+            "Analysis fell back to the default pattern '%s' — no domain-matched "
+            "candidate passed retrieval or the relevance floor; surfacing "
+            "is_fallback=true to the MCP caller",
+            result.recommended_style,
+            extra={"recommended_style": result.recommended_style},
+        )
+    return result
 
 
 # ─── ArchitectureDesign ───────────────────────────────────────────────────────

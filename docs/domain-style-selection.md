@@ -31,7 +31,7 @@ In `analyze()` (`src/pipeline.py:377-507`):
    - Dense leg embeds the *raw* domain string → FAISS (`src/patterns/retriever.py:304`)
    - BM25 leg matches the *normalized* slug tokens (`src/patterns/retriever.py:305`)
    - Different queries per leg is intentional (`src/patterns/retriever.py:141-147`)
-4. **Fusion + rerank**: RRF fusion, then mandatory TEI cross-encoder rerank capped at `rerank_top_n=10` — `src/patterns/retriever.py:336-435`
+4. **Fusion + rerank**: relative_score fusion (per-leg min-max normalization, dense 0.7 / BM25 0.3 weights — locked constant, see `docs/retrieval-fusion-modes.md`), then mandatory TEI cross-encoder rerank capped at `rerank_top_n=10` — `src/patterns/retriever.py` (`_ensure_fusion_retriever`, rerank block)
 5. **Slug → patterns**: `filter_by_domain(slug)`, pattern score = max fusion score over matching slugs — `src/patterns/retriever.py:444-451`
 6. **Fallback**: empty result or best score < `min_fusion_score` → `layered-monolith` tagged `is_fallback=True` — `src/patterns/retriever.py:456-469`, `495-516` (`DEFAULT_FALLBACK_PATTERN_NAME` at `src/patterns/retriever.py:78`)
 

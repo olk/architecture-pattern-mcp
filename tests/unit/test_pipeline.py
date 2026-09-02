@@ -344,7 +344,12 @@ class MockBM25Retriever:
 
 
 def create_test_pipeline(retrieval_config=None):
-    """Create a test pipeline with mock dependencies."""
+    """Create a test pipeline with mock dependencies.
+
+    Defaults to min_fusion_score=0.0: the mock reranker does not stamp
+    ``retrieval_score``, so the restore path yields 0.0 and the default
+    0.25 relevance floor would hijack these stage-semantics tests.
+    """
     agent = MockSoftwareArchitectAgent()
     pattern_loader = MockPatternLoader()
     pattern_loader.load_all()
@@ -352,7 +357,7 @@ def create_test_pipeline(retrieval_config=None):
         agent=agent,
         pattern_loader=pattern_loader,
         embedder_config=MagicMock(),
-        retrieval_config=retrieval_config,
+        retrieval_config=retrieval_config or RetrievalConfig(min_fusion_score=0.0),
     )
     pipeline._dense_retriever = MockDenseRetriever()
     pipeline._bm25_retriever = MockBM25Retriever()

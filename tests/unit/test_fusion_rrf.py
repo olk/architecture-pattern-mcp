@@ -20,14 +20,21 @@
 # SOFTWARE.
 
 """
-RRF fusion regression tests (via the upstream QueryFusionRetriever).
+Fusion regression tests.
 
-The fusion formula is part of the system's behavioural contract:
-``min_fusion_score`` thresholds stored in operator configs are calibrated
-against these exact score values, so the arithmetic must not drift
-silently.  If a test here fails after a dependency bump, the upstream
-fusion ranking changed — require an explicit migration note, never a
-silent threshold shift.
+Two families live here:
+
+1. TestQueryFusionRRF — upstream RRF arithmetic regression.  The reciprocal
+   rank formula is still part of the system's behavioural contract through
+   the ``rank_fusion`` CE-blend (``reciprocal_rank_score`` blends the
+   stage-1 fused-list rank with the cross-encoder rank), so the arithmetic
+   must not drift silently.  If a test here fails after a dependency bump,
+   the upstream ranking changed — require an explicit migration note.
+
+2. TestRetrievalFusionModeConstant / TestRelativeScoreWeightedFusion — the
+   stage-1 mode is locked to ``FUSION_MODES.RELATIVE_SCORE`` (per-leg
+   min-max normalization, dense 0.7 / BM25 0.3 weights).  These tests pin
+   the constants and hand-compute the weighted fusion arithmetic.
 
 Locked-in properties (issue numbers refer to the original fixes):
 - RRF score per node = sum over legs of 1/(rank + k - 1), k=60 (#23:
@@ -37,8 +44,6 @@ Locked-in properties (issue numbers refer to the original fixes):
   fusion_rank/retriever_idx collision)
 - the underlying TextNode objects (hash + metadata) are never mutated (#24)
 - consensus slugs (retrieved by both legs) outrank single-leg slugs
-- the legacy "simple" rank-union mode is removed from configuration and
-  from HybridPatternRetriever
 """
 
 from unittest.mock import MagicMock
@@ -50,8 +55,9 @@ from llama_index.core.retrievers import QueryFusionRetriever
 from llama_index.core.retrievers.fusion_retriever import FUSION_MODES
 from llama_index.core.schema import NodeWithScore, QueryBundle, TextNode
 
-from src.config import FusionMode
 from src.patterns.retriever import (
+    RETRIEVAL_FUSION_MODE,
+    RETRIEVAL_RETRIEVER_WEIGHTS,
     RRF_K,
     HybridPatternRetriever,
     reciprocal_rank_score,
@@ -198,31 +204,92 @@ class TestQueryFusionRRF:
         assert seen.count("normalized") == 2
 
 
-class TestSimpleModeRemoved:
-    """The legacy "simple" rank-union mode is gone: not a config literal and
-    not accepted by HybridPatternRetriever (upstream FUSION_MODES.SIMPLE has
-    different max-raw-score semantics and must stay unreachable)."""
+class TestRetrievalFusionModeConstant:
+    """Stage-1 fusion is locked: mode and leg weights are module constants,
+    not config-exposable.  relative_score is required because it is the only
+    family honoring retriever_weights under the pinned llama-index-core
+    (RRF silently ignores them — upstream issue #21444)."""
 
-    def test_simple_mode_not_in_fusion_mode(self) -> None:
-        assert "simple" not in FusionMode.__args__  # type: ignore[attr-defined]
-        assert "reciprocal_rerank" in FusionMode.__args__  # type: ignore[attr-defined]
-        assert "relative_score" in FusionMode.__args__  # type: ignore[attr-defined]
-        assert "dist_based_score" in FusionMode.__args__  # type: ignore[attr-defined]
+    def test_runtime_fusion_mode_is_relative_score(self) -> None:
+        assert RETRIEVAL_FUSION_MODE is FUSION_MODES.RELATIVE_SCORE
 
-    def test_simple_mode_rejected_by_retriever(self) -> None:
-        with pytest.raises(ValueError, match="Unsupported fusion mode"):
+    def test_retriever_weights_favor_dense(self) -> None:
+        assert RETRIEVAL_RETRIEVER_WEIGHTS == (0.7, 0.3)
+
+    def test_invalid_weights_rejected(self) -> None:
+        with pytest.raises(ValueError, match="retriever_weights"):
             HybridPatternRetriever(
                 dense_retriever=MagicMock(),
                 bm25_retriever=MagicMock(),
                 pattern_loader=MagicMock(),
-                mode="simple",  # type: ignore[arg-type]
+                retriever_weights=(0.7,),
             )
-
-    def test_unknown_mode_rejected_by_retriever(self) -> None:
-        with pytest.raises(ValueError, match="Unsupported fusion mode"):
+        with pytest.raises(ValueError, match="retriever_weights"):
             HybridPatternRetriever(
                 dense_retriever=MagicMock(),
                 bm25_retriever=MagicMock(),
                 pattern_loader=MagicMock(),
-                mode="bogus",  # type: ignore[arg-type]
+                retriever_weights=(0.7, -0.1),
             )
+
+
+class TestRelativeScoreWeightedFusion:
+    """Hand-computed relative_score arithmetic with the production weights
+    (0.7 dense, 0.3 BM25, num_queries=1).
+
+    Per leg: min-max normalize raw scores to [0, 1], multiply by the leg
+    weight, then sum across legs for nodes retrieved by both.  With these
+    fixtures the best consensus score is 1.0 and a dense-only hit caps at
+    0.7 — the scale the min_fusion_score floor (0.25) operates on.
+    """
+
+    def _fuse_weighted(
+        self,
+        dense: list[NodeWithScore],
+        bm25: list[NodeWithScore],
+        weights: tuple[float, float] = (0.7, 0.3),
+    ) -> list[NodeWithScore]:
+        fusion = QueryFusionRetriever(
+            retrievers=[_StubRetriever(dense), _StubRetriever(bm25)],
+            llm=MockLLM(),
+            mode=FUSION_MODES.RELATIVE_SCORE,
+            retriever_weights=list(weights),
+            num_queries=1,
+            use_async=False,
+            similarity_top_k=len(SLUGS) * 2,  # lossless: union of both legs
+        )
+        return fusion.retrieve(
+            QueryBundle(query_str="normalized", custom_embedding_strs=["raw"])
+        )
+
+    def test_hand_computed_weighted_scores(self, dense_nodes, bm25_nodes) -> None:
+        fused = self._fuse_weighted(dense_nodes, bm25_nodes)
+        fused_by_slug = {n.node.metadata["slug"]: n for n in fused}
+        expected = {
+            # dense mm, bm25 mm → 0.7·dense + 0.3·bm25
+            "slug-a": 0.7 * 1.0 + 0.3 * 0.75,   # 0.925 — consensus winner
+            "slug-b": 0.7 * 0.75 + 0.3 * 0.25,  # 0.6
+            "slug-c": 0.7 * 0.5 + 0.3 * 1.0,    # 0.65
+            "slug-d": 0.7 * 0.25 + 0.3 * 0.0,   # 0.175
+            "slug-e": 0.7 * 0.0 + 0.3 * 0.5,    # 0.15
+        }
+        for slug, score in expected.items():
+            assert fused_by_slug[slug].score == pytest.approx(score)
+
+    def test_weighted_ordering_dense_consensus_wins(
+        self, dense_nodes, bm25_nodes
+    ) -> None:
+        fused = self._fuse_weighted(dense_nodes, bm25_nodes)
+        order = [n.node.metadata["slug"] for n in fused]
+        assert order == ["slug-a", "slug-c", "slug-b", "slug-d", "slug-e"]
+
+    def test_single_leg_scores_capped_by_leg_weight(self) -> None:
+        # A dense-only hit normalizes to 1.0 → exactly 0.7; a BM25-only hit
+        # → 0.3 — regardless of raw score magnitude (10.0 vs 0.9).
+        dense = [NodeWithScore(node=TextNode(text="a", metadata={"slug": "a"}), score=0.9)]
+        bm25 = [NodeWithScore(node=TextNode(text="b", metadata={"slug": "b"}), score=10.0)]
+        fused = self._fuse_weighted(dense, bm25)
+        fused_by_slug = {n.node.metadata["slug"]: n for n in fused}
+        assert fused_by_slug["a"].score == pytest.approx(0.7)
+        assert fused_by_slug["b"].score == pytest.approx(0.3)
+        assert fused[0].node.metadata["slug"] == "a"

@@ -42,7 +42,7 @@ Configuration loading from JSON file with environment variable expansion.
 import json
 import logging
 import os
-from typing import Any, ClassVar, Literal
+from typing import Any, ClassVar
 
 from dotenv import load_dotenv
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
@@ -120,7 +120,9 @@ class RerankerConfig(BaseModel):
     """Reranker provider configuration — connection and post-fusion slug-cut settings.
 
     Contains the TEI-backed cross-encoder connection settings (base_url, timeout)
-    and the reranking stage parameters (rerank_top_n, rerank_selection).
+    and the reranking stage parameter (`rerank_top_n`).  The slug-cut
+    strategy (Vespa-style reciprocal-rank blend) is locked: see
+    ``docs/retrieval-fusion-modes.md`` for the rationale.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -136,23 +138,6 @@ class RerankerConfig(BaseModel):
             "Reranker scoring itself remains lossless."
         ),
     )
-    rerank_selection: Literal["rerank", "rank_fusion"] = Field(
-        "rerank",
-        description=(
-            "Slug-cut strategy after cross-encoder scoring. "
-            '"rerank" (default): keep top rerank_top_n by cross-encoder order only '
-            "(llama-index convention). Reported fusion_score is the original RRF score. "
-            '"rank_fusion": Vespa-style blend — keep top rerank_top_n by '
-            "RR(rrf_rank) + RR(ce_rank), k=60.  "
-            "Protects consensus-backed slugs from CE outliers on short domain-slug inputs. "
-            "Reported fusion_score is the blended selection score "
-            "(the min_fusion_score gate applies to that blended value in this mode). "
-            "Has no effect when the candidate pool is < rerank_top_n."
-        ),
-    )
-
-
-FusionMode = Literal["reciprocal_rerank", "relative_score", "dist_based_score"]
 
 
 PATTERN_CONTEXT_LIMITS: dict[str, int] = {
@@ -164,6 +149,11 @@ PATTERN_CONTEXT_LIMITS: dict[str, int] = {
     "anti_patterns": 3,
     "suitable_domains": 5,
 }
+
+# Maximum blend value the min_fusion_score gate can observe:
+# RR(fused_rank=1) + RR(ce_rank=1) = 2/(1+60-1) = 2/60.  Keep the
+# denominator in sync with ``RRF_K`` in src/patterns/retriever.py.
+RANK_FUSION_BLEND_MAX = 2.0 / 60.0
 
 
 class RetrievalConfig(BaseModel):
@@ -190,22 +180,19 @@ class RetrievalConfig(BaseModel):
     bm25_top_k: int = Field(0, ge=0, le=1000)
     dense_top_k: int = Field(0, ge=0, le=1000)
     top_k_patterns: int = Field(5, ge=1, le=100)
-    mode: FusionMode = Field(
-        "reciprocal_rerank",
-        description=(
-            "Stage-1 fusion strategy, applied by the upstream QueryFusionRetriever: "
-            '"reciprocal_rerank" (Reciprocal Rank Fusion, k=60, default), '
-            '"relative_score" (min-max normalized per-leg scores), '
-            '"dist_based_score" (relative score with a 3-sigma range). '
-            'The former "simple" rank-union mode was removed.'
-        ),
-    )
     min_fusion_score: float = Field(
-        0.0, ge=0.0, le=1.0,
+        0.0, ge=0.0, le=RANK_FUSION_BLEND_MAX,
         description=(
-            "RRF scores encode rank consensus, not calibrated relevance — "
-            "0.0 disables this gate (recommended). Relevance gating happens "
-            "downstream via style_score_threshold (0-100 scale)."
+            "Relevance floor on the best fused score for the recall set "
+            "(0.0 disables — the default, since the blend scale is tiny "
+            "and most recall sets sit at 0.5-0.9 of the blend range). "
+            "Stage-1 fusion is locked to relative_score; the CE stage uses "
+            "the Vespa-style reciprocal-rank blend "
+            "``RR(fused_rank) + RR(ce_rank)`` with k=60, whose reported "
+            "values lie in [0, 2/60] ≈ [0, 0.0333].  This is a per-query "
+            "floor, NOT absolute relevance — see docs/retrieval-fusion-modes.md. "
+            "A `ServerConfig` validator rejects values above the blend "
+            "maximum (e.g. a leftover 0.25 from an older config.json)."
         )
     )
     min_quality_score: float = Field(
@@ -384,6 +371,30 @@ class ServerConfig(BaseModel):
                 "must be a non-empty URL. Set RERANKER_BASE_URL and ensure the "
                 "deployed config.json contains the `reranker` block "
                 "(an outdated config file copied from an older image may omit it)."
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _check_fusion_floor_scale(self) -> "ServerConfig":
+        """Defense-in-depth: a min_fusion_score above the blend maximum
+        guarantees 100% fallback to layered-monolith.
+
+        With the slug-cut strategy locked to the Vespa-style reciprocal-
+        rank blend ``RR(fused_rank) + RR(ce_rank)`` (max 2/60), a
+        ``min_fusion_score`` greater than ``RANK_FUSION_BLEND_MAX`` cannot
+        ever be satisfied.  The field validator (``le=...``) catches the
+        common case; this catches cases where the operator sets an
+        out-of-range floor through a config.json that survived the
+        pydantic fail-fast path (e.g. when an older config file with a
+        stale 0.25 floor loads).
+        """
+        effective_floor = self.retrieval.min_fusion_score if self.retrieval else 0.0
+        if effective_floor > RANK_FUSION_BLEND_MAX:
+            raise ValueError(
+                f"retrieval.min_fusion_score ({effective_floor}) exceeds the "
+                f"theoretical maximum blend value "
+                f"({RANK_FUSION_BLEND_MAX:.4f}); every query would fall back to "
+                "layered-monolith. Lower the floor to 0.0 (or ≤ 0.033)."
             )
         return self
 

@@ -44,7 +44,9 @@ from src.patterns.retriever import (
 )
 from src.patterns.safe_tei_rerank import _safe_tei_rerank_call
 
-MOCK_FUSION_SCORE = 1 / 60
+# Stage-1 fusion (relative_score, dense weight 0.7) sends a single-leg
+# dense hit to 0.7 * 1.0 (min-max top of leg times leg weight).
+MOCK_FUSION_SCORE = 0.7
 
 
 class _DummyRetriever:
@@ -114,6 +116,8 @@ class TestRetrieveFallbackWhenNoMatch:
         )
         retriever._dense_retriever = MagicMock()
         retriever._bm25_retriever = MagicMock()
+        retriever._dense_retriever.retrieve.return_value = []
+        retriever._bm25_retriever.retrieve.return_value = []
 
         result = retriever.retrieve(
             user_domain="nonexistent-domain",
@@ -282,6 +286,7 @@ class TestRetrievalLogging:
             dense_retriever=_DummyRetriever(),
             bm25_retriever=_DummyRetriever(),
             pattern_loader=loader,
+            min_fusion_score=0.0,  # stage-1 semantics under test, not the gate
             reranker_config=MagicMock(base_url="http://reranker:8080", timeout=30.0, max_batch_size=48),
         )
         return retriever
@@ -360,7 +365,7 @@ class TestRetrievalLogging:
 
         fusion_logs = [r for r in caplog.records if r.levelno == logging.INFO and getattr(r, "stage", None) == "fusion"]
         assert len(fusion_logs) >= 1
-        assert getattr(fusion_logs[0], "mode", None) == "reciprocal_rerank"
+        assert getattr(fusion_logs[0], "mode", None) == "relative_score"
 
     def test_rerank_emits_info_log(
         self, retriever_with_mocks: HybridPatternRetriever, caplog: pytest.LogCaptureFixture
@@ -410,7 +415,7 @@ class TestRetrievalLogging:
         selected_logs = [r for r in caplog.records if r.levelno == logging.INFO and getattr(r, "stage", None) == "recall"]
         assert len(selected_logs) >= 1
         assert getattr(selected_logs[0], "domain", None) == "microservices"
-        assert getattr(selected_logs[0], "fusion_mode", None) == "reciprocal_rerank"
+        assert getattr(selected_logs[0], "fusion_mode", None) == "relative_score"
         patterns = getattr(selected_logs[0], "patterns", [])
         assert len(patterns) == 1
         assert patterns[0]["name"] == "microservices"
