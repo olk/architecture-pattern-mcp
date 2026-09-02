@@ -68,7 +68,6 @@ from src.reasoning.client import ReasoningClient
 from src.tools.jobs import JobsStore
 from src.config import ConfigManager, ServerConfig
 from src.patterns.loader import PatternLoader
-from src.patterns.vector_index import DomainVectorIndex
 from src.pipeline import ArchitecturePipeline, CancellationToken
 from src.resources.components import build_component_blueprints, slugify
 from src.resources.patterns import PatternResource
@@ -373,25 +372,20 @@ class MCPArchitectServer:
             if self._reasoning_client is not None and self._reasoning_client.enabled:
                 await self._check_reasoning_health(self._reasoning_client)
 
-            # Initialize PatternLoader and DomainVectorIndex
-            # Stored on self so resource handlers can reach it via lifespan_context
+            # Initialize PatternLoader (stored on self so resource handlers
+            # can reach it via lifespan_context)
             self._pattern_loader = PatternLoader(
                 patterns_dir=os.path.expanduser(self._config.pattern_directory)
             )
 
-            vector_index = DomainVectorIndex.from_embedder_config(self._config.embedder)
+            logger.info("PatternLoader initialized")
 
-            from src.patterns.bm25_index import DomainBM25Index
-            bm25_index = DomainBM25Index()
-
-            logger.info("PatternLoader, DomainVectorIndex, and DomainBM25Index initialized")
-
-            # Initialize ArchitecturePipeline
+            # Initialize ArchitecturePipeline; the pipeline builds the
+            # dense + BM25 retrieval legs itself at warmup.
             self._pipeline = ArchitecturePipeline(
                 agent=self._agent,
                 pattern_loader=self._pattern_loader,
-                vector_index=vector_index,
-                bm25_index=bm25_index,
+                embedder_config=self._config.embedder,
                 retrieval_config=self._config.retrieval,
                 reranker_config=self._config.reranker,
                 reasoning_client=self._reasoning_client,

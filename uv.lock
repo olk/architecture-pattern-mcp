@@ -200,7 +200,6 @@ version = "1.0.18"
 source = { editable = "." }
 dependencies = [
     { name = "aiosqlite" },
-    { name = "bm25s" },
     { name = "click" },
     { name = "faiss-cpu" },
     { name = "fastmcp" },
@@ -210,9 +209,9 @@ dependencies = [
     { name = "llama-index-llms-litellm" },
     { name = "llama-index-postprocessor-tei-rerank" },
     { name = "llama-index-retrievers-bm25" },
+    { name = "llama-index-vector-stores-faiss" },
     { name = "numpy" },
     { name = "pydantic" },
-    { name = "pystemmer" },
     { name = "python-dotenv" },
 ]
 
@@ -240,7 +239,6 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "aiosqlite", specifier = ">=0.20.0" },
-    { name = "bm25s", specifier = ">=0.2.0" },
     { name = "click", specifier = ">=8.0.0" },
     { name = "faiss-cpu", specifier = ">=1.14.3" },
     { name = "fastmcp", specifier = ">=3.4.4" },
@@ -250,10 +248,10 @@ requires-dist = [
     { name = "llama-index-llms-litellm", specifier = ">=0.7.1,<0.8" },
     { name = "llama-index-postprocessor-tei-rerank", specifier = ">=0.5.0,<0.6" },
     { name = "llama-index-retrievers-bm25", specifier = ">=0.7.1,<0.8" },
+    { name = "llama-index-vector-stores-faiss", specifier = ">=0.7.0" },
     { name = "numpy", specifier = ">=1.26.0" },
     { name = "pydantic", specifier = ">=2.11.7" },
     { name = "pydata-sphinx-theme", marker = "extra == 'docs'", specifier = ">=0.15.0" },
-    { name = "pystemmer", specifier = ">=2.2.0" },
     { name = "python-dotenv", specifier = ">=1.0.0" },
     { name = "sphinx", marker = "extra == 'docs'", specifier = ">=7.2.0" },
     { name = "sphinx-autoapi", marker = "extra == 'docs'", specifier = ">=3.0.0" },
@@ -2022,6 +2020,18 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/b5/72/c51933e684e5480c8c9560536d3fc8b68919ab3c857f556bd5a332293b21/llama_index_retrievers_bm25-0.7.1.tar.gz", hash = "sha256:65bff95c5c1354854394209406d2d342ff5e62983ff2818fd2b85d5bed70bed0", size = 5532 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/c1/c3/4a8d46d73829a528c552c86c0ea8b92f06df40e5fd338c0c7c6ffe8804e6/llama_index_retrievers_bm25-0.7.1-py3-none-any.whl", hash = "sha256:6feb1882fb43608bfcb8ea6466b5fabda78b097c7b7cbe28a4f2b3cc5a3705ee", size = 5061 },
+]
+
+[[package]]
+name = "llama-index-vector-stores-faiss"
+version = "0.7.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "llama-index-core" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/cc/80/b7e94f6b802488968d57dc6ff8fa91d1831a414e2eb72ee78bcf31ac0d39/llama_index_vector_stores_faiss-0.7.0.tar.gz", hash = "sha256:6531eb0de3fbda882a16e442beeeed590209c5fd7a09f2cf235977d94e97fd63", size = 6041 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/b9/63/8f4dd9200e491f0d8d1c3103c92a371871a1a478ece1d5565055c4dae796/llama_index_vector_stores_faiss-0.7.0-py3-none-any.whl", hash = "sha256:3284474958e2ed45ca9c96b6c2a66e84f856905eba7bd037fdb19d3bea58ec67", size = 7737 },
 ]
 
 [[package]]

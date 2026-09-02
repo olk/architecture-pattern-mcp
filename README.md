@@ -492,7 +492,7 @@ If the configured model already contains a provider prefix (e.g. `openai/gpt-4o-
 | `RETRIEVAL_BM25_TOP_K` | `0` | BM25 stage-1 recall cap (0=full corpus) |
 | `RETRIEVAL_DENSE_TOP_K` | `0` | Dense stage-1 recall cap (0=full corpus) |
 | `RETRIEVAL_TOP_K_PATTERNS` | `5` | Number of patterns to select |
-| `RETRIEVAL_MODE` | `reciprocal_rerank` | Fusion mode: `simple`, `reciprocal_rerank` |
+| `RETRIEVAL_MODE` | `reciprocal_rerank` | Fusion mode: `reciprocal_rerank`, `relative_score`, `dist_based_score` |
 | `RETRIEVAL_MIN_FUSION_SCORE` | `0.0` | Minimum RRF fusion score |
 | `RETRIEVAL_RERANK_TOP_N` | `10` | Rerank top N |
 | `RETRIEVAL_RERANK_SELECTION` | `rerank` | Slug-cut strategy: `rerank` (CE-only) or `rank_fusion` (Vespa-style RR blend) |

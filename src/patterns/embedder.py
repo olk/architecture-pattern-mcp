@@ -22,11 +22,26 @@
 """Embedder factory built on llama_index.embeddings.litellm.LiteLLMEmbedding.
 
 Supports openai, tei, ollama, vllm providers via EmbedderConfig.
+
+All embeddings are L2-normalised on the way out so that a FAISS
+``IndexFlatIP`` inner product equals cosine similarity — the same contract
+the former custom DomainVectorIndex enforced in its own ``_embed`` helper.
 """
 from typing import Any
 
+import numpy as np
 from llama_index.core.bridge.pydantic import PrivateAttr
 from llama_index.embeddings.litellm import LiteLLMEmbedding
+
+
+def _normalize(vecs: list[list[float]]) -> list[list[float]]:
+    """L2-normalise embedding vectors row-wise (zero vectors pass through)."""
+    arr = np.asarray(vecs, dtype=np.float32)
+    if arr.ndim == 1:
+        arr = arr.reshape(1, -1)
+    norms = np.linalg.norm(arr, axis=1, keepdims=True)
+    norms = np.where(norms == 0.0, 1.0, norms)
+    return (arr / norms).tolist()
 
 
 class InstructionAwareEmbedding(LiteLLMEmbedding):
@@ -34,18 +49,23 @@ class InstructionAwareEmbedding(LiteLLMEmbedding):
 
     Wraps _get_query_embedding and _get_text_embedding to prepend
     configurable instruction strings before delegating to the parent.
-    Batch override: sends a single HTTP call for a chunk of texts instead
-    of one call per text (issue #9).
 
     Uses PrivateAttr (LlamaIndex's documented extension point) so that
-    _query_instruction, _text_instruction, and _embed_batch_size are
-    stored as proper private attributes without triggering
-    ``object.__setattr__`` workarounds.
+    _query_instruction and _text_instruction are stored as proper private
+    attributes without triggering ``object.__setattr__`` workarounds.
+
+    Every embedding-producing path normalises its output to unit length
+    (see module docstring): single query/text, plural batch, and async
+    variants. Batch chunking is delegated to the upstream
+    ``BaseEmbedding.get_text_embedding_batch`` implementation, which
+    flushes every ``embed_batch_size`` texts through the overridden
+    ``_get_text_embeddings`` (instruction prefix + normalisation applied
+    per chunk) and additionally provides the embeddings cache, rate
+    limiting, and dispatcher/callback events.
     """
 
     _query_instruction: str = PrivateAttr("")
     _text_instruction: str = PrivateAttr("")
-    _embed_batch_size: int = PrivateAttr(16)
 
     def __init__(
         self,
@@ -54,10 +74,10 @@ class InstructionAwareEmbedding(LiteLLMEmbedding):
         embed_batch_size: int = 16,
         **kwargs: Any,
     ) -> None:
-        super().__init__(**kwargs)
+        kwargs.pop("embed_batch_size", None)
+        super().__init__(embed_batch_size=max(1, int(embed_batch_size)), **kwargs)
         self._query_instruction = query_instruction or ""
         self._text_instruction = text_instruction or ""
-        self._embed_batch_size = max(1, int(embed_batch_size))
 
     def _format_query(self, query: str) -> str:
         return f"{self._query_instruction}{query}" if self._query_instruction else query
@@ -66,26 +86,19 @@ class InstructionAwareEmbedding(LiteLLMEmbedding):
         return f"{self._text_instruction}{text}" if self._text_instruction else text
 
     def _get_query_embedding(self, query: str) -> list[float]:
-        return super()._get_query_embedding(self._format_query(query))
+        return _normalize([super()._get_query_embedding(self._format_query(query))])[0]
 
     def _get_text_embedding(self, text: str) -> list[float]:
-        return super()._get_text_embedding(self._format_text(text))
+        return _normalize([super()._get_text_embedding(self._format_text(text))])[0]
+
+    def _get_text_embeddings(self, texts: list[str]) -> list[list[float]]:
+        return _normalize(super()._get_text_embeddings([self._format_text(t) for t in texts]))
 
     async def _aget_query_embedding(self, query: str) -> list[float]:
-        return await super()._aget_query_embedding(self._format_query(query))
+        return _normalize([await super()._aget_query_embedding(self._format_query(query))])[0]
 
     async def _aget_text_embedding(self, text: str) -> list[float]:
-        return await super()._aget_text_embedding(self._format_text(text))
-
-    def get_text_embedding_batch(self, texts: list[str]) -> list[list[float]]:
-        """Batch text embedding with instruction prefixes applied.
-
-        One HTTP call per ``_embed_batch_size`` chunk instead of one call
-        per text. With 213 domain slugs and ``embed_batch_size=16``, this
-        drops cold-start from 213 serial HTTP calls to 14 batched ones.
-        """
-        prefixed = [self._format_text(t) for t in texts]
-        return super()._get_text_embeddings(prefixed)
+        return _normalize([await super()._aget_text_embedding(self._format_text(text))])[0]
 
 
 TEI_RERANKER_MODEL = "Alibaba-NLP/gte-reranker-modernbert-base"

@@ -311,118 +311,52 @@ class MockPatternLoader:
         ]
 
 
-class MockDomainVectorIndex:
-    """Mock DomainVectorIndex for testing."""
+class MockDenseRetriever:
+    """Mock dense-leg retriever returning canned domain nodes."""
 
-    def __init__(self, model_name=None):
-        self._model_name = model_name or "all-MiniLM-L6-v2"
-        self._index = None
-        self._domains = []
-        self._built = False
-        self.search_calls = []
+    def __init__(self, top_k: int = 20):
+        self._top_k = top_k
 
-    @property
-    def model_name(self) -> str:
-        return self._model_name
-
-    @property
-    def is_built(self) -> bool:
-        return self._built
-
-    @property
-    def domains(self) -> list[str]:
-        return list(self._domains)
-
-    @property
-    def _embedder(self):
-        from llama_index.core.embeddings import MockEmbedding
-        return MockEmbedding(embed_dim=8)
-
-    def build_index(self, domains: list[str]) -> None:
-        self._domains = list(domains)
-        self._built = True
-
-    def search(self, query: str, k: int = 5) -> list[tuple[str, float]]:
-        self.search_calls.append((query, k))
-        return [
-            ("cloud-native", 0.95),
-            ("microservices", 0.85),
-            ("distributed", 0.75)
+    def retrieve(self, query_bundle):
+        from llama_index.core.schema import NodeWithScore, TextNode
+        nodes = [
+            NodeWithScore(node=TextNode(text="cloud-native", metadata={"slug": "cloud-native"}), score=0.95),
+            NodeWithScore(node=TextNode(text="microservices", metadata={"slug": "microservices"}), score=0.85),
+            NodeWithScore(node=TextNode(text="distributed", metadata={"slug": "distributed"}), score=0.75),
         ]
-
-    def as_retriever(self, similarity_top_k: int = 20):
-        class MockDenseRetriever:
-            def __init__(self, top_k):
-                self._top_k = top_k
-
-            def retrieve(self, query_bundle):
-                from llama_index.core.schema import NodeWithScore, TextNode
-                nodes = [
-                    NodeWithScore(node=TextNode(text="cloud-native", metadata={"slug": "cloud-native"}), score=0.95),
-                    NodeWithScore(node=TextNode(text="microservices", metadata={"slug": "microservices"}), score=0.85),
-                    NodeWithScore(node=TextNode(text="distributed", metadata={"slug": "distributed"}), score=0.75),
-                ]
-                return nodes[:self._top_k]
-
-        return MockDenseRetriever(similarity_top_k)
+        return nodes[:self._top_k]
 
 
-class MockBM25Index:
-    """Mock DomainBM25Index for testing."""
+class MockBM25Retriever:
+    """Mock BM25-leg retriever returning canned domain nodes."""
 
-    def __init__(self):
-        self._domains: list[str] = []
-        self._built = False
+    def __init__(self, top_k: int = 20):
+        self._top_k = top_k
 
-    @property
-    def is_built(self) -> bool:
-        return self._built
-
-    @property
-    def domains(self) -> list[str]:
-        return list(self._domains)
-
-    def as_retriever(self, top_k: int = 20):
-        class MockBM25Retriever:
-            def __init__(self, top_k):
-                self._top_k = top_k
-
-            def retrieve(self, query_bundle):
-                from llama_index.core.schema import NodeWithScore, TextNode
-                nodes = [
-                    NodeWithScore(node=TextNode(text="cloud-native", metadata={"slug": "cloud-native"}), score=0.9),
-                    NodeWithScore(node=TextNode(text="microservices", metadata={"slug": "microservices"}), score=0.8),
-                    NodeWithScore(node=TextNode(text="distributed", metadata={"slug": "distributed"}), score=0.7),
-                ]
-                return nodes[:self._top_k]
-
-        return MockBM25Retriever(top_k)
-
-    def build_index(self, domains: list[str]) -> None:
-        self._domains = list(domains)
-        self._built = True
-
-    def search(self, query: str, k: int = 5) -> list[tuple[str, float]]:
-        return [
-            ("cloud-native", 0.9),
-            ("microservices", 0.8),
-            ("distributed", 0.7)
+    def retrieve(self, query_bundle):
+        from llama_index.core.schema import NodeWithScore, TextNode
+        nodes = [
+            NodeWithScore(node=TextNode(text="cloud-native", metadata={"slug": "cloud-native"}), score=0.9),
+            NodeWithScore(node=TextNode(text="microservices", metadata={"slug": "microservices"}), score=0.8),
+            NodeWithScore(node=TextNode(text="distributed", metadata={"slug": "distributed"}), score=0.7),
         ]
+        return nodes[:self._top_k]
 
 
 def create_test_pipeline(retrieval_config=None):
     """Create a test pipeline with mock dependencies."""
     agent = MockSoftwareArchitectAgent()
     pattern_loader = MockPatternLoader()
-    vector_index = MockDomainVectorIndex()
-    bm25_index = MockBM25Index()
-    return ArchitecturePipeline(
+    pattern_loader.load_all()
+    pipeline = ArchitecturePipeline(
         agent=agent,
         pattern_loader=pattern_loader,
-        vector_index=vector_index,
-        bm25_index=bm25_index,
+        embedder_config=MagicMock(),
         retrieval_config=retrieval_config,
     )
+    pipeline._dense_retriever = MockDenseRetriever()
+    pipeline._bm25_retriever = MockBM25Retriever()
+    return pipeline
 
 
 class TestArchitecturePipelineInit:
@@ -439,20 +373,19 @@ class TestArchitecturePipelineInit:
         """DP-5: Verify pipeline accepts dependency injected components."""
         agent = MockSoftwareArchitectAgent()
         pattern_loader = MockPatternLoader()
-        vector_index = MockDomainVectorIndex()
-        bm25_index = MockBM25Index()
+        embedder_config = MagicMock()
 
         pipeline = ArchitecturePipeline(
             agent=agent,
             pattern_loader=pattern_loader,
-            vector_index=vector_index,
-            bm25_index=bm25_index,
+            embedder_config=embedder_config,
         )
 
         assert pipeline._agent is agent
         assert pipeline._pattern_loader is pattern_loader
-        assert pipeline._vector_index is vector_index
-        assert pipeline._bm25_index is bm25_index
+        assert pipeline._embedder_config is embedder_config
+        assert pipeline._dense_retriever is None
+        assert pipeline._bm25_retriever is None
 
 
 class TestPipelinePhases:
@@ -1327,13 +1260,10 @@ class _MockArchitectForDenormalization:
 def _create_denorm_pipeline():
     agent = _MockArchitectForDenormalization()
     pattern_loader = MockPatternLoader()
-    vector_index = MockDomainVectorIndex()
-    bm25_index = MockBM25Index()
     return ArchitecturePipeline(
         agent=agent,
         pattern_loader=pattern_loader,
-        vector_index=vector_index,
-        bm25_index=bm25_index,
+        embedder_config=MagicMock(),
     )
 
 
@@ -2254,78 +2184,49 @@ class TestTimedPhaseLogging:
         )
 
 
-class _FakeIndex:
-    """Mimics DomainVectorIndex / DomainBM25Index is_built contract."""
-
-    def __init__(self, built: bool = False) -> None:
-        self._built = built
-        self._domains: list[str] = []
-        self.build_calls = 0
-
-    @property
-    def is_built(self) -> bool:
-        return self._built
-
-    @property
-    def domains(self) -> list[str]:
-        return self._domains
-
-    def build_index(self, domains: list[str]) -> None:
-        self.build_calls += 1
-        self._domains = list(domains)
-        self._built = True
-
-
 class TestWarmupIndexes:
     """Tests for ArchitecturePipeline.warmup_indexes()."""
 
-    def _make_pipeline(self, vector: _FakeIndex, bm25: _FakeIndex) -> ArchitecturePipeline:
+    def _make_pipeline(self, dense: object | None, bm25: object | None) -> ArchitecturePipeline:
         """Build a minimal ArchitecturePipeline stub that intercepts warmup_indexes."""
 
-        agent = MagicMock()
-        loader = MagicMock()
-        loader.load_all.return_value = []
-
         pipeline = ArchitecturePipeline(
-            agent=agent,
-            pattern_loader=loader,
-            vector_index=MagicMock(),
-            bm25_index=MagicMock(),
+            agent=MagicMock(),
+            pattern_loader=MagicMock(),
+            embedder_config=MagicMock(),
         )
-        pipeline._vector_index = vector
-        pipeline._bm25_index = bm25
+        pipeline._dense_retriever = dense
+        pipeline._bm25_retriever = bm25
         return pipeline
 
     def test_warmup_indexes_skips_when_both_built(self) -> None:
-        """No rebuild when both indexes are already built."""
-        vector, bm25 = _FakeIndex(built=True), _FakeIndex(built=True)
-        pipeline = self._make_pipeline(vector, bm25)
-        with patch.object(pipeline, "_build_vector_index") as mock_build:
+        """No rebuild when both retrievers are already built."""
+        sentinel = object()
+        pipeline = self._make_pipeline(sentinel, sentinel)
+        with patch.object(pipeline, "_build_retrievers") as mock_build:
             pipeline.warmup_indexes()
         mock_build.assert_not_called()
 
     def test_warmup_indexes_builds_when_unbuilt(self) -> None:
-        """Builds both indexes when neither is built."""
-        vector, bm25 = _FakeIndex(built=False), _FakeIndex(built=False)
-        pipeline = self._make_pipeline(vector, bm25)
-        with patch.object(pipeline, "_build_vector_index") as mock_build:
+        """Builds both retrievers when neither is built."""
+        pipeline = self._make_pipeline(None, None)
+        with patch.object(pipeline, "_build_retrievers") as mock_build:
             pipeline.warmup_indexes()
         mock_build.assert_called_once()
 
     def test_warmup_indexes_idempotent(self) -> None:
-        """Second call is a no-op after first build marks indexes as built."""
-        vector, bm25 = _FakeIndex(built=False), _FakeIndex(built=False)
-        pipeline = self._make_pipeline(vector, bm25)
+        """Second call is a no-op after first build stores the retrievers."""
+        pipeline = self._make_pipeline(None, None)
 
         call_count = 0
 
         def counting_build() -> None:
             nonlocal call_count
             call_count += 1
-            vector._built = True
-            bm25._built = True
+            pipeline._dense_retriever = object()
+            pipeline._bm25_retriever = object()
 
-        with patch.object(pipeline, "_build_vector_index", counting_build):
+        with patch.object(pipeline, "_build_retrievers", counting_build):
             pipeline.warmup_indexes()
             pipeline.warmup_indexes()
 

@@ -23,26 +23,29 @@
 HybridPatternRetriever - Configurable two-leg fusion of BM25 + dense embeddings.
 
 Stage-1 (recall) retrieval pipeline:
-  1. Build FAISS index via DomainVectorIndex over domain slugs
-  2. Build BM25Retriever over the same domain slugs
-  3. Dense leg:  embed(user_domain) → faiss top-K via DomainVectorRetriever
-  4. BM25 leg:   tokenize(normalized_domain) → bm25s top-K via DomainBM25Index.as_retriever
-     (bm25_top_k / dense_top_k = 0 means "full corpus" — lossless recall)
-  5. Apply fusion function: simple | reciprocal_rerank | relative_score | dist_based_score
-  6. Optionally rerank with TextEmbeddingInference (cross-encoder via TEI sidecar).
+  1. Dense + BM25 retrievers are built ONCE at warmup (ArchitecturePipeline)
+     over the shared domain-slug node set and injected here.
+  2. Both legs are orchestrated by the upstream ``QueryFusionRetriever``.
+     Per-leg queries stay split via ``QueryBundle``: the dense leg embeds
+     ``custom_embedding_strs`` (= raw user_domain) while the BM25 leg
+     tokenizes ``query_str`` (= normalized_domain).
+  3. Fusion via upstream FUSION_MODES: reciprocal_rerank (RRF, k=60,
+     default) | relative_score | dist_based_score.
+  4. Optionally rerank with TextEmbeddingInference (cross-encoder via TEI sidecar).
      The slug-cut strategy is controlled by :paramref:`rerank_selection`:
-       "rerank"       - keep top rerank_top_n by cross-encoder order only
-                       (llama-index convention; correct when the CE signal dominates).
-                       Reported fusion_score is the original RRF reciprocal-rank score.
-       "rank_fusion" - keep top rerank_top_n by RR(rrf_rank) + RR(ce_rank)
-                       (Vespa-style blend, k=60).  Protects consensus-backed slugs
-                       from CE outliers on short domain-slug inputs.
-                       Reported fusion_score is the blended selection score.
-     Scoring itself remains lossless regardless of selection mode.
-  7. Resolve each NodeWithScore.slug → patterns via PatternLoader.filter_by_domain
-  8. Aggregate: pattern_score = max(fusion_score) over slugs surfacing it.
-     fusion_score is RRF (``rerank``) or the blended RR(rrf)+RR(ce) (``rank_fusion``).
-  9. Return resolved patterns with fusion scores. When reranking is enabled,
+        "rerank"       - keep top rerank_top_n by cross-encoder order only
+                        (llama-index convention; correct when the CE signal dominates).
+                        Reported fusion_score is the original RRF reciprocal-rank score.
+        "rank_fusion" - keep top rerank_top_n by RR(rrf_rank) + RR(ce_rank)
+                        (Vespa-style blend, k=60).  Protects consensus-backed slugs
+                        from CE outliers on short domain-slug inputs.
+                        Reported fusion_score is the blended selection score.
+      Scoring itself remains lossless regardless of selection mode.
+  5. Resolve each NodeWithScore.slug → patterns via PatternLoader.filter_by_domain
+  6. Aggregate: pattern_score = max(fusion_score) over slugs surfacing it.
+     fusion_score is the upstream fused score (RRF for ``rerank`` selection)
+     or the blended RR(rrf)+RR(ce) (``rank_fusion``).
+  7. Return resolved patterns with fusion scores. When reranking is enabled,
      the slug pool is bounded by rerank_top_n before pattern resolution.
      Requirements-aware selection of top_k_patterns happens downstream in the
      analyze phase, which scores each candidate against the requirements.
@@ -55,19 +58,19 @@ import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal
 
+from llama_index.core.llms.mock import MockLLM
+from llama_index.core.retrievers import QueryFusionRetriever
+from llama_index.core.retrievers.fusion_retriever import FUSION_MODES
 from llama_index.core.schema import QueryBundle, NodeWithScore
 
+from src.config import FusionMode
+from src.patterns.embedder import TEI_RERANKER_MODEL
 from src.patterns.safe_tei_rerank import SafeTEIReranker
 
 if TYPE_CHECKING:
     from llama_index.core.retrievers import BaseRetriever
 
-from src.patterns._fusion import FusionMode, apply_fusion, reciprocal_rank_score
-from src.patterns.bm25_index import DomainBM25Index
-from src.patterns.embedder import TEI_RERANKER_MODEL
 from src.patterns.loader import PatternLoader
-from src.patterns.vector_index import DomainVectorIndex
-from src.patterns.vector_retriever import DomainVectorRetriever
 
 logger = logging.getLogger(__name__)
 
@@ -83,6 +86,67 @@ DEFAULT_FALLBACK_PATTERN_NAME = "layered-monolith"
 LOG_SUMMARY_CAP = 10
 
 DOMAIN_MATCH_REPORT_LIMIT = 5
+
+RRF_K: float = 60.0
+
+# Lossless default for the fused result cap when the caller supplies no
+# explicit ``fusion_top_k``.  The corpus is the domain-slug set (~213), so
+# the union of both legs is far below this bound and stage-1 recall stays
+# lossless by construction.
+FALLBACK_FUSION_TOP_K = 2048
+
+# Config-facing FusionMode -> upstream QueryFusionRetriever fusion mode.
+# The legacy "simple" rank-union mode was removed; upstream
+# FUSION_MODES.SIMPLE has different (max-raw-score) semantics and is
+# deliberately not reachable from configuration.
+_FUSION_MODE_MAP: dict[FusionMode, FUSION_MODES] = {
+    "reciprocal_rerank": FUSION_MODES.RECIPROCAL_RANK,
+    "relative_score": FUSION_MODES.RELATIVE_SCORE,
+    "dist_based_score": FUSION_MODES.DIST_BASED_SCORE,
+}
+
+
+def reciprocal_rank_score(rank: int, k: float = RRF_K) -> float:
+    r"""Reciprocal-rank contribution for one ranked list position.
+
+    Implements 1 / (rank + k - 1) — numerically identical to upstream
+    QueryFusionRetriever's ``1 / (rank0 + k)`` (rank0 = rank - 1), so
+    fused scores stay calibrated against stored
+    :paramref:`RetrievalConfig.min_fusion_score` thresholds.  Shared by
+    the retriever's :paramref:`HybridPatternRetriever.rerank_selection`
+    =\ ``rank_fusion`` slug-cut so it uses one definition of
+    "reciprocal rank" with the stage-1 fusion.
+    """
+    return 1.0 / (rank + k - 1)
+
+
+class _LoggingFusionRetriever(QueryFusionRetriever):
+    """QueryFusionRetriever that emits per-leg candidate summaries.
+
+    Overrides ``_run_sync_queries`` to log each leg's RAW (pre-fusion)
+    result set before the upstream fusion runs, preserving the former
+    two-leg observability contract (``stage="dense"`` / ``stage="bm25"``
+    INFO records with slug/score summaries).  Retriever order maps to
+    stages: index 0 → dense leg, index 1 → BM25 leg.
+    """
+
+    def _run_sync_queries(self, queries: list[QueryBundle]) -> dict[tuple[str, int], list[NodeWithScore]]:
+        results = super()._run_sync_queries(queries)
+        for (query_str, leg_idx), nodes in results.items():
+            stage = "dense" if leg_idx == 0 else "bm25"
+            logger.info(
+                "%s leg: %d candidates for domain '%s' (showing top %d)",
+                stage.capitalize(),
+                len(nodes),
+                query_str,
+                min(len(nodes), LOG_SUMMARY_CAP),
+                extra={
+                    "stage": stage,
+                    "domain": query_str,
+                    "summary": _summarize_nodes(nodes, LOG_SUMMARY_CAP),
+                },
+            )
+        return results
 
 
 @dataclass(frozen=True)
@@ -139,76 +203,82 @@ class HybridPatternRetriever:
     Hybrid retriever using two separate retrieval legs (dense + BM25) with a
     configurable fusion strategy and cross-encoder reranking.
 
-    The two legs receive different queries:
-    - Dense leg:    raw ``user_domain`` (benefits from embedding semantics)
-    - BM25 leg:     ``normalized_domain`` (exact slug token matching)
-
-    This separation is intentional: QueryFusionRetriever broadcasts the same query
-    to all retrievers, which would lose the normalisation benefit for BM25.
+    Both legs are orchestrated by the upstream ``QueryFusionRetriever``
+    (num_queries=1, sync, lossless ``similarity_top_k``).  The per-leg query
+    split is preserved via ``QueryBundle``: the dense leg embeds
+    ``custom_embedding_strs`` (raw ``user_domain``, benefiting from embedding
+    semantics) while the BM25 leg tokenizes ``query_str``
+    (``normalized_domain``, exact slug token matching).
     """
 
     def __init__(
         self,
-        bm25_index: DomainBM25Index,
-        vector_index: DomainVectorIndex,
+        dense_retriever: BaseRetriever,
+        bm25_retriever: BaseRetriever,
         pattern_loader: PatternLoader,
-        bm25_top_k: int = 0,
-        dense_top_k: int = 0,
         mode: FusionMode = "reciprocal_rerank",
         min_fusion_score: float = 0.0,
         rerank_top_n: int = 10,
         reranker_config: Any | None = None,
         rerank_selection: Literal["rerank", "rank_fusion"] = "rerank",
+        fusion_top_k: int | None = None,
     ) -> None:
-        self._bm25 = bm25_index
-        self._vector = vector_index
+        """Inject prebuilt per-leg retrievers (constructed once at warmup).
+
+        Args:
+            dense_retriever: Dense-leg retriever over domain-slug nodes.
+                Receives the raw ``user_domain`` query (via
+                ``QueryBundle.custom_embedding_strs``).
+            bm25_retriever: BM25-leg retriever over the same nodes.
+                Receives the ``normalized_domain`` query (via
+                ``QueryBundle.query_str``).
+            pattern_loader: Resolves slugs to pattern dicts.
+            mode: Stage-1 fusion strategy ("reciprocal_rerank" |
+                "relative_score" | "dist_based_score"), applied by the
+                upstream QueryFusionRetriever.
+            min_fusion_score: Gate on the best fusion score (0.0 disables).
+            rerank_top_n: Slug-pool cap after cross-encoder reranking.
+            reranker_config: RerankerInnerConfig (base_url, timeout, batch).
+            rerank_selection: Slug-cut mode ("rerank" | "rank_fusion").
+            fusion_top_k: Lossless cap for the fused result set. Defaults to
+                ``FALLBACK_FUSION_TOP_K`` (2048), which exceeds any possible
+                union of the two legs over the domain-slug corpus.
+        """
+        if mode not in _FUSION_MODE_MAP:
+            raise ValueError(f"Unsupported fusion mode: {mode!r}")
+        self._dense_retriever = dense_retriever
+        self._bm25_retriever = bm25_retriever
         self._loader = pattern_loader
-        self._bm25_top_k = bm25_top_k
-        self._dense_top_k = dense_top_k
         self._mode: FusionMode = mode
+        self._fusion_mode = _FUSION_MODE_MAP[mode]
+        self._fusion_top_k = fusion_top_k if fusion_top_k and fusion_top_k > 0 else FALLBACK_FUSION_TOP_K
         self._min_fusion_score = min_fusion_score
         self._rerank_top_n = rerank_top_n
         self._reranker_config = reranker_config
         self._reranker: SafeTEIReranker | None = None
-        self._dense_retriever: BaseRetriever | None = None
-        self._bm25_retriever: BaseRetriever | None = None
         self._rerank_selection: Literal["rerank", "rank_fusion"] = rerank_selection
+        self._fusion: _LoggingFusionRetriever | None = None
+        self._fusion_legs: tuple[Any, Any] | None = None
 
-    def _ensure_retrievers(self) -> None:
-        """Lazily build the underlying retrievers once.
+    def _ensure_fusion_retriever(self) -> _LoggingFusionRetriever:
+        """Lazily build the upstream fusion retriever over the current legs.
 
-        A top_k of 0 means "full corpus" (lossless stage-1 recall). It is
-        resolved to the number of indexed domain slugs before being passed
-        to the underlying retrievers, which require k >= 1.
+        Built per leg identity so callers that swap the injected retrievers
+        after construction (as tests do) keep working, while repeated calls
+        reuse one instance.
         """
-        if self._dense_retriever is not None and self._bm25_retriever is not None:
-            return
-
-        if not self._bm25.is_built:
-            raise RuntimeError("BM25 index must be built before retrieving")
-
-        if not self._vector.is_built:
-            raise RuntimeError("Vector index must be built before retrieving")
-
-        # 0 = full corpus (lossless recall); resolve to actual slug count.
-        corpus_n = max(len(self._bm25.domains), len(self._vector.domains))
-        dense_k = self._dense_top_k if self._dense_top_k > 0 else corpus_n
-        bm25_k = self._bm25_top_k if self._bm25_top_k > 0 else corpus_n
-
-        self._dense_retriever = DomainVectorRetriever(
-            vector_index=self._vector,
-            similarity_top_k=dense_k,
-        )
-        self._bm25_retriever = self._bm25.as_retriever(top_k=bm25_k)
-
-        logger.debug(
-            "Hybrid retriever initialised: mode=%s, "
-            "dense_k=%d, bm25_k=%d (corpus=%d)",
-            self._mode,
-            dense_k,
-            bm25_k,
-            corpus_n,
-        )
+        legs = (self._dense_retriever, self._bm25_retriever)
+        if self._fusion is None or self._fusion_legs != legs:
+            self._fusion = _LoggingFusionRetriever(
+                retrievers=[legs[0], legs[1]],
+                llm=MockLLM(),
+                mode=self._fusion_mode,
+                num_queries=1,
+                use_async=False,
+                similarity_top_k=self._fusion_top_k,
+            )
+            self._fusion_legs = legs
+        return self._fusion
 
     def _ensure_reranker(self) -> None:
         """Lazily build the TEI-backed cross-encoder once.
@@ -288,8 +358,9 @@ class HybridPatternRetriever:
         Returns:
             RetrievalOutcome containing:
             - patterns: list of (pattern_dict, fusion_score) tuples sorted by score
-              descending. fusion_score is the RRF score (``"rerank"``) or the
-              blended score ``RR(rrf_rank) + RR(ce_rank)`` (``"rank_fusion"``),
+              descending. fusion_score is the upstream fused score — the RRF score
+              for ``"reciprocal_rerank"`` (``"rerank"`` selection) or the blended
+              score ``RR(rrf_rank) + RR(ce_rank)`` (``"rank_fusion"``),
               NOT a requirements-fit score.  When reranking ran the pattern dict
               additionally carries ``rerank_logit`` (the cross-encoder logit).
             - matched_domains: top matched ArchitectureDomain slugs (max 5)
@@ -298,47 +369,17 @@ class HybridPatternRetriever:
               transparency.  ``fusion_score`` follows the same semantics as
               above.  Drawn from the post-cap survivor pool.
         """
-        self._ensure_retrievers()
         assert self._dense_retriever is not None
         assert self._bm25_retriever is not None
 
-        dense_nodes = self._dense_retriever.retrieve(QueryBundle(query_str=user_domain))
-        bm25_nodes = self._bm25_retriever.retrieve(QueryBundle(query_str=normalized_domain))
-
-        logger.debug(
-            "Two-leg retrieval: dense=%d nodes, bm25=%d nodes",
-            len(dense_nodes),
-            len(bm25_nodes),
+        # Single QueryBundle carrying both per-leg query representations:
+        # the dense leg embeds custom_embedding_strs (raw user_domain),
+        # the BM25 leg tokenizes query_str (normalized_domain).
+        query_bundle = QueryBundle(
+            query_str=normalized_domain,
+            custom_embedding_strs=[user_domain],
         )
-
-        logger.info(
-            "Dense leg: %d candidates for domain '%s' (showing top %d)",
-            len(dense_nodes),
-            user_domain,
-            min(len(dense_nodes), LOG_SUMMARY_CAP),
-            extra={
-                "stage": "dense",
-                "domain": user_domain,
-                "summary": _summarize_nodes(dense_nodes, LOG_SUMMARY_CAP),
-            },
-        )
-        logger.info(
-            "BM25 leg: %d candidates for domain '%s' (showing top %d)",
-            len(bm25_nodes),
-            normalized_domain,
-            min(len(bm25_nodes), LOG_SUMMARY_CAP),
-            extra={
-                "stage": "bm25",
-                "domain": normalized_domain,
-                "summary": _summarize_nodes(bm25_nodes, LOG_SUMMARY_CAP),
-            },
-        )
-
-        fused = apply_fusion(
-            self._mode,
-            dense_nodes,
-            bm25_nodes,
-        )
+        fused = self._ensure_fusion_retriever().retrieve(query_bundle)
 
         logger.info(
             "Fusion: %d candidates after %s (showing top %d)",
@@ -358,6 +399,15 @@ class HybridPatternRetriever:
         if len(fused) > 1:
             self._ensure_reranker()
             assert self._reranker is not None
+            # Node copies: fused nodes may wrap instances shared via the
+            # upstream docstore; the reranker (keep_retrieval_score) and the
+            # survivor stamping below mutate node metadata, which must never
+            # leak into concurrent or later requests.  Copies preserve
+            # node.hash (text+metadata content), so rank maps stay valid.
+            fused = [
+                NodeWithScore(node=n.node.model_copy(deep=True), score=n.score)
+                for n in fused
+            ]
             rrf_rank = {n.node.hash: i for i, n in enumerate(fused, start=1)}
             max_batch = getattr(self._reranker_config, "max_batch_size", 48)
             query_bundle = QueryBundle(query_str=user_domain)

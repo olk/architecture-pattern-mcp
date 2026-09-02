@@ -25,7 +25,7 @@ ArchitecturePipeline - LlamaIndex Workflow-backed pipeline coordinator.
 FR-214: Patterns SHALL flow through the pipeline with ANALYZE, GENERATE, EVALUATE, REFINE phases
 DP-1: Pipeline Pattern - Coordinate multi-step workflow via typed events and @step
 DP-5: Dependency Injection - ArchitecturePipeline receives SoftwareArchitectAgent, PatternLoader,
-       DomainVectorIndex via constructor
+       EmbedderConfig via constructor
 DP-6: Observer Pattern REPLACED by Workflow's handler.stream_events() — add_observer
       remove_observer and _emit_event are removed; use WorkflowHandler.stream_events() instead.
 
@@ -53,17 +53,16 @@ from functools import lru_cache
 from typing import Any, cast
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from llama_index.core.base.base_retriever import BaseRetriever
 from workflows import Context, Workflow, step
 from workflows.events import StartEvent, StopEvent
 
 from src.agent import SoftwareArchitectAgent
-from src.config import RetrievalConfig, RerankerConfig
+from src.config import EmbedderConfig, RetrievalConfig, RerankerConfig
 from src.design_normalization import denormalize_contracts
 from src.errors import MalformedArchitectureOverviewError
-from src.patterns.bm25_index import DomainBM25Index
 from src.patterns.loader import PatternLoader
 from src.patterns.retriever import DEFAULT_FALLBACK_PATTERN_NAME, HybridPatternRetriever
-from src.patterns.vector_index import DomainVectorIndex
 from src.reasoning.client import ReasoningClient
 from src.reasoning.prompts import render_degraded_context, render_reasoning_context
 from src.prompts import (
@@ -497,15 +496,17 @@ class ArchitecturePipeline(Workflow):
     DP-1: Pipeline Pattern - Coordinates pattern loading, domain search, LLM generation
           through sequential phases driven by _orchestrate step.
     DP-5: Dependency Injection - Receives SoftwareArchitectAgent, PatternLoader,
-          DomainVectorIndex via constructor.
+          EmbedderConfig via constructor.
     DP-6 (REMOVED): add_observer / remove_observer / _emit_event replaced by
           WorkflowHandler.stream_events() consumed externally.
 
     Attributes:
         _agent: SoftwareArchitectAgent instance for LLM interactions
         _pattern_loader: PatternLoader instance for pattern management
-        _vector_index: DomainVectorIndex instance for domain similarity search
-        _bm25_index: DomainBM25Index instance for lexical search
+        _embedder_config: EmbedderConfig for the dense leg (built at warmup)
+        _dense_retriever / _bm25_retriever: prebuilt per-leg retrievers over
+            the shared domain-slug node set (constructed once by
+            _build_retrievers, injected into HybridPatternRetriever)
         _retrieval_config: RetrievalConfig for hybrid fusion tuning
 
     Public method signatures are unchanged (async where they already were) so that
@@ -519,8 +520,7 @@ class ArchitecturePipeline(Workflow):
         self,
         agent: SoftwareArchitectAgent,
         pattern_loader: PatternLoader,
-        vector_index: DomainVectorIndex,
-        bm25_index: DomainBM25Index,
+        embedder_config: EmbedderConfig,
         retrieval_config: RetrievalConfig | None = None,
         reranker_config: RerankerConfig | None = None,
         reasoning_client: ReasoningClient | None = None,
@@ -533,8 +533,8 @@ class ArchitecturePipeline(Workflow):
         Args:
             agent: SoftwareArchitectAgent instance for LLM interactions
             pattern_loader: PatternLoader instance for pattern management
-            vector_index: DomainVectorIndex instance for domain similarity search
-            bm25_index: DomainBM25Index instance for lexical domain search
+            embedder_config: Embedder provider configuration for the dense
+                retrieval leg (consumed once by _build_retrievers at warmup)
             retrieval_config: Retrieval tuning parameters (defaults to RetrievalConfig())
             reranker_config: Reranker parameters — TEI connection and post-fusion slug-cut
                 settings (defaults to RerankerConfig() with default base_url).
@@ -546,8 +546,11 @@ class ArchitecturePipeline(Workflow):
         super().__init__(timeout=1200)
         self._agent = agent
         self._pattern_loader = pattern_loader
-        self._vector_index = vector_index
-        self._bm25_index = bm25_index
+        self._embedder_config = embedder_config
+        self._dense_retriever: BaseRetriever | None = None
+        self._bm25_retriever: BaseRetriever | None = None
+        self._retrieval_corpus_size: int = 0
+        self._fusion_top_k: int | None = None
         self._retrieval_config = retrieval_config or RetrievalConfig()
         self._reranker_config = reranker_config or RerankerConfig()
         self._reasoning = reasoning_client
@@ -667,20 +670,19 @@ class ArchitecturePipeline(Workflow):
                                verbose=self._retrieval_config.verbose_timing):
             normalized_domain = domain.lower().replace(" ", "-")
 
-            if not self._vector_index.is_built or not self._bm25_index.is_built:
-                self._build_vector_index()
+            if self._dense_retriever is None or self._bm25_retriever is None:
+                self._build_retrievers()
 
             retriever = HybridPatternRetriever(
-                bm25_index=self._bm25_index,
-                vector_index=self._vector_index,
+                dense_retriever=self._dense_retriever,
+                bm25_retriever=self._bm25_retriever,
                 pattern_loader=self._pattern_loader,
-                bm25_top_k=self._retrieval_config.bm25_top_k,
-                dense_top_k=self._retrieval_config.dense_top_k,
                 mode=self._retrieval_config.mode,
                 min_fusion_score=self._retrieval_config.min_fusion_score,
                 rerank_top_n=self._reranker_config.rerank_top_n,
                 reranker_config=self._reranker_config.config,
                 rerank_selection=self._reranker_config.rerank_selection,
+                fusion_top_k=self._fusion_top_k,
             )
 
             # ── Stage 1 (recall): all candidate patterns + fusion scores ──
@@ -1180,37 +1182,42 @@ class ArchitecturePipeline(Workflow):
     # ──────────────────────────────────────────────────────────────────────────
 
     def warmup_indexes(self) -> None:
-        """Idempotently build retrieval indexes at server startup.
+        """Idempotently build the retrieval legs at server startup.
 
         Call once from the FastMCP lifespan to fail-fast on a misconfigured
         TEI sidecar (dense leg cannot run without working embeddings).
-        Skips when both indexes are already built.  Thread-safety:
+        Skips when both retrievers are already built.  Thread-safety:
         assumed to run before any request arrives (lifespan completes
         prior to yield), so no lock is held against concurrent
         ``analyze()`` calls.
 
         Raises:
-            Whatever ``_build_vector_index`` raises (e.g. TEI HTTP errors,
+            Whatever ``_build_retrievers`` raises (e.g. TEI HTTP errors,
             pattern-loader I/O).  The lifespan must let the exception
             propagate so the server refuses to start.
         """
-        if self._vector_index.is_built and self._bm25_index.is_built:
-            logger.debug("Retrieval indexes already built; warmup no-op")
+        if self._dense_retriever is not None and self._bm25_retriever is not None:
+            logger.debug("Retrieval retrievers already built; warmup no-op")
             return
 
-        logger.info("Warming up retrieval indexes...")
+        logger.info("Warming up retrieval retrievers...")
         start = time.perf_counter()
-        self._build_vector_index()
+        self._build_retrievers()
         duration_ms = (time.perf_counter() - start) * 1000.0
-        domain_count = len(self._vector_index.domains)
         logger.info(
-            "Index warmup complete: %d domains, %.1fms",
-            domain_count,
+            "Retrieval warmup complete: %d domain slugs indexed, %.1fms",
+            self._retrieval_corpus_size,
             duration_ms,
         )
 
-    def _build_vector_index(self) -> None:
-        """Build FAISS and BM25 indexes from pattern suitable_domains."""
+    def _build_retrievers(self) -> None:
+        """Build the dense + BM25 retrieval legs over the shared domain slugs.
+
+        Collects unique domain slugs from every pattern's suitable_domains,
+        builds both legs, and stores them for HybridPatternRetriever
+        injection.  A retrieval_config top_k of 0 means "full corpus"
+        (lossless stage-1 recall) and is resolved to the slug count here.
+        """
         all_patterns = self._pattern_loader.load_all()
 
         domains_seen: set[str] = set()
@@ -1221,9 +1228,50 @@ class ArchitecturePipeline(Workflow):
                     domains_seen.add(domain)
                     all_domains.append(domain)
 
-        if all_domains:
-            self._vector_index.build_index(all_domains)
-            self._bm25_index.build_index(all_domains)
+        if not all_domains:
+            logger.warning(
+                "No suitable_domains found in the pattern catalogue; "
+                "retrieval legs stay unbuilt until the catalogue provides domains"
+            )
+            return
+
+        from src.patterns.embedder import build_embedder
+        from src.patterns.nodes import (
+            build_bm25_retriever,
+            build_domain_nodes,
+            build_vector_index,
+        )
+
+        embedder = build_embedder(
+            provider=self._embedder_config.provider,
+            base_url=self._embedder_config.config.base_url,
+            api_key=self._embedder_config.config.api_key,
+            query_instruction=self._embedder_config.config.query_instruction,
+            text_instruction=self._embedder_config.config.text_instruction,
+            embed_batch_size=self._embedder_config.config.embed_batch_size,
+        )
+        nodes = build_domain_nodes(all_domains)
+
+        corpus_n = len(all_domains)
+        dense_k = self._retrieval_config.dense_top_k or corpus_n
+        bm25_k = self._retrieval_config.bm25_top_k or corpus_n
+
+        self._dense_retriever = build_vector_index(nodes, embedder).as_retriever(
+            similarity_top_k=dense_k
+        )
+        self._bm25_retriever = build_bm25_retriever(nodes, bm25_k)
+        self._retrieval_corpus_size = corpus_n
+        # Lossless cap for the fused result set: the union of both legs can
+        # never exceed dense_k + bm25_k.
+        self._fusion_top_k = dense_k + bm25_k
+
+        logger.debug(
+            "Retrieval legs built: mode=%s, dense_k=%d, bm25_k=%d (corpus=%d)",
+            self._retrieval_config.mode,
+            dense_k,
+            bm25_k,
+            corpus_n,
+        )
 
     def _calculate_quality_metrics(self, patterns: list[dict]) -> QualityMetrics:
         """Calculate aggregate QualityMetrics from patterns."""

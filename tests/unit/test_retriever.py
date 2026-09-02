@@ -47,40 +47,6 @@ from src.patterns.safe_tei_rerank import _safe_tei_rerank_call
 MOCK_FUSION_SCORE = 1 / 60
 
 
-class MockBM25Index:
-    """Minimal mock DomainBM25Index for retriever tests."""
-
-    def __init__(self, built: bool = True) -> None:
-        self._built = built
-
-    @property
-    def is_built(self) -> bool:
-        return self._built
-
-    def as_retriever(self, _top_k: int = 20):
-        return _DummyRetriever()
-
-
-class MockVectorIndex:
-    """Minimal mock DomainVectorIndex for retriever tests."""
-
-    def __init__(self, built: bool = True) -> None:
-        self._built = built
-        self._vector_store = object()
-
-    @property
-    def is_built(self) -> bool:
-        return self._built
-
-    @property
-    def vector_store(self):
-        return self._vector_store
-
-    @property
-    def _embedder(self):
-        return None
-
-
 class _DummyRetriever:
     """Minimal retriever that returns empty nodes for any query."""
 
@@ -142,8 +108,8 @@ class TestRetrieveFallbackWhenNoMatch:
         )
 
         retriever = HybridPatternRetriever(
-            bm25_index=MockBM25Index(),
-            vector_index=MockVectorIndex(),
+            dense_retriever=_DummyRetriever(),
+            bm25_retriever=_DummyRetriever(),
             pattern_loader=loader,
         )
         retriever._dense_retriever = MagicMock()
@@ -181,8 +147,8 @@ class TestRetrieveFallbackMissing:
         )
 
         retriever = HybridPatternRetriever(
-            bm25_index=MockBM25Index(),
-            vector_index=MockVectorIndex(),
+            dense_retriever=_DummyRetriever(),
+            bm25_retriever=_DummyRetriever(),
             pattern_loader=loader,
             reranker_config=MagicMock(base_url="http://localhost:8080", timeout=30.0, max_batch_size=48),
         )
@@ -251,8 +217,8 @@ class TestRetrieveRealResults:
         )
 
         retriever = HybridPatternRetriever(
-            bm25_index=MockBM25Index(),
-            vector_index=MockVectorIndex(),
+            dense_retriever=_DummyRetriever(),
+            bm25_retriever=_DummyRetriever(),
             pattern_loader=loader,
         )
         retriever._dense_retriever = MagicMock()
@@ -313,11 +279,9 @@ class TestRetrievalLogging:
             get_by_name_result=LAYERED_MONOLITH,
         )
         retriever = HybridPatternRetriever(
-            bm25_index=MockBM25Index(),
-            vector_index=MockVectorIndex(),
+            dense_retriever=_DummyRetriever(),
+            bm25_retriever=_DummyRetriever(),
             pattern_loader=loader,
-            bm25_top_k=5,
-            dense_top_k=5,
             reranker_config=MagicMock(base_url="http://reranker:8080", timeout=30.0, max_batch_size=48),
         )
         return retriever
@@ -562,8 +526,8 @@ class TestChunkedReranking:
             max_batch_size=20,
         )
         retriever = HybridPatternRetriever(
-            bm25_index=MockBM25Index(),
-            vector_index=MockVectorIndex(),
+            dense_retriever=_DummyRetriever(),
+            bm25_retriever=_DummyRetriever(),
             pattern_loader=loader,
             reranker_config=reranker_config,
         )
@@ -618,8 +582,8 @@ class TestChunkedReranking:
             max_batch_size=48,
         )
         retriever = HybridPatternRetriever(
-            bm25_index=MockBM25Index(),
-            vector_index=MockVectorIndex(),
+            dense_retriever=_DummyRetriever(),
+            bm25_retriever=_DummyRetriever(),
             pattern_loader=loader,
             reranker_config=reranker_config,
         )

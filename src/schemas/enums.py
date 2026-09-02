@@ -67,7 +67,8 @@ class PatternCategory(str, Enum):
 
 
 # ArchitectureDomain: 376 problem-space domain values for pattern suitability filtering.
-# Used by Pattern.suitable_domains, Pattern.unsuitable_domains, DomainVectorIndex, DomainBM25Index.
+# Used by Pattern.suitable_domains, Pattern.unsuitable_domains and the retrieval
+# legs built in src/patterns/nodes.py.
 # Distinct from ArchitectureStyle which describes architectural approach names.
 class ArchitectureDomain(str, Enum):
     """
@@ -75,7 +76,8 @@ class ArchitectureDomain(str, Enum):
 
     This enum defines all valid domain values for Pattern.suitable_domains and
     Pattern.unsuitable_domains fields in pattern JSON files. It is also the source
-    corpus for DomainVectorIndex (FAISS) and DomainBM25Index in the hybrid retriever.
+    corpus for the dense (FAISS) and BM25 retrieval legs built from the shared
+    domain-slug nodes in src/patterns/nodes.py.
 
     Values are hyphenated-lowercase problem-space descriptors (e.g. e-commerce,
     healthcare-integration, high-frequency-trading). This is distinct from

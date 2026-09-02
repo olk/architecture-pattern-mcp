@@ -285,14 +285,12 @@ def test_golden_coverage_report():
 def _build_live_pipeline():
     """Build a real ArchitecturePipeline from the deployed config.
 
-    generate() never touches the vector/BM25 indexes, so they are passed
+    generate() never touches the retrieval legs, so they are left
     unbuilt — no TEI dependency for the GENERATE-only benchmark.
     """
     from src.agent import SoftwareArchitectAgent
     from src.config import ConfigManager, RetrievalConfig, RerankerConfig, ServerConfig
-    from src.patterns.bm25_index import DomainBM25Index
     from src.patterns.loader import PatternLoader
-    from src.patterns.vector_index import DomainVectorIndex
     from src.pipeline import ArchitecturePipeline
 
     cfg = ConfigManager.load_config()
@@ -303,8 +301,7 @@ def _build_live_pipeline():
     return ArchitecturePipeline(
         agent=agent,
         pattern_loader=PatternLoader(),
-        vector_index=DomainVectorIndex(),
-        bm25_index=DomainBM25Index(),
+        embedder_config=server_cfg.embedder,
         retrieval_config=retrieval,
         reranker_config=reranker,
     )

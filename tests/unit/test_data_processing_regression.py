@@ -47,17 +47,10 @@ def _make_pipeline():
     agent = MagicMock()
     loader = MagicMock()
     loader._loaded = True
-    vi = MagicMock()
-    vi.is_built = True
-    vi.domains = ["x"]
-    bm = MagicMock()
-    bm.is_built = True
-    bm.domains = ["x"]
     return ArchitecturePipeline(
         agent=agent,
         pattern_loader=loader,
-        vector_index=vi,
-        bm25_index=bm,
+        embedder_config=MagicMock(),
         retrieval_config=RetrievalConfig(
             analysis_blend_weight=0.7,
             fusion_blend_weight=0.3,

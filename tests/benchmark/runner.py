@@ -139,20 +139,18 @@ def load_cases(path: str, only: list[str] | None, limit: int | None) -> list[dic
 def build_pipeline() -> Any:
     from src.agent import SoftwareArchitectAgent
     from src.config import ConfigManager, RerankerConfig, RetrievalConfig, ServerConfig
-    from src.patterns.bm25_index import DomainBM25Index
     from src.patterns.loader import PatternLoader
-    from src.patterns.vector_index import DomainVectorIndex
     from src.pipeline import ArchitecturePipeline
 
     cfg = ConfigManager.load_config()
-    agent = SoftwareArchitectAgent(ServerConfig.model_validate(cfg))
+    server_cfg = ServerConfig.model_validate(cfg)
+    agent = SoftwareArchitectAgent(server_cfg)
     retrieval = RetrievalConfig(**cfg.get("retrieval", {}))
     reranker = RerankerConfig(**cfg.get("reranker", {}))
     pipeline = ArchitecturePipeline(
         agent=agent,
         pattern_loader=PatternLoader(),
-        vector_index=DomainVectorIndex(),
-        bm25_index=DomainBM25Index(),
+        embedder_config=server_cfg.embedder,
         retrieval_config=retrieval,
         reranker_config=reranker,
     )

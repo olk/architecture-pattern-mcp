@@ -45,9 +45,12 @@ import json
 import tempfile
 from pathlib import Path
 
+import pytest
+
 # Import the PatternLoader class
 from src.patterns.loader import (
     PatternLoader,
+    _validate_pattern,
 )
 
 
@@ -486,3 +489,50 @@ class TestIntegration:
             assert len(result2) == 1
             assert len(result3) == 1
             assert result1[0]["name"] == result2[0]["name"] == result3[0]["name"]
+
+
+class TestRealCatalogueParity:
+    """Tier-4 gate: PatternJSONReader path must load the real catalogue
+    exactly as the former hand-rolled glob+open loop did."""
+
+    @pytest.mark.skipif(
+        not Path("pattern").is_dir(),
+        reason="pattern catalogue not present",
+    )
+    def test_loads_every_catalogue_pattern(self) -> None:
+        raw_names: set[str] = set()
+        for pattern_file in Path("pattern").glob("*-architecture.json"):
+            data = json.loads(pattern_file.read_text(encoding="utf-8"))
+            if _validate_pattern(data):
+                raw_names.add(data["name"])
+
+        loader = PatternLoader()
+        loaded = loader.load_all()
+        loaded_names = {p["name"] for p in loaded}
+
+        assert raw_names, "catalogue produced no valid patterns"
+        assert loaded_names == raw_names
+
+    def test_alias_domain_filtering(self, tmp_path) -> None:
+        pattern = {
+            "name": "alias-check",
+            "context": "test context",
+            "category": "cloud",
+            "suitable_domains": ["cloud-native"],
+            "quality_attributes": {
+                "performance": 8,
+                "scalability": 8,
+                "reliability": 8,
+                "maintainability": 8,
+                "simplicity": 5,
+                "security": 8,
+            },
+        }
+        with open(Path(tmp_path) / "alias-check-architecture.json", "w") as f:
+            json.dump(pattern, f)
+
+        loader = PatternLoader(patterns_dir=tmp_path)
+        legacy = loader.filter_by_domain("cloud-native-applications")
+        canonical = loader.filter_by_domain("cloud-native")
+        assert [p["name"] for p in legacy] == [p["name"] for p in canonical]
+        assert [p["name"] for p in legacy] == ["alias-check"]

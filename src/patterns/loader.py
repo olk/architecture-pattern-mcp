@@ -42,6 +42,9 @@ import logging
 import re
 from pathlib import Path
 
+from llama_index.core.readers.base import BaseReader
+from llama_index.core.schema import Document
+
 # Quality attribute names (6 keys — must be present in every pattern's
 # quality_attributes dict; the scoring stage iterates over exactly this set).
 QUALITY_ATTRIBUTES = [
@@ -83,6 +86,82 @@ def _normalize_domain_slug(slug: str) -> str:
     result = re.sub(r"\s+", "-", result)
     result = re.sub(r"-+", "-", result).strip("-")
     return DOMAIN_ALIASES.get(result, result)
+
+
+def _validate_pattern(pattern_data: dict) -> bool:
+    """
+    Validate pattern against required schema.
+
+    E-5: Pattern validation failed against Pattern schema
+         (http_status: 400, severity: warn, logging_context: pattern_file)
+
+    Required fields:
+    - name: str
+    - context: str (also required by Pydantic Pattern.model_validate)
+    - category: str (required by Pydantic Pattern.model_validate)
+    - suitable_domains: List[str]
+    - quality_attributes: Dict[str, float] with all 6 keys present
+
+    Returns:
+        True if valid, False otherwise
+    """
+    required_fields = [
+        "name",
+        "context",
+        "category",
+        "suitable_domains",
+        "quality_attributes",
+    ]
+
+    for field in required_fields:
+        if field not in pattern_data:
+            return False
+
+    quality_attrs = pattern_data.get("quality_attributes", {})
+    for attr in QUALITY_ATTRIBUTES:
+        if attr not in quality_attrs:
+            return False
+
+    return True
+
+
+class PatternJSONReader(BaseReader):
+    """LlamaIndex BaseReader for ``*-architecture.json`` pattern files.
+
+    Parses one pattern file per ``load_data`` call, validates it against
+    the required schema (E-5 warning on failure), and returns a single
+    Document whose text is the canonical JSON dump and whose metadata
+    carries the source file path.  PatternLoader consumes the Document's
+    text so its in-memory cache keeps the plain-dict shape the rest of
+    the system expects.
+    """
+
+    def load_data(
+        self, file: Path, extra_info: dict | None = None
+    ) -> list[Document]:
+        path = Path(file)
+        extra = {"pattern_file": str(path)}
+        try:
+            with open(path, encoding="utf-8") as f:
+                pattern_data = json.load(f)
+        except json.JSONDecodeError as e:
+            logger.warning(f"Failed to parse JSON from {path}: {e}", extra=extra)
+            return []
+        except Exception as e:
+            logger.warning(f"Error loading pattern {path}: {e}", extra=extra)
+            return []
+
+        if not _validate_pattern(pattern_data):
+            # E-5: Pattern validation failed against Pattern schema
+            logger.warning(f"Pattern validation failed: {path}", extra=extra)
+            return []
+
+        return [
+            Document(
+                text=json.dumps(pattern_data, ensure_ascii=False),
+                metadata=extra,
+            )
+        ]
 
 logger = logging.getLogger(__name__)
 
@@ -148,10 +227,11 @@ class PatternLoader:
         if self._loaded:
             return self._patterns_cache
 
-        patterns = []
+        patterns: list[dict] = []
 
         # Find all *-architecture.json files in patterns directory
         # SCEN-12: PatternLoader loads all *-architecture.json files
+        # sorted() for deterministic load order across filesystems.
         if not self._patterns_dir.exists():
             logger.warning(
                 f"Patterns directory does not exist: {self._patterns_dir}"
@@ -160,33 +240,10 @@ class PatternLoader:
             self._loaded = True
             return patterns
 
-        pattern_files = list(self._patterns_dir.glob("*-architecture.json"))
-
-        for pattern_file in pattern_files:
-            try:
-                with open(pattern_file, encoding='utf-8') as f:
-                    pattern_data = json.load(f)
-
-                # Basic validation - ensure required fields exist
-                if self._validate_pattern(pattern_data):
-                    patterns.append(pattern_data)
-                else:
-                    # E-5: Pattern validation failed against Pattern schema
-                    # (http_status: 400, severity: warn)
-                    logger.warning(
-                        f"Pattern validation failed: {pattern_file}",
-                        extra={"pattern_file": str(pattern_file)}
-                    )
-            except json.JSONDecodeError as e:
-                logger.warning(
-                    f"Failed to parse JSON from {pattern_file}: {e}",
-                    extra={"pattern_file": str(pattern_file)}
-                )
-            except Exception as e:
-                logger.warning(
-                    f"Error loading pattern {pattern_file}: {e}",
-                    extra={"pattern_file": str(pattern_file)}
-                )
+        reader = PatternJSONReader()
+        for pattern_file in sorted(self._patterns_dir.glob("*-architecture.json")):
+            for doc in reader.load_data(pattern_file):
+                patterns.append(json.loads(doc.text))
 
         self._patterns_cache = patterns
         self._loaded = True
@@ -257,39 +314,3 @@ class PatternLoader:
             if pattern.get("name") == name:
                 return pattern
         return None
-
-    def _validate_pattern(self, pattern_data: dict) -> bool:
-        """
-        Validate pattern against required schema.
-
-        E-5: Pattern validation failed against Pattern schema
-             (http_status: 400, severity: warn, logging_context: pattern_file)
-
-        Required fields:
-        - name: str
-        - context: str (also required by Pydantic Pattern.model_validate)
-        - category: str (required by Pydantic Pattern.model_validate)
-        - suitable_domains: List[str]
-        - quality_attributes: Dict[str, float] with all 6 keys present
-
-        Returns:
-            True if valid, False otherwise
-        """
-        required_fields = [
-            "name",
-            "context",
-            "category",
-            "suitable_domains",
-            "quality_attributes",
-        ]
-
-        for field in required_fields:
-            if field not in pattern_data:
-                return False
-
-        quality_attrs = pattern_data.get("quality_attributes", {})
-        for attr in QUALITY_ATTRIBUTES:
-            if attr not in quality_attrs:
-                return False
-
-        return True

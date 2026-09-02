@@ -404,13 +404,19 @@ class TestRetrievalConfig:
             RetrievalConfig(top_k_patterns=101)
 
     @pytest.mark.parametrize("mode", [
-        "simple",
         "reciprocal_rerank",
+        "relative_score",
+        "dist_based_score",
     ])
-    def test_all_two_modes_accepted(self, mode: str) -> None:
-        """Test that all two fusion modes are accepted."""
+    def test_all_fusion_modes_accepted(self, mode: str) -> None:
+        """Test that all supported fusion modes are accepted."""
         config = RetrievalConfig(mode=mode)
         assert config.mode == mode
+
+    def test_simple_mode_rejected(self) -> None:
+        """The legacy "simple" rank-union fusion mode was removed."""
+        with pytest.raises(ValidationError):
+            RetrievalConfig(mode="simple")
 
     def test_unknown_mode_rejected(self) -> None:
         """Test that an unknown mode string raises ValidationError."""

@@ -152,7 +152,7 @@ class RerankerConfig(BaseModel):
     )
 
 
-FusionMode = Literal["simple", "reciprocal_rerank"]
+FusionMode = Literal["reciprocal_rerank", "relative_score", "dist_based_score"]
 
 
 PATTERN_CONTEXT_LIMITS: dict[str, int] = {
@@ -190,7 +190,16 @@ class RetrievalConfig(BaseModel):
     bm25_top_k: int = Field(0, ge=0, le=1000)
     dense_top_k: int = Field(0, ge=0, le=1000)
     top_k_patterns: int = Field(5, ge=1, le=100)
-    mode: FusionMode = "reciprocal_rerank"
+    mode: FusionMode = Field(
+        "reciprocal_rerank",
+        description=(
+            "Stage-1 fusion strategy, applied by the upstream QueryFusionRetriever: "
+            '"reciprocal_rerank" (Reciprocal Rank Fusion, k=60, default), '
+            '"relative_score" (min-max normalized per-leg scores), '
+            '"dist_based_score" (relative score with a 3-sigma range). '
+            'The former "simple" rank-union mode was removed.'
+        ),
+    )
     min_fusion_score: float = Field(
         0.0, ge=0.0, le=1.0,
         description=(

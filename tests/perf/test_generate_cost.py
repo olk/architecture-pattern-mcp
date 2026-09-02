@@ -227,8 +227,6 @@ def test_generate_live_llm_timing() -> None:
     import asyncio
     from src.pipeline import ArchitecturePipeline
     from src.patterns.loader import PatternLoader
-    from src.patterns.vector_index import DomainVectorIndex
-    from src.patterns.bm25_index import DomainBM25Index
     from src.agent import SoftwareArchitectAgent
 
     try:
@@ -236,18 +234,16 @@ def test_generate_live_llm_timing() -> None:
     except Exception as e:
         pytest.skip(f"Cannot load config: {e}")
 
-    agent = SoftwareArchitectAgent(ServerConfig.model_validate(cfg))
+    server_cfg = ServerConfig.model_validate(cfg)
+    agent = SoftwareArchitectAgent(server_cfg)
     loader = PatternLoader()
-    vector_idx = DomainVectorIndex()
-    bm25_idx = DomainBM25Index()
     retrieval = RetrievalConfig(**cfg.get("retrieval", {}))
     reranker = RerankerConfig(**cfg.get("reranker", {}))
 
     pipeline = ArchitecturePipeline(
         agent=agent,
         pattern_loader=loader,
-        vector_index=vector_idx,
-        bm25_index=bm25_idx,
+        embedder_config=server_cfg.embedder,
         retrieval_config=retrieval,
         reranker_config=reranker,
     )

@@ -29,7 +29,6 @@ T4: min_quality_score=50 + mocked overall_quality=60 stops after attempt 1 (issu
 T5: All 36 catalogue JSONs have 6 QA keys; PAC loads (issue #8)
 T6: rerank_enabled recall is lossless (issue #5)
 T7: min_fusion_score gate no longer drops single-leg rank-7 hit (issue #3)
-T8: simple fusion does not let BM25 dominate dense (issue #15)
 T10: All-zero weights logs WARNING and retries (issue #17)
 """
 
@@ -39,7 +38,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from llama_index.core.schema import NodeWithScore, TextNode
 
-from src.patterns._fusion import _fuse_simple
 from src.patterns.retriever import (
     DEFAULT_FALLBACK_PATTERN_NAME,
     HybridPatternRetriever,
@@ -289,19 +287,14 @@ class TestT4MinQualityScoreEarlyStop:
         loader.load_all.return_value = []
         loader.filter_by_domain.return_value = []
 
-        vi = MagicMock()
-        vi.is_built = True
-        vi.domains = ["x"]
-        bm = MagicMock()
-        bm.is_built = True
-        bm.domains = ["x"]
 
         pipeline = ArchitecturePipeline(
             agent=agent,
             pattern_loader=loader,
-            vector_index=vi,
-            bm25_index=bm,
+            embedder_config=MagicMock(),
         )
+        pipeline._dense_retriever = MagicMock()
+        pipeline._bm25_retriever = MagicMock()
 
         gen_count = 0
         original_gen = agent.generate_structured
@@ -439,8 +432,8 @@ class TestT6RerankLossless:
                 return MagicMock(retrieve=lambda _: nodes)
 
         retriever = HybridPatternRetriever(
-            bm25_index=_MockBM25(),
-            vector_index=_MockVec(),
+            dense_retriever=MagicMock(),
+            bm25_retriever=MagicMock(),
             pattern_loader=_MockLoader(),
             rerank_top_n=1,
             reranker_config=MagicMock(base_url="http://localhost:8080", timeout=30.0, max_batch_size=48),
@@ -513,8 +506,8 @@ class TestT7MinFusionScoreGateDisabled:
                 ])
 
         retriever = HybridPatternRetriever(
-            bm25_index=_MockBM25(),
-            vector_index=_MockVec(),
+            dense_retriever=MagicMock(),
+            bm25_retriever=MagicMock(),
             pattern_loader=_MockLoader(),
             min_fusion_score=0.0,
         )
@@ -561,8 +554,8 @@ class TestT7MinFusionScoreGateDisabled:
             def as_retriever(self, _k): return MagicMock(retrieve=lambda _: [])
 
         retriever = HybridPatternRetriever(
-            bm25_index=_MockBM25(),
-            vector_index=_MockVec(),
+            dense_retriever=MagicMock(),
+            bm25_retriever=MagicMock(),
             pattern_loader=_MockLoader(),
             min_fusion_score=0.0,
         )
@@ -580,48 +573,6 @@ class TestT7MinFusionScoreGateDisabled:
         assert result.patterns[0][0].get("is_fallback") is True
         # Fallback path means no real matched domains
         assert result.matched_domains == []
-
-
-# ─── T8 ────────────────────────────────────────────────────────────────────────
-
-
-class TestT8SimpleFusionRankUnion:
-    """T8: simple fusion does not let BM25 dominate dense (issue #15:
-    was sorting by raw score; BM25 ∈ [0, 15+] dominated cosine ∈ [0, 1]).
-    """
-
-    def test_simple_fusion_uses_rank_not_raw_score(self):
-        # Dense leg: a single node with cosine 0.5 (low).
-        dense = [
-            NodeWithScore(node=TextNode(text="a", id_="a"), score=0.5),
-        ]
-        # BM25 leg: a single node with raw score 10.0 (high).
-        bm25 = [
-            NodeWithScore(node=TextNode(text="b", id_="b"), score=10.0),
-        ]
-        fused = _fuse_simple(dense, bm25)
-        # After rank-union: a at rank 0 → 1/1 = 1.0; b at rank 0 → 1/1 = 1.0.
-        # Both have equal fusion score — order within a tied score is stable.
-        # The important invariant: BOTH appear, neither is silently dropped.
-        assert len(fused) == 2
-        scores = [n.score for n in fused]
-        assert scores[0] == pytest.approx(1.0)
-        assert scores[1] == pytest.approx(1.0)
-
-    def test_simple_fusion_top_rank_wins(self):
-        # Dense leg: 2 nodes, dense node at rank 0, BM25 node at rank 1.
-        dense = [
-            NodeWithScore(node=TextNode(text="a", id_="a"), score=0.9),
-            NodeWithScore(node=TextNode(text="b", id_="b"), score=0.5),
-        ]
-        bm25 = [
-            NodeWithScore(node=TextNode(text="b", id_="b"), score=8.0),
-        ]
-        fused = _fuse_simple(dense, bm25)
-        # 'a' at rank 0 (dense) → 1/1 = 1.0
-        # 'b' at rank 1 (dense) → 1/2 = 0.5; rank 0 (bm25) → 1/1 = 1.0 → best=1.0
-        # Tied — but 'a' should be first OR 'b' should be first; both 1.0
-        assert fused[0].score == pytest.approx(1.0)
 
 
 # ─── T10 ───────────────────────────────────────────────────────────────────────
@@ -651,14 +602,8 @@ class TestT10AllZeroWeightsRetry:
         agent.generate_structured = gen
 
         loader = MagicMock()
-        vi = MagicMock()
-        vi.is_built = True
-        vi.domains = ["x"]
-        bm = MagicMock()
-        bm.is_built = True
-        bm.domains = ["x"]
         pipeline = ArchitecturePipeline(
-            agent=agent, pattern_loader=loader, vector_index=vi, bm25_index=bm,
+            agent=agent, pattern_loader=loader, embedder_config=MagicMock(),
         )
 
         result = asyncio.run(pipeline._extract_requirement_weights("req", "domain"))
@@ -704,8 +649,8 @@ class TestRerankTopNCap:
                 return MagicMock(retrieve=lambda _: list(fused_nodes))
 
         retriever = HybridPatternRetriever(
-            bm25_index=_MockBM25(),
-            vector_index=_MockVec(),
+            dense_retriever=MagicMock(),
+            bm25_retriever=MagicMock(),
             pattern_loader=loader,
             rerank_top_n=rerank_top_n,
             reranker_config=MagicMock(base_url="http://localhost:8080", timeout=30.0, max_batch_size=48),
@@ -967,7 +912,7 @@ class TestT8RankFusionSelection:
         dr = _CR(fused)
         br = _CR([])
         retriever = HybridPatternRetriever(
-            bm25_index=br, vector_index=dr, pattern_loader=_ML(),
+            bm25_retriever=br, dense_retriever=dr, pattern_loader=_ML(),
             rerank_top_n=1,
             reranker_config=MagicMock(base_url="http://x", timeout=30.0, max_batch_size=48),
             rerank_selection="rerank",
@@ -1034,7 +979,7 @@ class TestT8RankFusionSelection:
         dr = _CR(fused)
         br = _CR([])
         retriever = HybridPatternRetriever(
-            bm25_index=br, vector_index=dr, pattern_loader=_ML(),
+            bm25_retriever=br, dense_retriever=dr, pattern_loader=_ML(),
             rerank_top_n=1,
             reranker_config=MagicMock(base_url="http://x", timeout=30.0, max_batch_size=48),
             rerank_selection="rank_fusion",
@@ -1096,7 +1041,7 @@ class TestT8RankFusionSelection:
         dr = _CR(fused)
         br = _CR([])
         retriever = HybridPatternRetriever(
-            bm25_index=br, vector_index=dr, pattern_loader=_ML(),
+            bm25_retriever=br, dense_retriever=dr, pattern_loader=_ML(),
             rerank_top_n=3,
             reranker_config=MagicMock(base_url="http://x", timeout=30.0, max_batch_size=48),
             rerank_selection="rank_fusion",
@@ -1176,8 +1121,8 @@ class TestT8RankFusionSelection:
 
         for selection_mode in ("rerank", "rank_fusion"):
             retriever = HybridPatternRetriever(
-                bm25_index=bm25_retriever,
-                vector_index=dense_retriever,
+                bm25_retriever=bm25_retriever,
+                dense_retriever=dense_retriever,
                 pattern_loader=_MockLoader(),
                 rerank_top_n=1,
                 reranker_config=MagicMock(
@@ -1234,8 +1179,8 @@ class TestT8RankFusionSelection:
             dr = _CR(fused)
             br = _CR([])
             retriever = HybridPatternRetriever(
-                bm25_index=br,
-                vector_index=dr,
+                bm25_retriever=br,
+                dense_retriever=dr,
                 pattern_loader=_ML(),
                 rerank_top_n=10,
                 reranker_config=MagicMock(
@@ -1287,7 +1232,7 @@ class TestT8RankFusionSelection:
         dr = _CR(fused)
         br = _CR([])
         retriever = HybridPatternRetriever(
-            bm25_index=br, vector_index=dr, pattern_loader=_ML(),
+            bm25_retriever=br, dense_retriever=dr, pattern_loader=_ML(),
             rerank_top_n=1,
             reranker_config=MagicMock(base_url="http://x", timeout=30.0, max_batch_size=48),
             rerank_selection="rerank",
@@ -1340,8 +1285,8 @@ class TestT8RankFusionSelection:
         bm25_retriever = _ConcreteRetriever([])
 
         retriever = HybridPatternRetriever(
-            bm25_index=bm25_retriever,
-            vector_index=dense_retriever,
+            bm25_retriever=bm25_retriever,
+            dense_retriever=dense_retriever,
             pattern_loader=_MockLoader(),
             rerank_top_n=1,
             reranker_config=None,
@@ -1388,7 +1333,7 @@ class TestT8RankFusionSelection:
         dr = _CR(fused)
         br = _CR([])
         retriever = HybridPatternRetriever(
-            bm25_index=br, vector_index=dr, pattern_loader=_ML(),
+            bm25_retriever=br, dense_retriever=dr, pattern_loader=_ML(),
             rerank_top_n=1,
             reranker_config=MagicMock(base_url="http://x", timeout=30.0, max_batch_size=48),
             rerank_selection="rerank",
