@@ -133,21 +133,10 @@ the keys list is the shape contract, the thought is the content.
 
 ## How to Change It
 
-To restrict analyze (or any phase) to a single tool:
-
-- **Env override** (preferred for deploys): set the phase's tools via
-  the env-expansion field `REASONING_ANALYZE_TOOLS='["shannon"]'`
-  (or `["code"]`). The config layer must support this per-phase list;
-  if not currently wired, the change is a small addition to
-  `src/reasoning/config.py` (add a per-phase env field to
-  `ReasoningStrategy`).
-- **Source change**: edit
-  `src/reasoning/config.py:_default_per_phase()["analyze"].tools` to
-  `["shannon"]` (or `["code"]`).
-
-Either change eliminates the duplicate `thought` lines for that
-phase but loses the dual-tool cross-validation pattern — keep the
-trade-off in mind.
+To restrict analyze (or any phase) to a single tool, edit
+`src/reasoning/config.py:_default_per_phase()["analyze"].tools` to
+`["shannon"]` (or `["code"]`). This loses the dual-tool
+cross-validation pattern — keep the trade-off in mind.
 
 ## Verifying in `docker logs`
 
