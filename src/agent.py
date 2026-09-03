@@ -134,12 +134,12 @@ class SoftwareArchitectAgent:
             }
         )
 
-    async def generate_structured(
+    async def generate_structured[ModelT: BaseModel](
         self,
         system_prompt: str,
         user_prompt: str,
-        response_schema: type[BaseModel],
-    ) -> BaseModel:
+        response_schema: type[ModelT],
+    ) -> ModelT:
         """
         # FR-175: The system SHALL provide a generate_structured method that accepts
         system_prompt, user_prompt, and response_schema and returns a validated Pydantic model
@@ -165,12 +165,12 @@ class SoftwareArchitectAgent:
         # E-9: ERR_009 - LLM provider returned error
         """
         if self._validation_config.retry_on_fail and self._validation_config.max_retries > 0:
-            async def initial_caller() -> BaseModel:
+            async def initial_caller() -> ModelT:
                 return await self._generate_structured_once(
                     system_prompt, user_prompt, response_schema
                 )
 
-            async def repair_caller(sp: str, up: str) -> BaseModel:
+            async def repair_caller(sp: str, up: str) -> ModelT:
                 return await self._generate_structured_once(sp, up, response_schema)
 
             from src.validation import validate_with_retries
@@ -188,12 +188,12 @@ class SoftwareArchitectAgent:
             system_prompt, user_prompt, response_schema
         )
 
-    async def _generate_structured_once(
+    async def _generate_structured_once[ModelT: BaseModel](
         self,
         system_prompt: str,
         user_prompt: str,
-        response_schema: type[BaseModel],
-    ) -> BaseModel:
+        response_schema: type[ModelT],
+    ) -> ModelT:
         """Single-shot structured generation without retry."""
         messages = [
             ChatMessage(role=MessageRole.SYSTEM, content=system_prompt),
@@ -212,7 +212,7 @@ class SoftwareArchitectAgent:
                 }
             )
 
-            return cast(BaseModel, response.raw)
+            return cast(ModelT, response.raw)
 
         except ValidationError:
             raise

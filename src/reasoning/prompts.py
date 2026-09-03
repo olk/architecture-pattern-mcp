@@ -186,7 +186,7 @@ def render_reasoning_context(phase: str, trace: ReasoningTrace) -> str:
     if trace.aborted_reason:
         abort_note = f"\nNOTE: trace incomplete ({trace.aborted_reason}); treat it as partial evidence."
     guidance = _PHASE_GUIDANCE.get(phase, _PHASE_GUIDANCE["analyze"])
-    tool_names = sorted({step.tool for step in trace.steps}) or ["none"]
+    tool_names: list[str] = sorted({step.tool for step in trace.steps}) or ["none"]
     return f"""<reasoning_context>
 PHASE: {phase} | TOOLS: {', '.join(tool_names)} | STEPS: {len(trace.steps)}{abort_note}
 TRACE:

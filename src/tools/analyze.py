@@ -102,16 +102,16 @@ class AnalyzeArchitectureOutput(BaseModel):
         description="Recommended architecture style"
     )
 
-    selected_patterns: list[dict] = Field(
+    selected_patterns: list[dict[str, Any]] = Field(
         default_factory=list,
         description="Selected architecture patterns"
     )
 
-    quality_metrics: dict | None = Field(
+    quality_metrics: dict[str, Any] | None = Field(
         default=None,
         description="Quality assessment metrics"
     )
-    matched_domains: list[dict] = Field(
+    matched_domains: list[dict[str, Any]] = Field(
         default_factory=list,
         description="Top matched ArchitectureDomain slugs from BM25+FAISS retrieval with fusion scores"
     )
@@ -370,7 +370,7 @@ class AnalyzeArchitectureTool:
 def analyze_architecture_tool(
     agent: SoftwareArchitectAgent,
     pipeline: ArchitecturePipeline,
-    tasks_config=None,
+    tasks_config: TasksConfig | None = None,
 ) -> AnalyzeArchitectureTool:
     """
     Factory function to create AnalyzeArchitectureTool instance.

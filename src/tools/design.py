@@ -87,12 +87,12 @@ class DesignArchitectureOutput(BaseModel):
         final_quality_score: Final quality score after best attempt
     """
 
-    design: dict = Field(
+    design: dict[str, Any] = Field(
         default_factory=dict,
         description="Complete architecture design"
     )
 
-    evaluation: dict = Field(
+    evaluation: dict[str, Any] = Field(
         default_factory=dict,
         description="Full architecture evaluation with metrics, risks, and recommendations"
     )
@@ -108,7 +108,7 @@ class DesignArchitectureOutput(BaseModel):
         description="Final architecture style"
     )
 
-    quality_metrics: dict | None = Field(
+    quality_metrics: dict[str, Any] | None = Field(
         default=None,
         description="Aggregated quality metrics from analysis"
     )
@@ -117,7 +117,7 @@ class DesignArchitectureOutput(BaseModel):
         default=0.0,
         description="Final quality score after best attempt"
     )
-    matched_domains: list[dict] = Field(
+    matched_domains: list[dict[str, Any]] = Field(
         default_factory=list,
         description="Top matched ArchitectureDomain slugs from BM25+FAISS retrieval with fusion scores"
     )
@@ -125,7 +125,7 @@ class DesignArchitectureOutput(BaseModel):
         default=False,
         description="True when no real domain match was found and the fallback layered-monolith pattern was used"
     )
-    alternative_styles: list[dict] = Field(
+    alternative_styles: list[dict[str, Any]] = Field(
         default_factory=list,
         description=(
             "Runner-up architectures from the analyze phase (score < final selected architecture), "
@@ -388,7 +388,7 @@ def pipeline_result_to_output(refined: PipelineResult) -> DesignArchitectureOutp
 def design_architecture_tool(
     agent: SoftwareArchitectAgent,
     pipeline: ArchitecturePipeline,
-    tasks_config=None,
+    tasks_config: TasksConfig | None = None,
 ) -> DesignArchitectureTool:
     """
     Factory function to create DesignArchitectureTool instance.

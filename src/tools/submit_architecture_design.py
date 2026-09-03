@@ -121,7 +121,11 @@ class SubmitArchitectureDesignJobTool:
             name=f"design-job-{job_id}",
         )
         self._job_tasks[job_id] = (task, cancellation)
-        task.add_done_callback(lambda _t, jid=job_id: self._job_tasks.pop(jid, None))
+
+        def _pop_job_task(_t: asyncio.Task[None], jid: str = job_id) -> None:
+            self._job_tasks.pop(jid, None)
+
+        task.add_done_callback(_pop_job_task)
 
         return {
             "job_id": job_id,

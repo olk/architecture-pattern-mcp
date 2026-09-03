@@ -102,9 +102,9 @@ class RerankerInnerConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     base_url: str = ""
-    timeout: float = Field(30.0, gt=0)
+    timeout: float = Field(default=30.0, gt=0)
     max_batch_size: int = Field(
-        48,
+        default=48,
         ge=1,
         le=1024,
         description=(
@@ -131,7 +131,7 @@ class RerankerConfig(BaseModel):
         default_factory=lambda: RerankerInnerConfig(base_url="http://pattern-tei-rerank:8080")
     )
     rerank_top_n: int = Field(
-        10, ge=1, le=100,
+        default=10, ge=1, le=100,
         description=(
             "Max candidates kept AFTER cross-encoder reranking. Bounds the slug "
             "pool fed to pattern resolution and matched_domains reporting. "
@@ -177,8 +177,8 @@ class RetrievalConfig(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    bm25_top_k: int = Field(0, ge=0, le=1000)
-    dense_top_k: int = Field(0, ge=0, le=1000)
+    bm25_top_k: int = Field(default=0, ge=0, le=1000)
+    dense_top_k: int = Field(default=0, ge=0, le=1000)
     dense_weight: float = Field(
         default=0.7, gt=0.0, le=1.0,
         description=(
@@ -191,9 +191,9 @@ class RetrievalConfig(BaseModel):
         default=0.3, gt=0.0, le=1.0,
         description="Stage-1 fusion weight on the BM25 leg. See dense_weight.",
     )
-    top_k_patterns: int = Field(5, ge=1, le=100)
+    top_k_patterns: int = Field(default=5, ge=1, le=100)
     min_fusion_score: float = Field(
-        0.0, ge=0.0, le=RANK_FUSION_BLEND_MAX,
+        default=0.0, ge=0.0, le=RANK_FUSION_BLEND_MAX,
         description=(
             "Relevance floor on the best fused score for the recall set "
             "(0.0 disables — the default, since the blend scale is tiny "
@@ -208,7 +208,7 @@ class RetrievalConfig(BaseModel):
         )
     )
     min_quality_score: float = Field(
-        50.0, ge=0.0, le=100.0,
+        default=50.0, ge=0.0, le=100.0,
         description=(
             "Early-stop threshold for the design loop on the 0-100 quality "
             "scale. Below this, the loop runs to max_tries. Above this, "
@@ -216,7 +216,7 @@ class RetrievalConfig(BaseModel):
             "the early stop."
         ),
     )
-    max_tries: int = Field(2, ge=1, le=10)
+    max_tries: int = Field(default=2, ge=1, le=10)
     use_lean_wire_schema: bool = Field(
         default=False,
         description=(
@@ -226,7 +226,7 @@ class RetrievalConfig(BaseModel):
         ),
     )
     style_score_threshold: float = Field(
-        50.0, ge=0.0, le=100.0,
+        default=50.0, ge=0.0, le=100.0,
         description="Minimum deterministic analysis_score (0-100) required for "
                     "the top-scoring pattern's name to be used as "
                     "recommended_style; below this, falls back to "
@@ -301,7 +301,7 @@ class ValidationConfig(BaseModel):
     retry_on_fail: If False, disable self-healing retries (raise on first validation failure).
     """
 
-    max_retries: int = Field(3, ge=0, le=10)
+    max_retries: int = Field(default=3, ge=0, le=10)
     retry_on_fail: bool = True
 
 

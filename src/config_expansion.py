@@ -48,7 +48,7 @@ def expand_env(value: str, environ: dict[str, str] | None = None) -> str:
     """
     env = environ if environ is not None else os.environ
 
-    def repl(m: re.Match) -> str:
+    def repl(m: re.Match[str]) -> str:
         var = m.group(1)
         default = m.group(2)
         return env.get(var, default if default is not None else "")

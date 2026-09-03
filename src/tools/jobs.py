@@ -119,6 +119,12 @@ class JobsStore:
             self._db = None
             JobsStore._instance = None
 
+    def _conn(self) -> aiosqlite.Connection:
+        """Initialised DB connection — get_instance() guarantees _db is set."""
+        if self._db is None:
+            raise RuntimeError("JobsStore not initialised — call JobsStore.get_instance() first")
+        return self._db
+
     def _now(self) -> str:
         return datetime.now(UTC).isoformat()
 
@@ -131,18 +137,18 @@ class JobsStore:
         """Create a pending job and return its ID."""
         job_id = str(uuid.uuid4())
         now = self._now()
-        await self._db.execute(
+        await self._conn().execute(
             "INSERT INTO jobs (id, status, requirements, domain, override_style, created_at, updated_at) "
             "VALUES (?, ?, ?, ?, ?, ?, ?)",
             (job_id, JobStatus.PENDING, requirements, domain, override_style, now, now),
         )
-        await self._db.commit()
+        await self._conn().commit()
         logger.debug("Job created", extra={"job_id": job_id})
         return job_id
 
     async def get_job(self, job_id: str) -> dict[str, Any] | None:
         """Return job dict or None if not found."""
-        cursor = await self._db.execute(
+        cursor = await self._conn().execute(
             "SELECT * FROM jobs WHERE id = ?", (job_id,)
         )
         row = await cursor.fetchone()
@@ -152,38 +158,38 @@ class JobsStore:
 
     async def set_running(self, job_id: str) -> None:
         now = self._now()
-        await self._db.execute(
+        await self._conn().execute(
             "UPDATE jobs SET status = ?, updated_at = ? WHERE id = ?",
             (JobStatus.RUNNING, now, job_id),
         )
-        await self._db.commit()
+        await self._conn().commit()
 
     async def set_completed(self, job_id: str, result: str) -> None:
         now = self._now()
-        await self._db.execute(
+        await self._conn().execute(
             "UPDATE jobs SET status = ?, result = ?, updated_at = ? WHERE id = ?",
             (JobStatus.COMPLETED, result, now, job_id),
         )
-        await self._db.commit()
+        await self._conn().commit()
 
     async def set_failed(self, job_id: str, error: str) -> None:
         now = self._now()
-        await self._db.execute(
+        await self._conn().execute(
             "UPDATE jobs SET status = ?, error = ?, updated_at = ? WHERE id = ?",
             (JobStatus.FAILED, error, now, job_id),
         )
-        await self._db.commit()
+        await self._conn().commit()
 
     async def set_cancelled(self, job_id: str) -> None:
         now = self._now()
-        await self._db.execute(
+        await self._conn().execute(
             "UPDATE jobs SET status = ?, updated_at = ? WHERE id = ?",
             (JobStatus.CANCELLED, now, job_id),
         )
-        await self._db.commit()
+        await self._conn().commit()
 
     async def is_cancelled(self, job_id: str) -> bool:
-        cursor = await self._db.execute(
+        cursor = await self._conn().execute(
             "SELECT status FROM jobs WHERE id = ?", (job_id,)
         )
         row = await cursor.fetchone()

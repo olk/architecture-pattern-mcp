@@ -40,6 +40,7 @@ Error Handling:
 import json
 import logging
 import re
+from typing import Any
 from pathlib import Path
 
 from llama_index.core.readers.base import BaseReader
@@ -88,7 +89,7 @@ def _normalize_domain_slug(slug: str) -> str:
     return DOMAIN_ALIASES.get(result, result)
 
 
-def _validate_pattern(pattern_data: dict) -> bool:
+def _validate_pattern(pattern_data: dict[str, Any]) -> bool:
     """
     Validate pattern against required schema.
 
@@ -137,7 +138,7 @@ class PatternJSONReader(BaseReader):
     """
 
     def load_data(
-        self, file: Path, extra_info: dict | None = None
+        self, file: Path, extra_info: dict[str, Any] | None = None
     ) -> list[Document]:
         path = Path(file)
         extra = {"pattern_file": str(path)}
@@ -197,7 +198,7 @@ class PatternLoader:
         else:
             _resolved = patterns_dir
         self._patterns_dir = Path(_resolved)
-        self._patterns_cache: list[dict] = []
+        self._patterns_cache: list[dict[str, Any]] = []
         self._loaded = False
 
     @property
@@ -205,7 +206,7 @@ class PatternLoader:
         """True once load_all() has populated the in-memory cache."""
         return self._loaded
 
-    def load_all(self) -> list[dict]:
+    def load_all(self) -> list[dict[str, Any]]:
         """
         Load all pattern JSON files from pattern/.
 
@@ -227,7 +228,7 @@ class PatternLoader:
         if self._loaded:
             return self._patterns_cache
 
-        patterns: list[dict] = []
+        patterns: list[dict[str, Any]] = []
 
         # Find all *-architecture.json files in patterns directory
         # SCEN-12: PatternLoader loads all *-architecture.json files
@@ -253,7 +254,7 @@ class PatternLoader:
         )
         return self._patterns_cache
 
-    def filter_by_domain(self, domain: str) -> list[dict]:
+    def filter_by_domain(self, domain: str) -> list[dict[str, Any]]:
         """
         Filter patterns by domain suitability.
 
@@ -296,7 +297,7 @@ class PatternLoader:
 
         return filtered
 
-    def get_by_name(self, name: str) -> dict | None:
+    def get_by_name(self, name: str) -> dict[str, Any] | None:
         """
         Look up a single pattern by its 'name' field.
 

@@ -1,0 +1,14 @@
+# Local hooks only: run tools through uv so the project venv (fastmcp,
+# llama-index, pydantic, faiss stubs) is visible. mirrors-mypy would run in an
+# isolated env and flood import-untyped errors. CI remains authoritative
+# (covers --no-verify bypass).
+repos:
+  - repo: local
+    hooks:
+      - id: mypy-strict
+        name: mypy --strict (changed src/ files)
+        entry: uv run mypy --strict
+        language: system
+        types: [python]
+        files: ^src/
+        require_serial: true

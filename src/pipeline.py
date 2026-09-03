@@ -50,6 +50,7 @@ import time
 from collections import OrderedDict
 from contextlib import asynccontextmanager
 from functools import lru_cache
+from collections.abc import AsyncIterator
 from typing import Any, cast
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
@@ -89,6 +90,7 @@ from src.schemas.enums import ArchitectureStyle, PatternCategory
 
 from src.schemas.analysis import (
     QUALITY_ATTRIBUTE_KEYS,
+    MatchedDomain,
     RequirementWeights,
     StyleCandidate,
 )
@@ -125,7 +127,7 @@ def _phase_extra(phase: str, domain: str, duration_s: float) -> dict[str, Any]:
 
 
 @asynccontextmanager
-async def _timed_phase(phase: str, domain: str = "", *, verbose: bool = False):
+async def _timed_phase(phase: str, domain: str = "", *, verbose: bool = False) -> AsyncIterator[None]:
     """Async context manager that logs phase start/end with wall-clock duration.
 
     When DEBUG is disabled AND verbose is False, the timer machinery is skipped
@@ -154,6 +156,21 @@ async def _timed_phase(phase: str, domain: str = "", *, verbose: bool = False):
 # These replace the original dataclasses while preserving dict-based field types
 # for LLM-friendly JSON manipulation.
 # ──────────────────────────────────────────────────────────────────────────────
+
+
+type _PatternContextKey = tuple[
+    tuple[tuple[str, str], ...], tuple[tuple[str, int], ...]
+]
+
+
+def _pattern_from_entry(p: dict[str, Any] | Pattern) -> Pattern:
+    """Coerce one selected-pattern entry (LLM JSON dict, or model) to Pattern."""
+    return p if isinstance(p, Pattern) else Pattern.model_validate(p)
+
+
+def _to_matched_domain(m: dict[str, Any] | MatchedDomain) -> MatchedDomain:
+    """Coerce one matched-domain entry (dict or model) to MatchedDomain."""
+    return m if isinstance(m, MatchedDomain) else MatchedDomain.model_validate(m)
 
 
 class AnalysisResult(BaseModel):
@@ -558,7 +575,7 @@ class ArchitecturePipeline(Workflow):
         self._retrieval_config = retrieval_config or RetrievalConfig()
         self._reranker_config = reranker_config or RerankerConfig()
         self._reasoning = reasoning_client
-        self._pattern_context_cache: OrderedDict[tuple, tuple[str, str, str]] = OrderedDict()
+        self._pattern_context_cache: OrderedDict[_PatternContextKey, tuple[str, str, str]] = OrderedDict()
         self._pattern_context_cache_max: int = self.PATTERN_CONTEXT_CACHE_MAX
         self._cancellation_token: CancellationToken | None = None
 
@@ -644,7 +661,8 @@ class ArchitecturePipeline(Workflow):
             style=style,
             evaluate_criteria=evaluate_criteria,
         )
-        return await handler
+        result: PipelineResult = await handler
+        return result
 
     async def analyze(
         self,
@@ -676,10 +694,15 @@ class ArchitecturePipeline(Workflow):
 
             if self._dense_retriever is None or self._bm25_retriever is None:
                 self._build_retrievers()
+            dense_retriever = self._dense_retriever
+            bm25_retriever = self._bm25_retriever
+            if dense_retriever is None or bm25_retriever is None:
+                # Unreachable: _build_retrievers() assigns both legs.
+                raise RuntimeError("Retrieval legs failed to initialise")
 
             retriever = HybridPatternRetriever(
-                dense_retriever=self._dense_retriever,
-                bm25_retriever=self._bm25_retriever,
+                dense_retriever=dense_retriever,
+                bm25_retriever=bm25_retriever,
                 pattern_loader=self._pattern_loader,
                 min_fusion_score=self._retrieval_config.min_fusion_score,
                 rerank_top_n=self._reranker_config.rerank_top_n,
@@ -790,7 +813,7 @@ class ArchitecturePipeline(Workflow):
         requirements: str,
         domain: str,
         style: str,
-        selected_patterns: list[dict],
+        selected_patterns: list[dict[str, Any]],
         analysis_result: AnalysisResult | None = None,
         override_user_prompt: str | None = None,
     ) -> ArchitectureDesign:
@@ -837,7 +860,11 @@ class ArchitecturePipeline(Workflow):
                 response_schema=response_schema,
             )
 
-            # For lean schema, default omitted fields to empty lists
+            # For lean schema, default omitted fields to empty lists.
+            # Response and Wire are sibling schemas sharing overview/components/
+            # relationships/quality_attributes with identical types; only the
+            # lean view is consumed below.
+            wire: ArchitectureDesignResponse | ArchitectureDesignResponseWire
             if use_lean:
                 wire = cast(ArchitectureDesignResponseWire, design_response)
                 api_contracts: list[Any] = []
@@ -915,7 +942,7 @@ class ArchitecturePipeline(Workflow):
             patterns: list[Pattern] = []
             if analysis_result is not None and analysis_result.selected_patterns:
                 patterns = [
-                    Pattern.model_validate(p) if isinstance(p, dict) else p
+                    _pattern_from_entry(p)
                     for p in analysis_result.selected_patterns
                 ]
 
@@ -938,7 +965,6 @@ class ArchitecturePipeline(Workflow):
                 user_prompt=user_prompt,
                 response_schema=ArchitectureEvaluation,
             )
-            llm_eval = cast(ArchitectureEvaluation, llm_eval)
 
             recs_dict: dict[str, list[str]] = {}
             for rec in self._generate_evaluation_recommendations(architecture):
@@ -991,7 +1017,7 @@ class ArchitecturePipeline(Workflow):
         requirements: str,
         domain: str,
         style: str,
-        selected_patterns: list[dict],
+        selected_patterns: list[dict[str, Any]],
         criteria: str,
         analysis_result: AnalysisResult | None = None,
         max_tries: int = DEFAULT_MAX_TRIES,
@@ -1124,13 +1150,17 @@ class ArchitecturePipeline(Workflow):
             best_design.overview.score = style_score
 
             return PipelineResult(
-                design=cast(ArchitectureDesign, best_design),
+                design=best_design,
                 evaluation=cast(ArchitectureEvaluation, best_evaluation),
                 attempts=attempts,
                 final_style=best_design.overview.style.value,
                 quality_metrics=analysis_result.quality_metrics if analysis_result else None,
                 final_quality_score=best_score,  # already 0-100
-                matched_domains=analysis_result.matched_domains if analysis_result else [],
+                matched_domains=[
+                    _to_matched_domain(m) for m in analysis_result.matched_domains
+                ]
+                if analysis_result
+                else [],
                 is_fallback=analysis_result.is_fallback if analysis_result else False,
                 alternative_styles=self._style_candidates(
                     analysis_result, best_design.overview.style.value
@@ -1279,7 +1309,7 @@ class ArchitecturePipeline(Workflow):
             corpus_n,
         )
 
-    def _calculate_quality_metrics(self, patterns: list[dict]) -> QualityMetrics:
+    def _calculate_quality_metrics(self, patterns: list[dict[str, Any]]) -> QualityMetrics:
         """Calculate aggregate QualityMetrics from patterns."""
         if not patterns:
             return QualityMetrics(
@@ -1307,7 +1337,7 @@ class ArchitecturePipeline(Workflow):
             performance=totals["performance"] / count,
         )
 
-    def _analyze_strengths(self, patterns: list[dict]) -> list[str]:
+    def _analyze_strengths(self, patterns: list[dict[str, Any]]) -> list[str]:
         """Analyze strengths from patterns."""
         strengths = []
         quality_attrs = [
@@ -1327,7 +1357,7 @@ class ArchitecturePipeline(Workflow):
 
         return strengths
 
-    def _analyze_weaknesses(self, patterns: list[dict]) -> list[str]:
+    def _analyze_weaknesses(self, patterns: list[dict[str, Any]]) -> list[str]:
         """Analyze weaknesses from patterns."""
         weaknesses = []
         quality_attrs = [
@@ -1347,7 +1377,7 @@ class ArchitecturePipeline(Workflow):
 
         return weaknesses
 
-    def _generate_recommendations(self, patterns: list[dict]) -> list[str]:
+    def _generate_recommendations(self, patterns: list[dict[str, Any]]) -> list[str]:
         """Generate recommendations from patterns."""
         recommendations = []
 
@@ -1359,7 +1389,7 @@ class ArchitecturePipeline(Workflow):
 
         return recommendations
 
-    def _pattern_context_key(self, patterns: list[dict[str, Any]]) -> tuple:
+    def _pattern_context_key(self, patterns: list[dict[str, Any]]) -> _PatternContextKey:
         """Build a content-stable hashable key for the pattern-context cache.
 
         The key has two parts:
@@ -1379,7 +1409,7 @@ class ArchitecturePipeline(Workflow):
         )
         return (patterns_part, limits_part)
 
-    def _build_pattern_context(self, patterns: list[dict]) -> tuple[str, str, str]:
+    def _build_pattern_context(self, patterns: list[dict[str, Any]]) -> tuple[str, str, str]:
         """Build structured pattern sections for the GENERATE user prompt.
 
         Returns ``(anti_patterns_block, best_practices_block, details_block)``:
@@ -1417,11 +1447,11 @@ class ArchitecturePipeline(Workflow):
             name = pattern.get("name", "unknown")
             ctx = pattern.get("context", "No context available")
 
-            benefits = pattern.get("benefits", [])[: limits.get("benefits", float("inf"))]
-            tradeoffs = pattern.get("tradeoffs", [])[: limits.get("tradeoffs", float("inf"))]
-            best_practices = pattern.get("best_practices", [])[: limits.get("best_practices", float("inf"))]
-            suitable_domains = pattern.get("suitable_domains", [])[: limits.get("suitable_domains", float("inf"))]
-            anti_patterns = pattern.get("anti_patterns", [])[: limits.get("anti_patterns", float("inf"))]
+            benefits = pattern.get("benefits", [])[: limits.get("benefits")]
+            tradeoffs = pattern.get("tradeoffs", [])[: limits.get("tradeoffs")]
+            best_practices = pattern.get("best_practices", [])[: limits.get("best_practices")]
+            suitable_domains = pattern.get("suitable_domains", [])[: limits.get("suitable_domains")]
+            anti_patterns = pattern.get("anti_patterns", [])[: limits.get("anti_patterns")]
 
             for ap in anti_patterns:
                 ap_lower = ap.lower()
@@ -1626,7 +1656,7 @@ Emit a single JSON object matching the response schema.
             user_prompt=user_prompt,
             response_schema=RequirementWeights,
         )
-        return self._smooth_weights(cast(RequirementWeights, llm_result))
+        return self._smooth_weights(llm_result)
 
     def _smooth_weights(self, weights: RequirementWeights) -> RequirementWeights:
         """Apply convex smoothing: w' = alpha*w + (1-alpha)*(1/n).
@@ -1670,7 +1700,7 @@ Emit a single JSON object matching the response schema.
 
         scored: list[dict[str, Any]] = []
         for pattern in patterns:
-            qa = pattern.get("quality_attributes", {}) or {}
+            qa: dict[str, Any] = pattern.get("quality_attributes", {}) or {}
             if weight_sum > 0:
                 weighted_avg = sum(
                     w[attr] * float(qa.get(attr, 0.0))

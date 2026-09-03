@@ -96,13 +96,13 @@ class GenerateArchitectureOutput(BaseModel):
     )
 
     # ENT-12: ArchitectureDesign components attribute
-    components: list[dict] = Field(
+    components: list[dict[str, Any]] = Field(
         default_factory=list,
         description="List of architecture components"
     )
 
     # ENT-12: ArchitectureDesign relationships attribute
-    relationships: list[dict] = Field(
+    relationships: list[dict[str, Any]] = Field(
         default_factory=list,
         description="List of component relationships"
     )
@@ -114,19 +114,19 @@ class GenerateArchitectureOutput(BaseModel):
     )
 
     # ENT-12: ArchitectureDesign api_contracts attribute
-    api_contracts: list[dict] = Field(
+    api_contracts: list[dict[str, Any]] = Field(
         default_factory=list,
         description="API contract definitions"
     )
 
     # ENT-12: ArchitectureDesign shared_data_models attribute
-    shared_data_models: list[dict] = Field(
+    shared_data_models: list[dict[str, Any]] = Field(
         default_factory=list,
         description="Shared data model definitions"
     )
 
     # ENT-12: ArchitectureDesign event_contracts attribute
-    event_contracts: list[dict] = Field(
+    event_contracts: list[dict[str, Any]] = Field(
         default_factory=list,
         description="Event contract definitions"
     )
@@ -201,7 +201,7 @@ class GenerateArchitectureTool:
         requirements: Annotated[PrintableText, Field(description="Architecture requirements description (1-100000 chars, must contain visible text)")],
         style: Annotated[PrintableText, Field(description="Architecture style to use (1-100000 chars, must contain visible text)")],
         domain: Annotated[DomainName, Field(description="Target architecture domain (1-200 chars, must contain visible text)")],
-        selected_patterns: Annotated[list[str], Field(description="Pattern names to incorporate in the architecture")] = None,
+        selected_patterns: Annotated[list[str] | None, Field(description="Pattern names to incorporate in the architecture")] = None,
         ctx: Context | None = None,
     ) -> dict[str, Any]:
         """
@@ -400,7 +400,7 @@ class GenerateArchitectureTool:
 def generate_architecture_tool(
     agent: SoftwareArchitectAgent,
     pipeline: ArchitecturePipeline,
-    tasks_config=None,
+    tasks_config: TasksConfig | None = None,
 ) -> GenerateArchitectureTool:
     """
     Factory function to create GenerateArchitectureTool instance.

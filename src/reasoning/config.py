@@ -76,17 +76,21 @@ CODE_REASONING_NPX_CMD: list[str] = ["npx", "-y", "@mettamatt/code-reasoning@0.8
 ReasoningTool = Literal["shannon", "code"]
 
 
+def _default_tools() -> list[ReasoningTool]:
+    return ["shannon"]
+
+
 class ReasoningStrategy(BaseModel):
     """Per-phase reasoning strategy driving the ThoughtGenerator loop."""
 
     model_config = ConfigDict(extra="forbid")
 
     pre_llm_thoughts: int = Field(
-        3, ge=1, le=20,
+        default=3, ge=1, le=20,
         description="Maximum reasoning steps before the phase's main LLM call.",
     )
     tools: list[ReasoningTool] = Field(
-        default_factory=lambda: ["shannon"],
+        default_factory=_default_tools,
         description=(
             "Reasoning tools used for this phase. Each thought is submitted to "
             "every listed tool in order (the tools alternate per step when more "
@@ -103,7 +107,7 @@ class ReasoningStrategy(BaseModel):
         ),
     )
     system_directive: str = Field(
-        "",
+        default="",
         description="Phase-level directive prepended to every step prompt.",
     )
 
@@ -219,7 +223,7 @@ class ReasoningConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     enabled: bool = Field(
-        True,
+        default=True,
         description="Master switch. Opt out via REASONING_ENABLED=false.",
     )
     shannonthinking_cmd: str | list[str] = Field(
@@ -237,11 +241,11 @@ class ReasoningConfig(BaseModel):
             "the Docker-embedded entry point; set to a JSON list to override."
         ),
     )
-    spawn_timeout_seconds: float = Field(10.0, gt=0)
-    step_timeout_seconds: float = Field(20.0, gt=0)
-    max_total_steps: int = Field(8, ge=1, le=20)
+    spawn_timeout_seconds: float = Field(default=10.0, gt=0)
+    step_timeout_seconds: float = Field(default=20.0, gt=0)
+    max_total_steps: int = Field(default=8, ge=1, le=20)
     quiet_stderr: bool = Field(
-        True,
+        default=True,
         description=(
             "Route reasoning-subprocess stderr to os.devnull. The shannonthinking "
             "server prints large ASCII progress boxes and code-reasoning prints "
@@ -252,7 +256,7 @@ class ReasoningConfig(BaseModel):
         ),
     )
     fail_fast: bool = Field(
-        False,
+        default=False,
         description=(
             "If True, server startup FAILS when a reasoning tool is unreachable. "
             "Default False: startup logs a loud ERROR and degrades to the "

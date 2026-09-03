@@ -41,7 +41,8 @@ def _normalize(vecs: list[list[float]]) -> list[list[float]]:
         arr = arr.reshape(1, -1)
     norms = np.linalg.norm(arr, axis=1, keepdims=True)
     norms = np.where(norms == 0.0, 1.0, norms)
-    return (arr / norms).tolist()
+    normalized: list[list[float]] = (arr / norms).tolist()
+    return normalized
 
 
 class InstructionAwareEmbedding(LiteLLMEmbedding):

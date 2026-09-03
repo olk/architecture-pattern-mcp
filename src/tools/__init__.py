@@ -28,6 +28,12 @@ DP-5: Dependency Injection - Constructor injection of dependencies
 Each factory function creates a tool instance with the appropriate dependencies.
 """
 
+import asyncio
+
+from src.agent import SoftwareArchitectAgent
+from src.config import TasksConfig
+from src.patterns.loader import PatternLoader
+from src.pipeline import ArchitecturePipeline, CancellationToken
 from src.tools.analyze import analyze_architecture_tool
 from src.tools.cancel_architecture_design import cancel_architecture_design_tool
 from src.tools.design import design_architecture_tool
@@ -56,13 +62,13 @@ __all__ = [
 
 
 def create_all_tools(
-    agent,
-    pipeline,
-    pattern_loader,
-    tasks_config=None,
+    agent: SoftwareArchitectAgent,
+    pipeline: ArchitecturePipeline,
+    pattern_loader: PatternLoader,
+    tasks_config: TasksConfig | None = None,
     *,
-    job_tasks: dict[str, tuple] | None = None,
-):
+    job_tasks: dict[str, tuple[asyncio.Task[None], CancellationToken]] | None = None,
+) -> dict[str, object]:
     """
     Factory function to create all MCP tool instances.
 

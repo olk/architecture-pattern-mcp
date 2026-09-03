@@ -75,8 +75,7 @@ dev = [
     "pytest-cov>=4.1.0",
     "hypothesis>=6.0.0",
     "ruff>=0.2.0",
-    "mypy>=1.8.0",
-    "pyright>=1.1.300",
+    "mypy>=2.3.1",
     "pre-commit>=3.6.0",
     "vulture>=2.14",
     "deptry>=0.23.0",
@@ -160,17 +159,16 @@ ignore = [
     "B904",
 ]
 
-[tool.pyright]
-pythonVersion = "3.12"
-include = ["src"]
-exclude = ["tests", "examples"]
-typeCheckingMode = "off"
-
 [tool.mypy]
 python_version = "3.12"
 strict = true
 warn_return_any = true
 warn_unused_configs = true
+files = ["src"]
+explicit_package_bases = true
+# Policy: NO mypy plugins (e.g. pydantic.mypy) — zuban LSP (Rust) cannot run
+# mypy plugins and would diverge from CI. Use PEP-681-compatible style instead
+# (Field(default=...) keyword form, annotated default_factory functions).
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

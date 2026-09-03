@@ -60,7 +60,8 @@ from mcp.types import ToolAnnotations
 from src.agent import ERROR_LLM_PROVIDER, LLMError, SoftwareArchitectAgent
 from src.config import TasksConfig
 from src.errors import ERROR_INVALID_ARCHITECTURE, ERROR_REQUIREMENTS_VALIDATION, MalformedArchitectureOverviewError
-from src.pipeline import ArchitectureEvaluation, ArchitecturePipeline
+from src.pipeline import ArchitecturePipeline
+from src.schemas.evaluation import ArchitectureEvaluation
 from src.text_validation import DomainName, PrintableText, ensure_printable_text
 
 logger = logging.getLogger(__name__)
@@ -360,7 +361,7 @@ class EvaluateArchitectureTool:
 def evaluate_architecture_tool(
     agent: SoftwareArchitectAgent,
     pipeline: ArchitecturePipeline,
-    tasks_config=None,
+    tasks_config: TasksConfig | None = None,
 ) -> EvaluateArchitectureTool:
     """
     Factory function to create EvaluateArchitectureTool instance.

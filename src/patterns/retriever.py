@@ -137,7 +137,7 @@ class _LoggingFusionRetriever(QueryFusionRetriever):
     """
 
     def _run_sync_queries(self, queries: list[QueryBundle]) -> dict[tuple[str, int], list[NodeWithScore]]:
-        results = super()._run_sync_queries(queries)
+        results: dict[tuple[str, int], list[NodeWithScore]] = super()._run_sync_queries(queries)
         for (query_str, leg_idx), nodes in results.items():
             stage = "dense" if leg_idx == 0 else "bm25"
             logger.info(
@@ -486,7 +486,7 @@ class HybridPatternRetriever:
                     reciprocal_rank_score(safe_fused_rank.get(h, len(scored)))
                     + reciprocal_rank_score(ce_rank[h])
                 )
-                nws.node.metadata["selection_score"] = blend  # type: ignore[assignment]
+                nws.node.metadata["selection_score"] = blend
                 nws.score = blend
 
             logger.debug(

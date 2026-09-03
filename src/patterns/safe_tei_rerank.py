@@ -106,7 +106,12 @@ class SafeTEIReranker(TextEmbeddingInference):
         )
         self.auth_token = auth_token
 
-    def _call_api(self, query: str, texts: list[str]) -> list[dict[str, Any]]:
+    # Upstream stub declares `-> list[float]`, but the TEI /rerank endpoint
+    # returns [{index, score, ...}] dicts (see _safe_tei_rerank_call and the
+    # parent class's own response handling) — the stub is wrong.
+    def _call_api(  # type: ignore[override]
+        self, query: str, texts: list[str]
+    ) -> list[dict[str, Any]]:
         """Call TEI /rerank with HTTP status validation and informative error messages.
 
         Raises RuntimeError (not AssertionError) when the sidecar returns an

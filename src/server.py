@@ -53,7 +53,7 @@ import logging
 import os
 import sys
 from datetime import datetime, timezone
-from collections.abc import Sequence
+from collections.abc import AsyncIterator, Sequence
 from contextlib import asynccontextmanager
 from typing import Any
 
@@ -70,7 +70,7 @@ from src.tools.jobs import JobsStore
 from src.config import ConfigManager, ServerConfig
 from src.patterns.loader import PatternLoader
 from src.pipeline import ArchitecturePipeline, CancellationToken
-from src.resources.components import build_component_blueprints, slugify
+from src.resources.components import ComponentDefinition, build_component_blueprints, slugify
 from src.resources.patterns import PatternResource
 from src.resources.templates import RESOURCES
 from src.tools import create_all_tools
@@ -464,6 +464,10 @@ class MCPArchitectServer:
         if not reasoning_config.enabled:
             logger.info("Reasoning MCP integration disabled (REASONING_ENABLED=false)")
             return None
+        if self._agent is None:
+            # Invariant: this runs inside _initialize() right after the agent is
+            # constructed; reaching this means init ordering broke.
+            raise RuntimeError("SoftwareArchitectAgent not initialized — cannot build ReasoningClient")
         return ReasoningClient(reasoning_config, self._agent)
 
     async def _check_reasoning_health(self, client: ReasoningClient) -> None:
@@ -550,7 +554,7 @@ class MCPArchitectServer:
             )
 
     @asynccontextmanager
-    async def lifespan(self, server: FastMCP):
+    async def lifespan(self, server: FastMCP) -> AsyncIterator[dict[str, Any]]:
         """
         Lifespan context manager for FastMCP server.
 
@@ -700,8 +704,11 @@ class MCPArchitectServer:
             mime_type="application/json",
         )
         async def _get_component(type: str, ctx: Context) -> str:
-            blueprints = ctx.request_context.lifespan_context.get(
-                "component_blueprints", {}
+            request_context = ctx.request_context
+            if request_context is None:
+                raise ToolError("No request context available for component lookup")
+            blueprints: dict[str, ComponentDefinition] = (
+                request_context.lifespan_context.get("component_blueprints", {})
             )
 
             slug = slugify(type)

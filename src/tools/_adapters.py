@@ -44,7 +44,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 
 from src.errors import MalformedArchitectureOverviewError
 
@@ -69,9 +69,9 @@ from src.schemas.contracts import ApiContract, ApiEndpoint
 logger = logging.getLogger(__name__)
 
 
-def _lint_convert[T](klass: type[T], data: dict[str, Any]) -> T:
+def _lint_convert[T: BaseModel](klass: type[T], data: dict[str, Any]) -> T:
     """Coerce a dict to a typed Pydantic model using lax validation."""
-    return klass.model_validate(data)  # type: ignore[return-value]
+    return klass.model_validate(data)
 
 
 def _safe_preview(data: dict[str, Any], max_len: int = 200) -> dict[str, Any]:

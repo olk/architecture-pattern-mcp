@@ -33,7 +33,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Annotated
+from typing import Any, Annotated
 
 from pydantic import Field
 
@@ -81,7 +81,7 @@ class CancelArchitectureDesignTool:
         self,
         job_id: Annotated[str, Field(description="Job ID returned by submit_architecture_design_job")],
         _ctx: Context | None = None,
-    ) -> dict:
+    ) -> dict[str, Any]:
         store = await JobsStore.get_instance()
         job = await store.get_job(job_id)
 

@@ -28,6 +28,8 @@ changes, import fails and CI breaks.
 If you modify a Pydantic schema, you MUST update the corresponding example here.
 """
 
+from pydantic import BaseModel
+
 from src.schemas.analysis import AnalysisResult, RequirementWeights
 from src.schemas.architecture import (
     ArchitectureDesignResponse,
@@ -41,7 +43,7 @@ from src.schemas.patterns import ScoredPattern
 from src.schemas.quality import QualityMetrics
 
 
-def _fmt(label: str, obj) -> str:
+def _fmt(label: str, obj: BaseModel) -> str:
     """Format a Pydantic model as a readable JSON code block."""
     return f"{label}:\n```json\n{obj.model_dump_json(indent=2)}\n```"
 

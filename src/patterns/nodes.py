@@ -37,11 +37,12 @@ therefore ``node.hash`` — untouched.
 from __future__ import annotations
 
 import logging
+from typing import cast
 
 import faiss
 from llama_index.core import StorageContext, VectorStoreIndex
 from llama_index.core.base.embeddings.base import BaseEmbedding
-from llama_index.core.schema import TextNode
+from llama_index.core.schema import BaseNode, TextNode
 from llama_index.retrievers.bm25 import BM25Retriever
 from llama_index.vector_stores.faiss import FaissVectorStore
 
@@ -92,8 +93,10 @@ def build_bm25_retriever(nodes: list[TextNode], top_k: int) -> BM25Retriever:
     effective_top_k = top_k if top_k > 0 else len(nodes)
     effective_top_k = min(effective_top_k, len(nodes))
 
+    # list invariance: list[TextNode] is a valid list[BaseNode] corpus, but the
+    # upstream signature does not accept a covariant sequence.
     retriever = BM25Retriever.from_defaults(
-        nodes=nodes,
+        nodes=cast(list[BaseNode], nodes),
         language=DEFAULT_LANGUAGE,
         similarity_top_k=effective_top_k,
     )
