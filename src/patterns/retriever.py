@@ -29,10 +29,14 @@ Stage-1 (recall) retrieval pipeline:
      Per-leg queries stay split via ``QueryBundle``: the dense leg embeds
      ``custom_embedding_strs`` (= raw user_domain) while the BM25 leg
      tokenizes ``query_str`` (= normalized_domain).
-  3. Fusion via upstream ``FUSION_MODES.RELATIVE_SCORE`` (per-leg min-max
-     normalization, weighted by ``RETRIEVAL_RETRIEVER_WEIGHTS``) — locked
-     as a module constant, deliberately not config-exposable; see
-     ``docs/retrieval-fusion-modes.md`` for the full trade-off analysis.
+   3. Fusion via upstream ``FUSION_MODES.RELATIVE_SCORE`` (per-leg min-max
+      normalization, weighted by leg weights — defaults to
+      ``RETRIEVAL_RETRIEVER_WEIGHTS = (0.7, 0.3)``; overridable per
+      deployment via ``RetrievalConfig.dense_weight`` / ``bm25_weight``
+      (env: ``RETRIEVAL_DENSE_WEIGHT`` / ``RETRIEVAL_BM25_WEIGHT``) and
+      for tests via the ``retriever_weights=`` ctor).  The fusion mode
+      itself stays a locked module constant; see
+      ``docs/retrieval-fusion-modes.md`` for the full trade-off analysis.
    4. Optionally rerank with TextEmbeddingInference (cross-encoder via TEI sidecar).
 The slug-cut strategy is fixed to the Vespa-style reciprocal-rank
          blend: keep top rerank_top_n by
@@ -93,17 +97,21 @@ RRF_K: float = 60.0
 FALLBACK_FUSION_TOP_K = 2048
 
 # Stage-1 fusion mode, locked to upstream relative_score: per-leg min-max
-# normalization, weighted by RETRIEVAL_RETRIEVER_WEIGHTS, summed across legs.
+# normalization, weighted by the leg weights, summed across legs.
 # Deliberately not config-exposable — the embedder is fixed, the calibrated
 # [0, 1] scale makes min_fusion_score meaningful, and score-based modes are
 # the only ones honoring retriever_weights under the pinned llama-index-core
 # (RRF silently ignores them).  Full analysis: docs/retrieval-fusion-modes.md.
 RETRIEVAL_FUSION_MODE: FUSION_MODES = FUSION_MODES.RELATIVE_SCORE
 
-# Stage-1 leg weights (dense, BM25).  Dense is the primary signal — the
-# embedder encodes user-domain semantics while BM25 only catches exact slug
-# tokens.  Upstream normalizes weights to sum 1, so with num_queries=1 the
-# best possible consensus score is 1.0 and a dense-only hit caps at 0.7.
+# Stage-1 leg weights (dense, BM25) — DEFAULTS only, overridable per
+# deployment via RetrievalConfig.dense_weight / bm25_weight (env:
+# RETRIEVAL_DENSE_WEIGHT / RETRIEVAL_BM25_WEIGHT, sum-to-1 validated) and
+# per instantiation via the ``retriever_weights=`` ctor parameter.  Dense
+# is the primary signal — the embedder encodes user-domain semantics while
+# BM25 only catches exact slug tokens.  Upstream normalizes weights to sum
+# 1, so with num_queries=1 the best possible consensus score is 1.0 and a
+# dense-only hit caps at the dense weight (0.7 with the defaults).
 RETRIEVAL_RETRIEVER_WEIGHTS: tuple[float, float] = (0.7, 0.3)
 
 
@@ -207,12 +215,14 @@ class HybridPatternRetriever:
 
     Both legs are orchestrated by the upstream ``QueryFusionRetriever``
     (num_queries=1, sync, lossless ``similarity_top_k``, mode locked to
-    ``RETRIEVAL_FUSION_MODE``, leg weights ``RETRIEVAL_RETRIEVER_WEIGHTS``
-    — dense 0.7 / BM25 0.3).  The per-leg query split is preserved via
-    ``QueryBundle``: the dense leg embeds ``custom_embedding_strs`` (raw
-    ``user_domain``, benefiting from embedding semantics) while the BM25
-    leg tokenizes ``query_str`` (``normalized_domain``, exact slug token
-    matching).
+    ``RETRIEVAL_FUSION_MODE``, leg weights from the ``retriever_weights=``
+    ctor parameter — defaults to ``RETRIEVAL_RETRIEVER_WEIGHTS`` (dense
+    0.7 / BM25 0.3), overridable per deployment via
+    ``RetrievalConfig.dense_weight`` / ``bm25_weight``).  The per-leg query
+    split is preserved via ``QueryBundle``: the dense leg embeds
+    ``custom_embedding_strs`` (raw ``user_domain``, benefiting from
+    embedding semantics) while the BM25 leg tokenizes ``query_str``
+    (``normalized_domain``, exact slug token matching).
     """
 
     def __init__(
@@ -396,13 +406,16 @@ class HybridPatternRetriever:
         fused = self._ensure_fusion_retriever().retrieve(query_bundle)
 
         logger.info(
-            "Fusion: %d candidates after %s (showing top %d)",
+            "Fusion: %d candidates after %s (dense=%.2f, bm25=%.2f; showing top %d)",
             len(fused),
             RETRIEVAL_FUSION_MODE.value,
+            self._retriever_weights[0],
+            self._retriever_weights[1],
             min(len(fused), LOG_SUMMARY_CAP),
             extra={
                 "stage": "fusion",
                 "mode": RETRIEVAL_FUSION_MODE.value,
+                "retriever_weights": list(self._retriever_weights),
                 "summary": _summarize_nodes(fused, LOG_SUMMARY_CAP),
             },
         )
@@ -552,6 +565,7 @@ class HybridPatternRetriever:
                 "domain": user_domain,
                 "normalized_domain": normalized_domain,
                 "fusion_mode": RETRIEVAL_FUSION_MODE.value,
+                "retriever_weights": list(self._retriever_weights),
                 "patterns": [
                     {"name": p["name"], "score": float(s)}
                     for p, s in resolved[:LOG_SUMMARY_CAP]

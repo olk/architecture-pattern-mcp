@@ -1,20 +1,24 @@
 # Fusion Modes for Stage-1 Hybrid Domain-Slug Retrieval
 
 Stage-1 of the recall pipeline fuses the BM25 leg with the dense embedding
-leg via llama-index's `QueryFusionRetriever`. Stage-1 fusion is **locked
-to `FUSION_MODES.RELATIVE_SCORE`** (per-leg min-max normalization,
-dense 0.7 / BM25 0.3 leg weights), and the slug-cut strategy is **locked
-to the Vespa-style reciprocal-rank blend** `RR(fused_rank) + RR(ce_rank)`
-with k=60. Neither knob is operator-tunable. This document records the
-arithmetic, the rationale for the choices, and the surface area, so the
-decisions stay revisitable.
+leg via llama-index's `QueryFusionRetriever`. Stage-1 fusion **mode** is
+**locked to `FUSION_MODES.RELATIVE_SCORE`** (per-leg min-max
+normalization), and the slug-cut strategy is **locked to the Vespa-style
+reciprocal-rank blend** `RR(fused_rank) + RR(ce_rank)` with k=60. The
+**leg weights** (dense / BM25) are operator-tunable since the
+`dense_weight` / `bm25_weight` config fields landed: defaults
+0.7 / 0.3, validated to sum to 1.0 (±1e-3), extreme ratios (< 0.05)
+log a startup warning. This document records the arithmetic, the
+rationale for the choices, and the surface area, so the decisions stay
+revisitable.
 
 > **State & anchor note.** This document describes the post-migration
-> state (relative_score stage-1 fusion, dense 0.7 / BM25 0.3, locked
-> rank_fusion slug-cut, `min_fusion_score` default 0.0 operating on the
-> blend scale [0, 2/60]). Authored in the same change set as the
-> migration. Project-code anchors are symbol-level by design (durable);
-> upstream code is cited by module path + function, pinned by `uv.lock`.
+> state (relative_score stage-1 fusion, default leg weights dense 0.7 /
+> BM25 0.3, locked rank_fusion slug-cut, `min_fusion_score` default 0.0
+> operating on the blend scale [0, 2/60]). Authored in the same change
+> set as the migration. Project-code anchors are symbol-level by design
+> (durable); upstream code is cited by module path + function, pinned by
+> `uv.lock`.
 
 ## The three upstream modes (for context)
 
@@ -32,12 +36,13 @@ Defined in `llama_index/core/retrievers/fusion_retriever.py` as
 - **`dist_based_score`** — `relative_score` with the min/max anchors
   replaced by mean ± 3·std per leg; outlier-robust variant.
 
-With the production leg weights `(dense=0.7, bm25=0.3)` (upstream
-normalizes to sum 1, `num_queries=1`):
+With the default leg weights `(dense=0.7, bm25=0.3)` (upstream normalizes
+to sum 1, `num_queries=1`; any validated weight pair shifts these caps
+proportionally):
 
 - best possible consensus: 0.7 + 0.3 = **1.0**
-- dense-only hit: **0.7**
-- BM25-only hit: **0.3**
+- dense-only hit: **0.7** (the dense weight)
+- BM25-only hit: **0.3** (the BM25 weight)
 
 ## Why relative_score wins for this system
 
@@ -46,9 +51,9 @@ normalizes to sum 1, `num_queries=1`):
    doesn't apply here.
 2. **The slug-cut blend is rank-reciprocal** (`RR(fused) + RR(ce)` with
    k=60). Choosing score-based stage-1 lets the blend accumulate
-   meaningful per-leg magnitudes (dense 0.7 vs BM25 0.3) before the rank
-   transform. (Choosing RRF stage-1 would still combine cleanly; the
-   choice here is driven by point 4.)
+   meaningful per-leg magnitudes (dense 0.7 vs BM25 0.3 with the default
+   weights) before the rank transform. (Choosing RRF stage-1 would still
+   combine cleanly; the choice here is driven by point 4.)
 3. **Dense rank-1 confidence is preserved.** RRF's k=60 flattening
    treats rank 1 vs rank 5 as nearly identical (1/60 vs 1/64); on a
    ~213-slug corpus of one-line documents the cosine gap is real signal.
@@ -56,8 +61,8 @@ normalizes to sum 1, `num_queries=1`):
    0.14.x, `_reciprocal_rerank_fusion` iterates `results.values()` and
    silently ignores `retriever_weights` (upstream issue
    run-llama/llama_index#21444); `_relative_score_fusion` honors them.
-   The dense-favoring 0.7/0.3 weighting is only meaningful in
-   relative_score.
+   The dense-favoring weighting (0.7/0.3 with the defaults) is only
+   meaningful in relative_score.
 
 ### What relative_score does NOT give you
 
@@ -67,8 +72,9 @@ worst slug of that query's leg results — a 0.6 for "e-commerce" and a
 
 - Because min-max sends each leg's top node to 1.0, **any non-empty
   recall scores ≥ max leg weight** (0.7 with dense hits; 0.3 for
-  BM25-only). The `min_fusion_score` gate therefore fires only on
-  degenerate (all-zero) recall.
+  BM25-only, with the default weights — generally, the larger of the
+  two configured weights). The `min_fusion_score` gate therefore fires
+  only on degenerate (all-zero) recall.
 - A single extreme outlier can pin one leg's max at 1.0 and compress
   the rest toward 0. If dashboards show that, switch candidates:
   `dist_based_score` is the drop-in variant.
@@ -141,8 +147,9 @@ See `src/patterns/retriever.py :: _ensure_fusion_retriever`.
 
 | Knob | Value / constraint |
 |---|---|
-| `RETRIEVAL_FUSION_MODE` | `FUSION_MODES.RELATIVE_SCORE` (module constant) |
-| `RETRIEVAL_RETRIEVER_WEIGHTS` | `(0.7, 0.3)` — (dense, BM25) |
+| `RETRIEVAL_FUSION_MODE` | `FUSION_MODES.RELATIVE_SCORE` (module constant, locked) |
+| `RetrievalConfig.dense_weight` / `bm25_weight` | Stage-1 leg weights, defaults `(0.7, 0.3)`; each `> 0`, `≤ 1.0`, must sum to 1.0 (±1e-3, model validator); either `< 0.05` logs a startup WARNING; env `RETRIEVAL_DENSE_WEIGHT` / `RETRIEVAL_BM25_WEIGHT` |
+| `RETRIEVAL_RETRIEVER_WEIGHTS` | module constant holding the DEFAULTS `(0.7, 0.3)` — (dense, BM25); config values take precedence via the pipeline wiring |
 | `HybridPatternRetriever(..., retriever_weights=...)` | ctor override; two positive numbers, upstream-normalized |
 | Slug-cut strategy | locked to `RR(fused) + RR(ce)` (k=60) |
 | `RetrievalConfig.min_fusion_score` | default 0.0, validated `[0, 2/60]` (`le=RANK_FUSION_BLEND_MAX`) |
@@ -175,9 +182,14 @@ see git history for its retirement notes.
 - Embedder swap: re-check the score distribution shape. If outliers
   compress the normalized range, `dist_based_score` is the drop-in
   variant (single-constant change in `RETRIEVAL_FUSION_MODE`).
-- Re-tune leg weighting via `retriever_weights=(dense, bm25)` on
-  `HybridPatternRetriever` — honored in score-based modes only under
-  the pinned core.
+- Re-tune leg weighting via `RETRIEVAL_DENSE_WEIGHT` /
+  `RETRIEVAL_BM25_WEIGHT` (sum to 1.0, ±1e-3) or
+  `retriever_weights=(dense, bm25)` on `HybridPatternRetriever` —
+  honored in score-based modes only under the pinned core.
+- Changing the leg weights shifts the relative_score scale: the
+  dense-only cap becomes the dense weight and the BM25-only floor the
+  BM25 weight. The rank-based slug-cut blend and the `min_fusion_score`
+  gate ([0, 2/60]) are unaffected — both operate on ranks, not scores.
 
 ## References
 

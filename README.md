@@ -490,6 +490,8 @@ If the configured model already contains a provider prefix (e.g. `openai/gpt-4o-
 | `EMBEDDER_TEXT_INSTRUCTION` | *(empty)* | Text instruction prefix |
 | `RETRIEVAL_BM25_TOP_K` | `0` | BM25 stage-1 recall cap (0=full corpus) |
 | `RETRIEVAL_DENSE_TOP_K` | `0` | Dense stage-1 recall cap (0=full corpus) |
+| `RETRIEVAL_DENSE_WEIGHT` | `0.7` | **Stage-1 fusion leg weight** on the dense leg. Pairs with `RETRIEVAL_BM25_WEIGHT`; both must be > 0 and sum to 1.0 (±1e-3, startup validation). Either weight < 0.05 logs a startup warning. Distinct from the Stage-2 selection blend weights (`RETRIEVAL_ANALYSIS_BLEND_WEIGHT` / `RETRIEVAL_FUSION_BLEND_WEIGHT`). Note: config keys unknown to an older image fail fast at startup. |
+| `RETRIEVAL_BM25_WEIGHT` | `0.3` | **Stage-1 fusion leg weight** on the BM25 leg. See `RETRIEVAL_DENSE_WEIGHT`. |
 | `RETRIEVAL_TOP_K_PATTERNS` | `5` | Number of patterns to select |
 | `RETRIEVAL_MIN_FUSION_SCORE` | `0.0` | Relevance floor on the rank_fusion blend value (range [0, 2/60] ≈ [0, 0.033]). Default 0.0 (gate disabled). Values above the blend maximum are rejected at startup. |
 | `RETRIEVAL_RERANK_TOP_N` | `10` | Rerank top N (slug-cut after CE) |

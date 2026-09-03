@@ -39,6 +39,10 @@ services:
 
       - RETRIEVAL_BM25_TOP_K=20
       - RETRIEVAL_DENSE_TOP_K=20
+      # Stage-1 fusion leg weights (dense + BM25 must sum to 1.0; a startup
+      # warning fires if either is < 0.05). Overridable via .env or shell.
+      - RETRIEVAL_DENSE_WEIGHT=${RETRIEVAL_DENSE_WEIGHT:-0.7}
+      - RETRIEVAL_BM25_WEIGHT=${RETRIEVAL_BM25_WEIGHT:-0.3}
       - RETRIEVAL_TOP_K_PATTERNS=5
       # Slug-cut strategy is locked to rank_fusion (Vespa-style RR blend).
       # The reported fusion_score lies in [0, 2/60] ≈ [0, 0.033];

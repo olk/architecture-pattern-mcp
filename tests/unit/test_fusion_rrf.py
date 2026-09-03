@@ -33,8 +33,10 @@ Two families live here:
 
 2. TestRetrievalFusionModeConstant / TestRelativeScoreWeightedFusion — the
    stage-1 mode is locked to ``FUSION_MODES.RELATIVE_SCORE`` (per-leg
-   min-max normalization, dense 0.7 / BM25 0.3 weights).  These tests pin
-   the constants and hand-compute the weighted fusion arithmetic.
+   min-max normalization).  These tests pin the mode constant, pin the
+   DEFAULT leg weights (dense 0.7 / BM25 0.3 — overridable via
+   ``RetrievalConfig.dense_weight`` / ``bm25_weight``, sum-to-1 validated),
+   and hand-compute the weighted fusion arithmetic.
 
 Locked-in properties (issue numbers refer to the original fixes):
 - RRF score per node = sum over legs of 1/(rank + k - 1), k=60 (#23:
@@ -54,7 +56,9 @@ from llama_index.core.llms.mock import MockLLM
 from llama_index.core.retrievers import QueryFusionRetriever
 from llama_index.core.retrievers.fusion_retriever import FUSION_MODES
 from llama_index.core.schema import NodeWithScore, QueryBundle, TextNode
+from pydantic import ValidationError
 
+from src.config import RetrievalConfig
 from src.patterns.retriever import (
     RETRIEVAL_FUSION_MODE,
     RETRIEVAL_RETRIEVER_WEIGHTS,
@@ -205,16 +209,32 @@ class TestQueryFusionRRF:
 
 
 class TestRetrievalFusionModeConstant:
-    """Stage-1 fusion is locked: mode and leg weights are module constants,
-    not config-exposable.  relative_score is required because it is the only
-    family honoring retriever_weights under the pinned llama-index-core
-    (RRF silently ignores them — upstream issue #21444)."""
+    """Stage-1 fusion MODE is locked (module constant, not config-exposable);
+    the leg WEIGHTS are tunable — ``RETRIEVAL_RETRIEVER_WEIGHTS`` pins only
+    the default, operators override via ``RetrievalConfig.dense_weight`` /
+    ``bm25_weight`` (sum-to-1 validated, ±1e-3).  relative_score is required
+    because it is the only family honoring retriever_weights under the
+    pinned llama-index-core (RRF silently ignores them — upstream issue
+    #21444)."""
 
     def test_runtime_fusion_mode_is_relative_score(self) -> None:
         assert RETRIEVAL_FUSION_MODE is FUSION_MODES.RELATIVE_SCORE
 
-    def test_retriever_weights_favor_dense(self) -> None:
+    def test_default_retriever_weights_favor_dense(self) -> None:
+        # Pin the DEFAULT only — operators can override via RetrievalConfig.
         assert RETRIEVAL_RETRIEVER_WEIGHTS == (0.7, 0.3)
+
+    def test_config_default_leg_weights_match_constant(self) -> None:
+        cfg = RetrievalConfig()
+        assert (cfg.dense_weight, cfg.bm25_weight) == RETRIEVAL_RETRIEVER_WEIGHTS
+
+    def test_leg_weight_validator_rejects_misnormalized_pair(self) -> None:
+        with pytest.raises(ValidationError, match="dense_weight \\+ bm25_weight"):
+            RetrievalConfig(dense_weight=0.5, bm25_weight=0.4)
+
+    def test_leg_weight_validator_accepts_epsilon(self) -> None:
+        cfg = RetrievalConfig(dense_weight=0.7001, bm25_weight=0.2999)
+        assert abs(cfg.dense_weight + cfg.bm25_weight - 1.0) < 1e-3
 
     def test_invalid_weights_rejected(self) -> None:
         with pytest.raises(ValueError, match="retriever_weights"):

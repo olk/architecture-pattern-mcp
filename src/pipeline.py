@@ -685,6 +685,10 @@ class ArchitecturePipeline(Workflow):
                 rerank_top_n=self._reranker_config.rerank_top_n,
                 reranker_config=self._reranker_config.config,
                 fusion_top_k=self._fusion_top_k,
+                retriever_weights=(
+                    self._retrieval_config.dense_weight,
+                    self._retrieval_config.bm25_weight,
+                ),
             )
 
             # ── Stage 1 (recall): all candidate patterns + fusion scores ──

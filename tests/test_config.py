@@ -31,6 +31,7 @@ Tests:
 """
 
 import json
+import logging
 import os
 from pathlib import Path
 from unittest.mock import patch
@@ -402,6 +403,55 @@ class TestRetrievalConfig:
         """Test that top_k_patterns > 100 raises ValidationError."""
         with pytest.raises(ValidationError):
             RetrievalConfig(top_k_patterns=101)
+
+    def test_leg_weight_defaults(self) -> None:
+        """Stage-1 fusion leg weights default to dense 0.7 / BM25 0.3."""
+        config = RetrievalConfig()
+        assert config.dense_weight == 0.7
+        assert config.bm25_weight == 0.3
+
+    def test_leg_weight_custom_balanced_pair(self) -> None:
+        """Any positive pair summing to 1.0 (±1e-3) is accepted."""
+        config = RetrievalConfig(dense_weight=0.4, bm25_weight=0.6)
+        assert config.dense_weight == 0.4
+        assert config.bm25_weight == 0.6
+
+    def test_leg_weight_rejects_zero(self) -> None:
+        """Zero disables a leg entirely; gt=0 rejects it."""
+        with pytest.raises(ValidationError):
+            RetrievalConfig(dense_weight=0.0, bm25_weight=1.0)
+        with pytest.raises(ValidationError):
+            RetrievalConfig(dense_weight=1.0, bm25_weight=0.0)
+
+    def test_leg_weight_rejects_sum_not_one(self) -> None:
+        """Pairs not summing to 1.0 (±1e-3) fail the model validator."""
+        with pytest.raises(ValidationError, match="dense_weight \\+ bm25_weight"):
+            RetrievalConfig(dense_weight=0.5, bm25_weight=0.4)
+
+    def test_leg_weight_rejects_above_one(self) -> None:
+        """Individual weights are capped at le=1.0."""
+        with pytest.raises(ValidationError):
+            RetrievalConfig(dense_weight=1.5, bm25_weight=-0.5)
+
+    def test_extreme_leg_weights_warn(self, caplog: pytest.LogCaptureFixture) -> None:
+        """A5: extreme ratios (either weight < 0.05) are accepted but log a
+        startup WARNING so operators catch effective single-leg configs."""
+        with caplog.at_level(logging.WARNING, logger="src.config"):
+            config = RetrievalConfig(dense_weight=0.97, bm25_weight=0.03)
+        assert config.dense_weight == 0.97
+        assert any(
+            "effectively disabled" in record.message for record in caplog.records
+        )
+
+    def test_normal_leg_weights_do_not_warn(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Default weights must not trigger the extreme-ratio warning."""
+        with caplog.at_level(logging.WARNING, logger="src.config"):
+            RetrievalConfig()
+        assert not any(
+            "effectively disabled" in record.message for record in caplog.records
+        )
 
     def test_legacy_mode_field_rejected(self) -> None:
         """The fusion mode is no longer config-exposable: RetrievalConfig's

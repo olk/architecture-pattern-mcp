@@ -179,6 +179,18 @@ class RetrievalConfig(BaseModel):
 
     bm25_top_k: int = Field(0, ge=0, le=1000)
     dense_top_k: int = Field(0, ge=0, le=1000)
+    dense_weight: float = Field(
+        default=0.7, gt=0.0, le=1.0,
+        description=(
+            "Stage-1 fusion weight on the dense leg. Pairs with bm25_weight; "
+            "must sum to 1.0 (±1e-3, validated). Upstream QueryFusionRetriever "
+            "re-normalizes internally as a safety net."
+        ),
+    )
+    bm25_weight: float = Field(
+        default=0.3, gt=0.0, le=1.0,
+        description="Stage-1 fusion weight on the BM25 leg. See dense_weight.",
+    )
     top_k_patterns: int = Field(5, ge=1, le=100)
     min_fusion_score: float = Field(
         0.0, ge=0.0, le=RANK_FUSION_BLEND_MAX,
@@ -260,6 +272,22 @@ class RetrievalConfig(BaseModel):
         if abs(s - 1.0) > 1e-3:
             raise ValueError(
                 f"analysis_blend_weight + fusion_blend_weight must sum to 1.0, got {s}"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _check_leg_weights_sum_to_one(self) -> "RetrievalConfig":
+        s = self.dense_weight + self.bm25_weight
+        if abs(s - 1.0) > 1e-3:
+            raise ValueError(
+                f"dense_weight + bm25_weight must sum to 1.0 (±1e-3), got {s}"
+            )
+        if min(self.dense_weight, self.bm25_weight) < 0.05:
+            logger.warning(
+                "Extreme stage-1 fusion leg weights (dense=%.3f, bm25=%.3f); "
+                "one retrieval leg is effectively disabled",
+                self.dense_weight,
+                self.bm25_weight,
             )
         return self
 
