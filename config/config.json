@@ -65,7 +65,7 @@
     "step_timeout_seconds": "{env:REASONING_STEP_TIMEOUT_SECONDS:-20.0}",
     "max_total_steps": "{env:REASONING_MAX_TOTAL_STEPS:-8}",
     "quiet_stderr": "{env:REASONING_QUIET_STDERR:-true}",
-    "fail_fast": "{env:REASONING_FAIL_FAST:-false}"
+    "fail_fast": "{env:REASONING_FAIL_FAST:-true}"
   },
   "tasks": {
     "heartbeat_enabled": "{env:TASKS_HEARTBEAT_ENABLED:-true}",

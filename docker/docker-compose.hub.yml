@@ -21,18 +21,18 @@ services:
     environment:
       # Generator — bring your own LLM.  Defaults match config/config.json (OpenAI).
       # Override any of these via .env, e.g. GENERATOR_PROVIDER=minimax.
-      - GENERATOR_PROVIDER=${GENERATOR_PROVIDER:-openai}
-      - GENERATOR_MODEL=${GENERATOR_MODEL:-gpt-4o-mini}
-      - GENERATOR_BASE_URL=${GENERATOR_BASE_URL:-https://api.openai.com/v1}
-      - GENERATOR_API_KEY=${GENERATOR_API_KEY:?Set GENERATOR_API_KEY in .env}
-      - GENERATOR_TEMPERATURE=${GENERATOR_TEMPERATURE:-0.1}
-      - GENERATOR_TOP_P=${GENERATOR_TOP_P:-1.0}
-      - GENERATOR_TOP_K=${GENERATOR_TOP_K:-20}
+      - GENERATOR_PROVIDER=openai
+      - GENERATOR_MODEL=gpt-4o-mini
+      - GENERATOR_BASE_URL=https://api.openai.com/v1
+      - GENERATOR_API_KEY=${OPENAI_API_KEY}
+      - GENERATOR_TEMPERATURE=0.1
+      - GENERATOR_TOP_P=1.0
+      - GENERATOR_TOP_K=20
 
       # Embedder — connect to the TEI sidecar on the shared network.
       - EMBEDDER_PROVIDER=tei
-      - EMBEDDER_BASE_URL=${EMBEDDER_BASE_URL:-http://pattern-tei-embed:8080/v1}
-      - EMBEDDER_BATCH_SIZE=${EMBEDDER_BATCH_SIZE:-8}
+      - EMBEDDER_BASE_URL=http://pattern-tei-embed:8080/v1
+      - EMBEDDER_BATCH_SIZE=8
       - EMBEDDER_API_KEY=not-needed
 
       - PATTERN_DIRECTORY=./pattern
@@ -54,12 +54,22 @@ services:
       - RETRIEVAL_VERBOSE_TIMING=false
 
       # Reranker — set RERANKER_BASE_URL to point at the tei-rerank sidecar.
-      - RERANKER_BASE_URL=${RERANKER_BASE_URL:-http://pattern-tei-rerank:8080}
+      - RERANKER_BASE_URL=http://pattern-tei-rerank:8080
       - RERANKER_TIMEOUT=30
 
+      # Server-side reasoning MCPs (Plan v5) — embedded in the image at
+      # build time; defaults below. Override commands as JSON lists to point
+      # elsewhere (e.g. npx) or set REASONING_ENABLED=false to opt out.
+      - REASONING_ENABLED=true
+      - REASONING_SPAWN_TIMEOUT_SECONDS=10
+      - REASONING_STEP_TIMEOUT_SECONDS=20
+      - REASONING_MAX_TOTAL_STEPS=8
+      - REASONING_QUIET_STDERR=true
+      - REASONING_FAIL_FAST=true
+
       # Background heartbeat for long-running tools
-      - TASKS_HEARTBEAT_ENABLED=${TASKS_HEARTBEAT_ENABLED:-true}
-      - TASKS_HEARTBEAT_INTERVAL_SECONDS=${TASKS_HEARTBEAT_INTERVAL_SECONDS:-30}
+      - TASKS_HEARTBEAT_ENABLED=true
+      - TASKS_HEARTBEAT_INTERVAL_SECONDS=30
       - TRANSPORT=streamable-http
       - HOST=0.0.0.0
       - PORT=8050

@@ -500,7 +500,7 @@ If the configured model already contains a provider prefix (e.g. `openai/gpt-4o-
 | `REASONING_STEP_TIMEOUT_SECONDS` | `20` | Per-thought tool-call timeout |
 | `REASONING_MAX_TOTAL_STEPS` | `8` | Hard cap on reasoning steps per phase |
 | `REASONING_QUIET_STDERR` | `true` | Silence reasoning-subprocess stderr (ASCII progress boxes, `[info]` banners); set `false` to debug spawn failures |
-| `REASONING_FAIL_FAST` | `false` | Fail server startup when a reasoning tool is unreachable |
+| `REASONING_FAIL_FAST` | `true` | Fail server startup when a reasoning tool is unreachable |
 | `REASONING_SHANNONTHINKING_CMD` | *(embedded)* | JSON list command for shannonthinking (e.g. `["npx","-y","server-shannon-thinking@latest"]`) |
 | `REASONING_CODE_REASONING_CMD` | *(embedded)* | JSON list command for code-reasoning |
 | `RETRIEVAL_ANALYSIS_BLEND_WEIGHT` | `0.7` | Weight on analysis score in blend |

@@ -50,7 +50,7 @@ and are wired through config.json {env:...} expansion:
     REASONING_SPAWN_TIMEOUT_SECONDS          (default: 10)
     REASONING_STEP_TIMEOUT_SECONDS           (default: 20)
     REASONING_MAX_TOTAL_STEPS                (default: 8)
-    REASONING_FAIL_FAST                      (default: false)
+    REASONING_FAIL_FAST                      (default: true)
 """
 
 import json
