@@ -58,7 +58,7 @@ from pydantic import BaseModel, Field
 from fastmcp import Context
 from fastmcp.exceptions import ToolError
 from fastmcp.tools import tool
-from fastmcp.tools.base import ToolAnnotations
+from mcp.types import ToolAnnotations
 
 from src.agent import ERROR_LLM_PROVIDER, LLMError, SoftwareArchitectAgent
 from src.config import TasksConfig
@@ -202,10 +202,10 @@ class DesignArchitectureTool:
         tags={"architecture", "design"},
         annotations=ToolAnnotations(
             title="Design Architecture (default)",
-            readOnlyHint=True,
-            destructiveHint=False,
-            idempotentHint=False,  # non-idempotent: each run creates a new LLM pipeline
-            openWorldHint=False,
+            read_only_hint=True,
+            destructive_hint=False,
+            idempotent_hint=False,  # non-idempotent: each run creates a new LLM pipeline
+            open_world_hint=False,
         ),
     )
     async def design(  # noqa: PLR0912

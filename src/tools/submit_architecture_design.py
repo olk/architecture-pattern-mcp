@@ -42,7 +42,7 @@ from pydantic import Field
 from fastmcp import Context
 from fastmcp.exceptions import ToolError
 from fastmcp.tools import tool
-from fastmcp.tools.base import ToolAnnotations
+from mcp.types import ToolAnnotations
 
 from src.agent import ERROR_LLM_PROVIDER, LLMError, SoftwareArchitectAgent
 from src.errors import ERROR_REQUIREMENTS_VALIDATION
@@ -82,10 +82,10 @@ class SubmitArchitectureDesignJobTool:
         tags={"architecture", "design"},
         annotations=ToolAnnotations(
             title="Submit Design Job (async)",
-            readOnlyHint=False,
-            destructiveHint=False,
-            idempotentHint=False,
-            openWorldHint=False,
+            read_only_hint=False,
+            destructive_hint=False,
+            idempotent_hint=False,
+            open_world_hint=False,
         ),
     )
     async def submit_job(

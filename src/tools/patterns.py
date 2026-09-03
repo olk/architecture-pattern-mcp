@@ -39,7 +39,7 @@ from typing import Annotated, Any
 
 from fastmcp.exceptions import ToolError
 from fastmcp.tools import tool
-from fastmcp.tools.base import ToolAnnotations
+from mcp.types import ToolAnnotations
 from pydantic import Field
 
 from src.resources.patterns import PatternResource
@@ -91,10 +91,10 @@ class ListArchitecturePatternsTool:
         tags={"architecture", "patterns", "read"},
         annotations=ToolAnnotations(
             title="List Architecture Patterns",
-            readOnlyHint=True,
-            destructiveHint=False,
-            idempotentHint=True,
-            openWorldHint=False,
+            read_only_hint=True,
+            destructive_hint=False,
+            idempotent_hint=True,
+            open_world_hint=False,
         ),
     )
     async def list_architecture_patterns(
@@ -181,10 +181,10 @@ class GetArchitecturePatternTool:
         tags={"architecture", "patterns", "read"},
         annotations=ToolAnnotations(
             title="Get Architecture Pattern",
-            readOnlyHint=True,
-            destructiveHint=False,
-            idempotentHint=True,
-            openWorldHint=False,
+            read_only_hint=True,
+            destructive_hint=False,
+            idempotent_hint=True,
+            open_world_hint=False,
         ),
     )
     async def get_architecture_pattern(

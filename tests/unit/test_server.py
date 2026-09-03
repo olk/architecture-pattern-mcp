@@ -195,7 +195,7 @@ class TestMCPArchitectServerToolRegistration:
         """Every exposed tool declares all four MCP annotation hints (OpenAI directory requirement).
 
         Guards against regressions where annotation hints are missing or non-boolean.
-        The four required hints are: readOnlyHint, destructiveHint, idempotentHint, openWorldHint.
+        The four required hints are: read_only_hint, destructive_hint, idempotent_hint, open_world_hint.
         """
         server = MCPArchitectServer()
         async with server._mcp.lifespan():
@@ -208,7 +208,7 @@ class TestMCPArchitectServerToolRegistration:
                 for t in tools:
                     ann = t.annotations
                     assert ann is not None, f"{t.name} missing annotations"
-                    for hint in ("readOnlyHint", "destructiveHint", "idempotentHint", "openWorldHint"):
+                    for hint in ("read_only_hint", "destructive_hint", "idempotent_hint", "open_world_hint"):
                         value = getattr(ann, hint)
                         assert isinstance(
                             value, bool,

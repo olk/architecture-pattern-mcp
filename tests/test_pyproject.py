@@ -326,7 +326,7 @@ class TestDependencyDeclarations:
 
     def test_fastmcp_dependency(self) -> None:
         """
-        AC-4: Verify fastmcp>=3.3.1 specified in dependencies
+        AC-4: Verify fastmcp>=4.0.2 specified in dependencies
 
         # Validates: FR-4, IC-2, AC-4
         """
@@ -341,7 +341,7 @@ class TestDependencyDeclarations:
         fastmcp_dep = next((d for d in deps if d.startswith("fastmcp")), None)
         assert fastmcp_dep is not None, "fastmcp dependency not found"
 
-        # Verify version constraint >=3.3.1
+        # Verify version constraint >=4.0.2
         match = re.match(r"fastmcp(>=[\d.]+)", fastmcp_dep)
         assert match is not None, f"Invalid fastmcp version format: {fastmcp_dep}"
 
@@ -352,7 +352,7 @@ class TestDependencyDeclarations:
         major = int(version_match.group(1))
         minor = int(version_match.group(2))
         patch = int(version_match.group(3))
-        assert (major, minor, patch) >= (3, 3, 1), f"fastmcp version {fastmcp_dep} is less than 3.3.1"
+        assert (major, minor, patch) >= (4, 0, 2), f"fastmcp version {fastmcp_dep} is less than 4.0.2"
 
     def test_llama_index_dependencies(self) -> None:
         """
@@ -382,7 +382,7 @@ class TestDependencyDeclarations:
 
     def test_pydantic_dependency(self) -> None:
         """
-        AC-6: Verify pydantic>=2.0.0 specified in dependencies
+        AC-6: Verify pydantic>=2.12.0 specified in dependencies
 
         # Validates: FR-6, IC-4, AC-6
         """
@@ -397,7 +397,7 @@ class TestDependencyDeclarations:
         pydantic_dep = next((d for d in deps if d.startswith("pydantic")), None)
         assert pydantic_dep is not None, "pydantic dependency not found"
 
-        # Verify version constraint >=2.0.0
+        # Verify version constraint >=2.12.0
         match = re.match(r"pydantic(>=[\d.]+)", pydantic_dep)
         assert match is not None, f"Invalid pydantic version format: {pydantic_dep}"
 
@@ -408,7 +408,7 @@ class TestDependencyDeclarations:
         major = int(version_match.group(1))
         minor = int(version_match.group(2))
         patch = int(version_match.group(3))
-        assert (major, minor, patch) >= (2, 11, 7), f"pydantic version {pydantic_dep} is less than 2.11.7"
+        assert (major, minor, patch) >= (2, 12, 0), f"pydantic version {pydantic_dep} is less than 2.12.0"
 
     def test_python_dotenv_dependency(self) -> None:
         """

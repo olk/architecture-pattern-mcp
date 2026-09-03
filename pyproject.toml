@@ -1,15 +1,15 @@
 # FR-1: The system SHALL define the project name as architecture-pattern-mcp
 # FR-2: The system SHALL define the project version as 1.0.16
 # FR-3: The system SHALL require Python version 3.12 or higher
-# FR-4: The system SHALL depend on fastmcp version 3.4.4 or higher for MCP protocol support
+# FR-4: The system SHALL depend on fastmcp version 4.0.2 or higher for MCP protocol support
 # FR-5: The system SHALL depend on llama-index-core and llama-index-llms-litellm for multi-provider LLM access
-# FR-6: The system SHALL depend on pydantic version 2.11.7 or higher for data validation
+# FR-6: The system SHALL depend on pydantic version 2.12 or higher for data validation
 # FR-7: The system SHALL depend on python-dotenv version 1.0.0 or higher for environment variable management
 # FR-200: The system SHALL depend on sentence-transformers>=3.0 and faiss-cpu>=1.14.3
 # IC-1: Python version SHALL be 3.12 or higher
-# IC-2: fastmcp version SHALL be 3.4.4 or higher
+# IC-2: fastmcp version SHALL be 4.0.2 or higher
 # IC-3: llama-index-core and llama-index-llms-litellm version SHALL be as specified
-# IC-4: pydantic version SHALL be 2.11.7 or higher
+# IC-4: pydantic version SHALL be 2.12 or higher
 # IC-5: python-dotenv version SHALL be 1.0.0 or higher
 # IC-34: sentence-transformers>=3.0 and faiss-cpu>=1.14.3
 # IC-41: The system SHALL use hatchling as the build backend
@@ -41,12 +41,12 @@ classifiers = [
 # FR-7, IC-5: Environment variable management via python-dotenv
 # FR-200, IC-34: Vector similarity search via faiss-cpu and LiteLLMEmbedding
 dependencies = [
-    "fastmcp>=3.4.4",
+    "fastmcp>=4.0.2",
     "llama-index-core>=0.14.23,<0.15",
     "llama-index-llms-litellm>=0.7.1,<0.8",
     "llama-index-embeddings-litellm>=0.5.0,<0.6",
     "llama-index-retrievers-bm25>=0.7.1,<0.8",
-    "pydantic>=2.11.7",
+    "pydantic>=2.12.0",
     "python-dotenv>=1.0.0",
     "llama-index-postprocessor-tei-rerank>=0.5.0,<0.6",
     "faiss-cpu>=1.14.3",

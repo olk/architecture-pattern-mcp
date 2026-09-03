@@ -40,7 +40,7 @@ from pydantic import Field
 from fastmcp import Context
 from fastmcp.exceptions import ToolError
 from fastmcp.tools import tool
-from fastmcp.tools.base import ToolAnnotations
+from mcp.types import ToolAnnotations
 
 from src.pipeline import CancellationToken
 from src.tools.jobs import JobStatus, JobsStore
@@ -71,10 +71,10 @@ class CancelArchitectureDesignTool:
         tags={"architecture", "design"},
         annotations=ToolAnnotations(
             title="Cancel Design Job",
-            readOnlyHint=False,
-            destructiveHint=True,
-            idempotentHint=False,
-            openWorldHint=False,
+            read_only_hint=False,
+            destructive_hint=True,
+            idempotent_hint=False,
+            open_world_hint=False,
         ),
     )
     async def cancel(

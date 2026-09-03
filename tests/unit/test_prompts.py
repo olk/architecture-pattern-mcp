@@ -226,10 +226,10 @@ class TestPromptsAsTools:
                     ann = by_name[tool_name].annotations
                     assert ann is not None, f"{tool_name} has no annotations"
                     assert ann.title == expected_title
-                    assert ann.readOnlyHint is True
-                    assert ann.destructiveHint is False
-                    assert ann.idempotentHint is True
-                    assert ann.openWorldHint is False
+                    assert ann.read_only_hint is True
+                    assert ann.destructive_hint is False
+                    assert ann.idempotent_hint is True
+                    assert ann.open_world_hint is False
 
     @pytest.mark.asyncio
     async def test_list_prompts_tool_returns_all_workflow_prompts(self):

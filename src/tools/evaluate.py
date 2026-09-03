@@ -55,7 +55,7 @@ from fastmcp import Context
 from src.schemas.design import ArchitectureDesign
 from fastmcp.exceptions import ToolError
 from fastmcp.tools import tool
-from fastmcp.tools.base import ToolAnnotations
+from mcp.types import ToolAnnotations
 
 from src.agent import ERROR_LLM_PROVIDER, LLMError, SoftwareArchitectAgent
 from src.config import TasksConfig
@@ -157,10 +157,10 @@ class EvaluateArchitectureTool:
         tags={"architecture", "evaluation"},
         annotations=ToolAnnotations(
             title="Evaluate Architecture",
-            readOnlyHint=True,
-            destructiveHint=False,
-            idempotentHint=False,  # non-idempotent: each run triggers a fresh LLM evaluation
-            openWorldHint=False,
+            read_only_hint=True,
+            destructive_hint=False,
+            idempotent_hint=False,  # non-idempotent: each run triggers a fresh LLM evaluation
+            open_world_hint=False,
         ),
     )
     async def evaluate(  # noqa: PLR0912

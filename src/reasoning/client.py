@@ -121,7 +121,7 @@ async def _noop_log_handler(*_args: Any, **_kwargs: Any) -> None:
     the protocol's logging notifications, which fastmcp re-logs at INFO.
     The thought content is already captured in the reasoning trace, so
     re-logging it doubles the output for no value. Must be a coroutine
-    function — fastmcp 3.x awaits the handler (a sync callable fails with
+    function — fastmcp 3.x/4.x await the handler (a sync callable fails with
     "object NoneType can't be used in 'await' expression").
     """
 

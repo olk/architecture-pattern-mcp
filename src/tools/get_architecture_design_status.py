@@ -35,7 +35,7 @@ from pydantic import Field
 from fastmcp import Context
 from fastmcp.exceptions import ToolError
 from fastmcp.tools import tool
-from fastmcp.tools.base import ToolAnnotations
+from mcp.types import ToolAnnotations
 
 from src.tools.jobs import JobStatus, JobsStore
 
@@ -63,10 +63,10 @@ class GetArchitectureDesignStatusTool:
         tags={"architecture", "design"},
         annotations=ToolAnnotations(
             title="Get Design Status",
-            readOnlyHint=True,
-            destructiveHint=False,
-            idempotentHint=True,
-            openWorldHint=False,
+            read_only_hint=True,
+            destructive_hint=False,
+            idempotent_hint=True,
+            open_world_hint=False,
         ),
     )
     async def get_status(

@@ -592,7 +592,7 @@ class TestLogNoise:
             assert captured["log_file"] is client_module._devnull()
             assert captured["keep_alive"] is False
             handler = captured["log_handler"]
-            assert asyncio.iscoroutinefunction(handler)  # fastmcp 3.x awaits it
+            assert asyncio.iscoroutinefunction(handler)  # fastmcp 3.x/4.x await it
         finally:
             monkey_local.undo()
 

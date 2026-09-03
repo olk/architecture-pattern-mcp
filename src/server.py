@@ -60,7 +60,8 @@ from typing import Any
 from fastmcp import Context, FastMCP
 from fastmcp.exceptions import ToolError
 from fastmcp.server.transforms import GetToolNext, PromptsAsTools, VersionSpec
-from fastmcp.tools.base import Tool, ToolAnnotations
+from fastmcp.tools import Tool
+from mcp.types import ToolAnnotations
 
 from src.agent import SoftwareArchitectAgent
 from src.reasoning import ReasoningConfig
@@ -188,17 +189,17 @@ def configure_logging(log_level: str = "INFO", log_format: str = "json") -> None
 _PROMPTS_AS_TOOLS_HINTS: dict[str, ToolAnnotations] = {
     "list_prompts": ToolAnnotations(
         title="List Prompts",
-        readOnlyHint=True,
-        destructiveHint=False,
-        idempotentHint=True,
-        openWorldHint=False,
+        read_only_hint=True,
+        destructive_hint=False,
+        idempotent_hint=True,
+        open_world_hint=False,
     ),
     "get_prompt": ToolAnnotations(
         title="Get Prompt",
-        readOnlyHint=True,
-        destructiveHint=False,
-        idempotentHint=True,
-        openWorldHint=False,
+        read_only_hint=True,
+        destructive_hint=False,
+        idempotent_hint=True,
+        open_world_hint=False,
     ),
 }
 
@@ -206,10 +207,11 @@ _PROMPTS_AS_TOOLS_HINTS: dict[str, ToolAnnotations] = {
 class AnnotatedPromptsAsTools(PromptsAsTools):
     """PromptsAsTools that injects ToolAnnotations on the generated tools.
 
-    Works around PrefectHQ/fastmcp#3459 (still open for PromptsAsTools as of 3.4.4):
-    the upstream transform emits list_prompts / get_prompt with annotations=None,
+    Works around PrefectHQ/fastmcp#3459 (still unfixed in 4.0.2 — PR #3476 fixed
+    ResourcesAsTools only): the upstream transform emits list_prompts / get_prompt
+    with annotations=None,
     so MCP clients must assume worst-case. Both generated tools are pure reads of
-    server-internal prompt metadata, so we declare readOnlyHint=True post-hoc via
+    server-internal prompt metadata, so we declare read_only_hint=True post-hoc via
     the public Transform API instead of touching upstream's underscore-prefixed factories.
     """
 

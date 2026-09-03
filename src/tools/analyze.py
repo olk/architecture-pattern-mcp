@@ -53,7 +53,7 @@ from pydantic import BaseModel, Field
 from fastmcp import Context
 from fastmcp.exceptions import ToolError
 from fastmcp.tools import tool
-from fastmcp.tools.base import ToolAnnotations
+from mcp.types import ToolAnnotations
 
 from src.agent import ERROR_LLM_PROVIDER, SoftwareArchitectAgent
 from src.config import TasksConfig
@@ -178,10 +178,10 @@ class AnalyzeArchitectureTool:
         tags={"architecture", "analysis"},
         annotations=ToolAnnotations(
             title="Analyze Architecture",
-            readOnlyHint=True,
-            destructiveHint=False,
-            idempotentHint=False,  # non-idempotent: each run triggers a fresh LLM analysis
-            openWorldHint=False,
+            read_only_hint=True,
+            destructive_hint=False,
+            idempotent_hint=False,  # non-idempotent: each run triggers a fresh LLM analysis
+            open_world_hint=False,
         ),
     )
     async def analyze(
