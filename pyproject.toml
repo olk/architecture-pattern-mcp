@@ -196,6 +196,8 @@ optional_dependencies_dev_groups = ["docs"]
 [tool.deptry.per_rule_ignores]
 # litellm (src/agent.py) and workflows (src/pipeline.py) are imported directly
 # but provided transitively via llama-index-llms-litellm and llama-index-core
-# (which vendors llama-index-workflows). Ignored under both DEP001 and DEP003.
-DEP001 = ["litellm", "workflows"]
-DEP003 = ["litellm", "workflows"]
+# (which vendors llama-index-workflows). mcp (src/server.py, src/tools/*) is
+# imported directly but provided transitively via fastmcp. Ignored under both
+# DEP001 and DEP003.
+DEP001 = ["litellm", "workflows", "mcp"]
+DEP003 = ["litellm", "workflows", "mcp"]
