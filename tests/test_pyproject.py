@@ -87,7 +87,7 @@ class TestPyprojectToml:
         return """\
 [project]
 name = "architecture-pattern-mcp"
-version = "1.0.19"
+version = "1.1.0"
 requires-python = ">=3.12"
 description = "MCP Architect Server providing comprehensive architectural expertise"
 
@@ -107,7 +107,7 @@ build-backend = "hatchling.build"
 
         assert "project" in config
         assert config["project"]["name"] == "architecture-pattern-mcp"
-        assert config["project"]["version"] == "1.0.19"
+        assert config["project"]["version"] == "1.1.0"
 
     def test_load_config_raises_filenotfound_for_missing_file(self) -> None:
         """
@@ -127,7 +127,7 @@ build-backend = "hatchling.build"
         content = """\
 [project]
 name = "architecture-pattern-mcp"
-version = "1.0.19"
+version = "1.1.0"
 requires-python = ">=3.12"
 
 [build-system]
@@ -149,7 +149,7 @@ build-backend = "hatchling.build"
         content = """\
 [project]
 name = "architecture-pattern-mcp"
-version = "1.0.19"
+version = "1.1.0"
 requires-python = ">=3.12"
 
 [build-system]
@@ -160,7 +160,7 @@ build-backend = "hatchling.build"
         pyproject_path.write_text(content)
 
         config = load_toml_config(str(pyproject_path))
-        assert config["project"]["version"] == "1.0.19"
+        assert config["project"]["version"] == "1.1.0"
 
     def test_python_requires_312_or_higher(self, tmp_path: Path) -> None:
         """
@@ -171,7 +171,7 @@ build-backend = "hatchling.build"
         content = """\
 [project]
 name = "architecture-pattern-mcp"
-version = "1.0.19"
+version = "1.1.0"
 requires-python = ">=3.12"
 
 [build-system]
@@ -201,7 +201,7 @@ build-backend = "hatchling.build"
         content = """\
 [project]
 name = "architecture-pattern-mcp"
-version = "1.0.19"
+version = "1.1.0"
 requires-python = ">=3.12"
 
 [build-system]
@@ -271,7 +271,7 @@ class TestPyprojectTomlFromWorktree:
             pytest.skip("pyproject.toml does not exist")
 
         config = load_toml_config(str(pyproject_path))
-        assert config["project"]["version"] == "1.0.19"
+        assert config["project"]["version"] == "1.1.0"
 
     def test_worktree_python_requires(self) -> None:
         """
