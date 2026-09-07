@@ -53,8 +53,6 @@ lint-fix: install ## Auto-fix linting issues
 	$(UV) run ruff check --fix .
 	$(UV) run ruff format .
 
-typecheck: static-typing ## Alias for static-typing (mypy strict)
-
 # mypy strict check on src/. --strict is redundant with [tool.mypy] strict=true —
 # kept explicit so the gate survives future config edits.
 static-typing: install ## Run mypy --strict static type check on src/
