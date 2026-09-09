@@ -164,6 +164,9 @@ ignore = [
 # oracles must catch (zip-without-strict and manual loop indices ARE the
 # mutations; "fixing" them would delete the bugs the garden exists to plant).
 "tests/verification/gardens/*" = ["B905", "SIM113"]
+# L9 structural invariant checker: one branch per invariant family (INV-1..7)
+# is the point of the function — splitting it would hide the invariant set.
+"tests/eval/invariants.py" = ["PLR0912"]
 
 [tool.mypy]
 python_version = "3.12"
@@ -187,7 +190,10 @@ markers = [
 ]
 
 [tool.deptry]
-known_first_party = ["src"]# Treat the docs extras (sphinx toolchain) as build-time-only, not runtime deps.
+# "verify_coverage" = scripts/verify_coverage.py (NAGINI_FILES, shared by the
+# L5 coverage report and the L8 cross-consistency gate) — a repo-local module,
+# not a package dependency.
+known_first_party = ["src", "verify_coverage"]# Treat the docs extras (sphinx toolchain) as build-time-only, not runtime deps.
 optional_dependencies_dev_groups = ["docs"]
 
 [tool.deptry.package_module_name_map]
