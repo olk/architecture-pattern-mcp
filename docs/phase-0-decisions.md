@@ -78,6 +78,12 @@ layer in the respective commits:
 - **FizzBee (L4):** specs and ledger are complete; `make verify-fizz` runs
   the exhaustive checks when the `fizz` binary (or
   `scripts/fizz-docker.sh`) is on PATH.
-- **DST (L6):** the experiment runs natively (seeded bounded interleaving
-  explorer over the real `JobsStore`); the simloom/frontrun swap-in is
-  documented in the test module.
+- **DST (L6):** the experiment ran natively and **passed**: exhaustive
+  micro-step interleaving of the cancel/completion race (all 6
+  order-preserving schedules) plus seeded real-asyncio races (5 seeds,
+  pre-yield-shifted interleavings) prove **both members of the discriminating
+  pair J-1/J-2** on the real `JobsStore` (E1 acceptance threshold exceeded),
+  with a can-fail oracle asserting the guard *rejects* the historical race
+  schedule. simloom/frontrun swap-in remains pending tool provisioning; the
+  harness scenarios and oracles map 1:1 onto
+  `@simloom.test(systematic=True, max_delays=N)` / frontrun DPOR.
