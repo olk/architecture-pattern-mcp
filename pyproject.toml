@@ -159,6 +159,12 @@ ignore = [
     "B904",
 ]
 
+[tool.ruff.lint.per-file-ignores]
+# L3 planted-bug garden: mutants deliberately encode the bug classes the
+# oracles must catch (zip-without-strict and manual loop indices ARE the
+# mutations; "fixing" them would delete the bugs the garden exists to plant).
+"tests/verification/gardens/*" = ["B905", "SIM113"]
+
 [tool.mypy]
 python_version = "3.12"
 strict = true
@@ -180,8 +186,7 @@ markers = [
 ]
 
 [tool.deptry]
-known_first_party = ["src"]
-# Treat the docs extras (sphinx toolchain) as build-time-only, not runtime deps.
+known_first_party = ["src"]# Treat the docs extras (sphinx toolchain) as build-time-only, not runtime deps.
 optional_dependencies_dev_groups = ["docs"]
 
 [tool.deptry.package_module_name_map]
@@ -199,3 +204,27 @@ optional_dependencies_dev_groups = ["docs"]
 # DEP001 and DEP003.
 DEP001 = ["litellm", "workflows", "mcp"]
 DEP003 = ["litellm", "workflows", "mcp"]
+
+# L3 mutation testing (testing-strategies.md §3.4, nagini plan §5.2):
+# mutmut audits the oracles themselves — the answer to same-model circularity
+# (68% of AI test suites validate bugs instead of catching them). Scope is the
+# Tier A/B/C modules; run via `make mutation-tests` (manual/nightly gate).
+# Caveat (mutmut docs): the mypy-based mutant filter can hide valid mutants —
+# the planted-bug garden (tests/verification/gardens/) stays the vacuity
+# authority; filter survivor counts are a hint, never a verdict.
+[tool.mutmut]
+source_paths = [
+    "src/text_validation.py",
+    "src/design_normalization.py",
+    "src/config_expansion.py",
+    "src/tools/jobs.py",
+    "src/validation.py",
+]
+pytest_add_cli_args_test_selection = [
+    "tests/unit/test_text_validation.py",
+    "tests/unit/test_normalization.py",
+    "tests/unit/test_validation.py",
+    "tests/unit/test_jobs.py",
+    "tests/unit/test_config_expansion.py",
+    "tests/verification",
+]

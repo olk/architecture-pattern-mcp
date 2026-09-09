@@ -13,7 +13,7 @@
 # =============================================================================
 
 .PHONY: help install install-mcps lint lint-fix typecheck static-typing deadcode depcheck unit-tests \
-	verify-hypothesis-oracles \
+	verify-hypothesis-oracles mutation-tests \
 	client docker-build docker-build-tei \
 	docker-build-all docker-publish docker-publish-tei \
 	docker-publish-all \
@@ -77,6 +77,10 @@ unit-tests: install ## Run unit tests with uv (tests/unit/)
 
 verify-hypothesis-oracles: install ## Run executable oracles (tests/verification/): L1 canary, L2 PBT oracles, trace replay
 	$(UV) run pytest tests/verification/ -v
+
+mutation-tests: ## L3: mutmut over Tier A/B/C + gardens (manual/nightly; ephemeral install via uv)
+	$(UV) run --with mutmut mutmut run
+	$(UV) run --with mutmut mutmut results
 
 ##@ Demo
 client: ## Run the pipes-and-filters MCP client demo (synchronous design_architecture)
