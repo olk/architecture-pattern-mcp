@@ -92,25 +92,29 @@ SPEC_DIR := specs/fizz
 # without the fizz binary can never break the standard gate set.
 verify-fizz: ## L4: exhaustive FizzBee model checks over specs/fizz/ (RUN_VERIFY=1)
 	@if [ -z "$(RUN_VERIFY)" ]; then \
-		echo "verify-fizz: opt-in via RUN_VERIFY=1 (CI sets it unconditionally)"; exit 0; fi
-	@if ! command -v $(FIZZ) >/dev/null 2>&1; then \
-		echo "fizz binary not found: brew install fizzbee, or set FIZZ=scripts/fizz-docker.sh"; exit 1; fi
-	@set -e; for spec in $(SPEC_DIR)/*.fizz; do \
-		echo ">> $$(date +%H:%M:%S) exhaustive check: $$spec"; \
-		$(FIZZ) "$$spec" || exit 1; \
-	done
-	@echo "verify-fizz: all specs green (exhaustive, bounds per fizz.yaml)"
+		echo "verify-fizz: opt-in via RUN_VERIFY=1 (CI sets it unconditionally)"; \
+	elif ! command -v $(FIZZ) >/dev/null 2>&1; then \
+		echo "fizz binary not found: brew install fizzbee, or set FIZZ=scripts/fizz-docker.sh"; exit 1; \
+	else \
+		set -e; for spec in $(SPEC_DIR)/*.fizz; do \
+			echo ">> $$(date +%H:%M:%S) exhaustive check: $$spec"; \
+			$(FIZZ) "$$spec" || exit 1; \
+		done; \
+		echo "verify-fizz: all specs green (exhaustive, bounds per fizz.yaml)"; \
+	fi
 
 verify-fizz-simulation: ## L4: seeded parallel FizzBee simulation (nightly relief valve)
 	@if [ -z "$(RUN_VERIFY)" ]; then \
-		echo "verify-fizz-simulation: opt-in via RUN_VERIFY=1"; exit 0; fi
-	@if ! command -v $(FIZZ) >/dev/null 2>&1; then \
-		echo "fizz binary not found: brew install fizzbee, or set FIZZ=scripts/fizz-docker.sh"; exit 1; fi
-	@set -e; seed=$$(date +%s); workers=$$(nproc); \
-	echo ">> seeded simulation seed=$$seed workers=$$workers"; \
-	for spec in $(SPEC_DIR)/*.fizz; do \
-		$(FIZZ) -x --seed $$seed --parallel $$workers "$$spec" || exit 1; \
-	done
+		echo "verify-fizz-simulation: opt-in via RUN_VERIFY=1"; \
+	elif ! command -v $(FIZZ) >/dev/null 2>&1; then \
+		echo "fizz binary not found: brew install fizzbee, or set FIZZ=scripts/fizz-docker.sh"; exit 1; \
+	else \
+		set -e; seed=$$(date +%s); workers=$$(nproc); \
+		echo ">> seeded simulation seed=$$seed workers=$$workers"; \
+		for spec in $(SPEC_DIR)/*.fizz; do \
+			$(FIZZ) -x --seed $$seed --parallel $$workers "$$spec" || exit 1; \
+		done; \
+	fi
 
 NAGINI_FILES := $(shell $(UV) run python scripts/verify_coverage.py --files 2>/dev/null)
 
@@ -119,14 +123,16 @@ NAGINI_FILES := $(shell $(UV) run python scripts/verify_coverage.py --files 2>/d
 # a pushed branch can never skip verification either.
 verify-nagini: ## L5: Nagini deductive verification over NAGINI_FILES (RUN_VERIFY=1)
 	@if [ -z "$(RUN_VERIFY)" ]; then \
-		echo "verify-nagini: opt-in via RUN_VERIFY=1 (CI sets it unconditionally)"; exit 0; fi
-	@if ! command -v nagini >/dev/null 2>&1; then \
-		echo "nagini not found: pip install \"nagini[mcp,lsp,server]>=1.3.1\" (Java 11+ required; \$$JAVA_HOME set)"; exit 1; fi
-	@set -e; for f in $(NAGINI_FILES); do \
-		echo ">> nagini --counterexample $$f"; \
-		nagini --counterexample $$f || exit 1; \
-	done
-	@echo "verify-nagini: all NAGINI_FILES verified"
+		echo "verify-nagini: opt-in via RUN_VERIFY=1 (CI sets it unconditionally)"; \
+	elif ! command -v nagini >/dev/null 2>&1; then \
+		echo "nagini not found: pip install \"nagini[mcp,lsp,server]>=1.3.1\" (Java 11+ required; \$$JAVA_HOME set)"; exit 1; \
+	else \
+		set -e; for f in $(NAGINI_FILES); do \
+			echo ">> nagini --counterexample $$f"; \
+			nagini --counterexample $$f || exit 1; \
+		done; \
+		echo "verify-nagini: all NAGINI_FILES verified"; \
+	fi
 
 verify-coverage: ## L5: contract-coverage report over NAGINI_FILES
 	@$(UV) run python scripts/verify_coverage.py
