@@ -33,99 +33,34 @@ Two enforcement layers:
   Layer 2 — Runtime guard: defence-in-depth for values read back from persistent
              storage (JobsStore SQLite) or passed through internal APIs.
 
-Design decisions applied:
-  - normalize (strip outer whitespace) before validation
-  - require at least one letter or digit (Unicode categories L* or N*)
-  - max_length: domain <= 200 chars, free text <= 100 000 chars, pattern name <= 100
+Pure validation logic lives in src/text_validation_core.py (the Nagini
+verification core — no third-party imports, nagini plan §3.4); this module
+keeps the Pydantic-facing API and re-exports the core callables, so all
+existing import sites keep working unchanged.
 """
 
 from __future__ import annotations
 
-import unicodedata
 from typing import Annotated
 
 from pydantic import AfterValidator, Field, StringConstraints
 
-DOMAIN_MAX_LENGTH = 200
-FREETEXT_MAX_LENGTH = 100_000
-PATTERN_NAME_MAX_LENGTH = 100
+from src.text_validation_core import (
+    DOMAIN_MAX_LENGTH,
+    FREETEXT_MAX_LENGTH,
+    PATTERN_NAME_MAX_LENGTH,
+    ensure_printable_text,
+)
 
-
-def _has_printable_content(value: str) -> bool:
-    """Return True if value contains at least one letter or digit."""
-    return any(
-        unicodedata.category(ch).startswith(("L", "N"))
-        for ch in value
-    )
-
-
-def _check_free_text(stripped: str) -> str:
-    """Validate free-form text (requirements, criteria, style, etc.)."""
-    if not _has_printable_content(stripped):
-        raise ValueError(
-            "Value must contain at least one visible letter or digit; "
-            "whitespace-only and invisible-character-only strings are not allowed"
-        )
-    return stripped
-
-
-def _check_domain(stripped: str) -> str:
-    """Validate a domain string (strict: no line breaks)."""
-    if not _has_printable_content(stripped):
-        raise ValueError(
-            "Domain must contain at least one visible letter or digit; "
-            "whitespace-only and invisible-character-only strings are not allowed"
-        )
-    return stripped
-
-
-def ensure_printable_text(
-    value: str,
-    *,
-    field: str,
-    allow_line_breaks: bool = True,
-    max_length: int = FREETEXT_MAX_LENGTH,
-) -> str:
-    """
-    Strip, validate, and return a text parameter.
-
-    Used both as:
-      1. Pydantic AfterValidator callable — runs after StringConstraints.
-      2. Runtime guard callable in tool handlers (defence-in-depth).
-
-    Args:
-        value:        The string value to validate.
-        field:        Human-readable field name used in error messages.
-        allow_line_breaks: Whether ``\\n`` and ``\\r`` are permitted inside the text.
-        max_length:   Maximum allowed character count after stripping.
-
-    Returns:
-        The stripped string (normalised).
-
-    Raises:
-        ValueError: When the value is whitespace-only, contains disallowed
-                    control/format characters, or contains no printable letters/digits.
-    """
-    _allowed = {"\t", "\n", "\r"}
-    if not allow_line_breaks:
-        _allowed -= {"\n", "\r"}
-
-    for ch in value:
-        cat = unicodedata.category(ch)
-        if cat.startswith("C") and ch not in _allowed:
-            raise ValueError(
-                f"{field} contains disallowed character U+{ord(ch):04X} "
-                f"(category {cat}); control and format characters are not allowed"
-            )
-
-    stripped = value.strip()
-    if len(stripped) > max_length:
-        raise ValueError(
-            f"{field} exceeds maximum length of {max_length} characters "
-            f"(got {len(stripped)} after stripping)"
-        )
-
-    return _check_free_text(stripped) if allow_line_breaks else _check_domain(stripped)
+__all__ = [
+    "DOMAIN_MAX_LENGTH",
+    "FREETEXT_MAX_LENGTH",
+    "PATTERN_NAME_MAX_LENGTH",
+    "DomainName",
+    "PatternName",
+    "PrintableText",
+    "ensure_printable_text",
+]
 
 
 def _freetext_validator(value: str) -> str:

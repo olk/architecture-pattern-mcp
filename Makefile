@@ -14,6 +14,7 @@
 
 .PHONY: help install install-mcps lint lint-fix typecheck static-typing deadcode depcheck unit-tests \
 	verify-hypothesis-oracles mutation-tests verify-fizz verify-fizz-simulation \
+	verify-nagini verify-coverage \
 	client docker-build docker-build-tei \
 	docker-build-all docker-publish docker-publish-tei \
 	docker-publish-all \
@@ -109,6 +110,25 @@ verify-fizz-simulation: ## L4: seeded parallel FizzBee simulation (nightly relie
 	for spec in $(SPEC_DIR)/*.fizz; do \
 		$(FIZZ) -x --seed $$seed --parallel $$workers "$$spec" || exit 1; \
 	done
+
+NAGINI_FILES := $(shell $(UV) run python scripts/verify_coverage.py --files 2>/dev/null)
+
+# Opt-in via RUN_VERIFY=1 (nagini plan §3.9): CI sets it unconditionally; a
+# local environment without Java can never break the standard gate set — but
+# a pushed branch can never skip verification either.
+verify-nagini: ## L5: Nagini deductive verification over NAGINI_FILES (RUN_VERIFY=1)
+	@if [ -z "$(RUN_VERIFY)" ]; then \
+		echo "verify-nagini: opt-in via RUN_VERIFY=1 (CI sets it unconditionally)"; exit 0; fi
+	@if ! command -v nagini >/dev/null 2>&1; then \
+		echo "nagini not found: pip install \"nagini[mcp,lsp,server]>=1.3.1\" (Java 11+ required; \$$JAVA_HOME set)"; exit 1; fi
+	@set -e; for f in $(NAGINI_FILES); do \
+		echo ">> nagini --counterexample $$f"; \
+		nagini --counterexample $$f || exit 1; \
+	done
+	@echo "verify-nagini: all NAGINI_FILES verified"
+
+verify-coverage: ## L5: contract-coverage report over NAGINI_FILES
+	@$(UV) run python scripts/verify_coverage.py
 
 ##@ Demo
 client: ## Run the pipes-and-filters MCP client demo (synchronous design_architecture)

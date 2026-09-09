@@ -22,15 +22,16 @@
 """
 Pure transformations on ArchitectureDesign for spec §4.11 denormalization.
 
+Pydantic adapter: the pure precedence/dedup logic lives in
+src/design_normalization_core.py (plain-data protocols, Nagini target);
+this module passes the Pydantic design through the core and applies the
+result with a single model_copy (deep=True).
+
 See docs/implementation-guide.md §4.14 for the full rule table.
 """
 
-from src.schemas import (
-    ApiContract,
-    ArchitectureDesign,
-    DataModel,
-    EventContract,
-)
+from src.design_normalization_core import denormalize_core
+from src.schemas import ArchitectureDesign
 
 
 def denormalize_contracts(design: ArchitectureDesign) -> ArchitectureDesign:
@@ -48,45 +49,12 @@ def denormalize_contracts(design: ArchitectureDesign) -> ArchitectureDesign:
     the returned design as immutable — list fields are references to trusted
     input.
     """
-    seen_ids: set[str] = set()
-    promoted_apis: list[ApiContract] = []
-    for ac in design.api_contracts:
-        if ac.component_id not in seen_ids:
-            promoted_apis.append(ac)
-            seen_ids.add(ac.component_id)
-    for comp in design.components:
-        if comp.api_contract is not None and comp.api_contract.component_id not in seen_ids:
-            promoted_apis.append(comp.api_contract)
-            seen_ids.add(comp.api_contract.component_id)
-
-    seen_models: set[tuple[str, bool]] = set()
-    promoted_models: list[DataModel] = []
-    for m in design.shared_data_models:
-        key = (m.name, m.is_shared)
-        if key not in seen_models:
-            promoted_models.append(m)
-            seen_models.add(key)
-    for comp in design.components:
-        for model in comp.data_models:
-            if not model.is_shared:
-                continue
-            key = (model.name, model.is_shared)
-            if key not in seen_models:
-                promoted_models.append(model)
-                seen_models.add(key)
-
-    seen_events: set[str] = set()
-    promoted_events: list[EventContract] = []
-    for ec in design.event_contracts:
-        if ec.event_name not in seen_events:
-            promoted_events.append(ec)
-            seen_events.add(ec.event_name)
-
+    promoted = denormalize_core(design)
     return design.model_copy(
         update={
-            "api_contracts": promoted_apis,
-            "shared_data_models": promoted_models,
-            "event_contracts": promoted_events,
+            "api_contracts": promoted["api_contracts"],
+            "shared_data_models": promoted["shared_data_models"],
+            "event_contracts": promoted["event_contracts"],
         },
         deep=True,
     )
