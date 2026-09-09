@@ -15,6 +15,7 @@
 .PHONY: help install install-mcps lint lint-fix typecheck static-typing deadcode depcheck unit-tests \
 	verify-hypothesis-oracles mutation-tests verify-fizz verify-fizz-simulation \
 	verify-nagini verify-coverage verify-import-inventory verify-deps-audit \
+	verify-ledger verify-cross-consistency \
 	client docker-build docker-build-tei \
 	docker-build-all docker-publish docker-publish-tei \
 	docker-publish-all \
@@ -131,6 +132,15 @@ verify-coverage: ## L5: contract-coverage report over NAGINI_FILES
 	@$(UV) run python scripts/verify_coverage.py
 
 IMPORT_SNAPSHOT := tests/verification/snapshots/import_inventory.txt
+
+verify-ledger: ## L8: property-ID ledger consistency (specs/fizz/README.md <-> artifacts)
+	@$(UV) run python scripts/verify_ledger.py
+
+# Advisory NL-Doc cross-consistency gate (mechanical subset; the LLM
+# comparison activates via ARCH_CONSISTENCY_MODEL, checker identity pinned
+# per run — E3). STRICT=1 enforces the >10% divergence promotion trigger.
+verify-cross-consistency: ## L8: NL-Doc/docstring consistency over NAGINI_FILES (advisory)
+	@$(UV) run python scripts/cross_consistency.py $(if $(STRICT),--strict,)
 
 verify-import-inventory: ## L7: third-party import inventory drift check (slopsquatting defence)
 	@$(UV) run python scripts/import_inventory.py --check $(IMPORT_SNAPSHOT)
