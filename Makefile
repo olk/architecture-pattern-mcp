@@ -13,6 +13,7 @@
 # =============================================================================
 
 .PHONY: help install install-mcps lint lint-fix typecheck static-typing deadcode depcheck unit-tests \
+	verify-hypothesis-oracles \
 	client docker-build docker-build-tei \
 	docker-build-all docker-publish docker-publish-tei \
 	docker-publish-all \
@@ -73,6 +74,9 @@ depcheck: ## Run deptry dependency-hygiene scan
 ##@ Tests
 unit-tests: install ## Run unit tests with uv (tests/unit/)
 	$(UV) run pytest tests/unit/ -v
+
+verify-hypothesis-oracles: install ## Run executable oracles (tests/verification/): L1 canary, L2 PBT oracles, trace replay
+	$(UV) run pytest tests/verification/ -v
 
 ##@ Demo
 client: ## Run the pipes-and-filters MCP client demo (synchronous design_architecture)
