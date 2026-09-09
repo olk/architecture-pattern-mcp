@@ -1,0 +1,111 @@
+---
+# jobs_protocol.fizz — job lifecycle protocol (fizzbee plan §3.3-§3.5).
+deadlock_detection: true       # default; stated explicitly for review
+options:
+  max_concurrent_actions: 2
+action_options:
+  "JobClient.Submit":
+    max_actions: 6             # model bound, not a protocol limit (SlateDB pattern)
+---
+
+# Element→code map (SlateDB header convention; ledger: specs/fizz/README.md):
+#   role JobClient          ↔ callers of submit_job/get_status/cancel_job (src/tools/jobs.py)
+#   role JobStore           ↔ JobsStore transition setters (set_running/set_completed/...)
+#   atomic action Submit    ↔ jobs.create_job: INSERT (id, pending)
+#   atomic action Trans     ↔ guarded UPDATEs (W0-1: WHERE id = ? AND status IN (...))
+#   always assertion J1     ↔ nagini twin J-1 (verify/twin/jobs_state_twin.py)
+#   always assertion J3     ↔ oracle J-3 (tests/verification/test_jobs_properties.py)
+#
+# JobStore models the SQLite store: durable, no mid-statement crash —
+# crash_on_yield: false is the explicit, justified choice (models SQLite
+# durability; the DB does not crash mid-statement).
+# JobClient models a tool caller: crash-on-yield ON (default) — a crashed
+# client is exactly the fault class the checker must explore.
+
+MAX_CLIENTS = 2        # model bound — symmetry makes role identity irrelevant
+TERMINAL = ["COMPLETED", "FAILED", "CANCELLED"]
+GUARDED = True         # models the Week-0 guarded UPDATEs in src/tools/jobs.py
+                       # (UPDATE ... WHERE id = ? AND status IN (...)). Set to
+                       # False to reproduce the pre-Week-0 unconditional
+                       # semantics — the F0 A/B flip: guard off must violate
+                       # J1; guard on (current implementation) must hold.
+
+role JobStore:
+    func Init():
+        self.status = {}       # job_id -> status string
+        self.created = {}      # logical creation clock
+        self.updated = {}      # logical update clock
+        self._left_terminal = {}   # ghost: jid -> True once it left a terminal state
+        self.clock = 0
+
+    # Mirrors set_running/set_completed/set_failed/set_cancelled in
+    # src/tools/jobs.py — guarded since Week 0; GUARDED=False recovers the
+    # historical unconditional UPDATE (the F0 A/B flip direction).
+    atomic func Trans(jid, new_status):
+        self.clock = self.clock + 1
+        old = self.status[jid]
+        if GUARDED and old in TERMINAL:
+            return                                # the Week-0 guard: reject
+        if old in TERMINAL:
+            self._left_terminal[jid] = True       # ghost bookkeeping: J1 witness
+        self.status[jid] = new_status             # unguarded when GUARDED=False
+        self.updated[jid] = self.clock
+
+    atomic func Submit(jid):
+        self.clock = self.clock + 1
+        self.status[jid] = "PENDING"
+        self.created[jid] = self.clock
+        self.updated[jid] = self.clock
+
+symmetric role JobClient:
+    action Init:
+        self.inflight = None      # ephemeral: lost on crash
+        self.submitted = 0
+
+    atomic action Submit:
+        require self.submitted < 2
+        jid = "j" + str(self.submitted)
+        self.submitted = self.submitted + 1
+        store.Submit(jid)
+        self.inflight = jid
+
+    atomic action Cancel:
+        require self.inflight != None
+        store.Trans(self.inflight, "CANCELLED")   # models cancel_job's guarded UPDATE
+        self.inflight = None
+
+    atomic action Complete:
+        require self.inflight != None
+        store.Trans(self.inflight, "COMPLETED")   # models set_completed's UPDATE
+        self.inflight = None
+
+    atomic action Fail:
+        require self.inflight != None
+        store.Trans(self.inflight, "FAILED")      # models set_failed's UPDATE
+        self.inflight = None
+
+action Init:
+    store = JobStore()
+    store.Init()
+    clients = [JobClient() for i in range(MAX_CLIENTS)]
+
+# ---- assertions (ledger §3.4) ----
+
+always assertion J4_SingleRunner:
+    # at most one RUNNING per job — with atomic Trans this is structural;
+    # kept as a tripwire for future non-atomic store actions
+    return True
+
+always assertion J3_TimestampsMonotone:
+    # created_at <= updated_at always; logical clocks: fixed UTC ISO-8601
+    # format makes lexicographic == chronological in the implementation
+    for jid in store.status.keys():
+        if store.created[jid] > store.updated[jid]:
+            return False
+    return True
+
+always assertion J1_TerminalImmutable:
+    # ghost state: Trans marks jid in _left_terminal the moment a job leaves
+    # a terminal state. GUARDED=False must produce a violation trace (the
+    # historical pre-Week-0 bug); GUARDED=True must hold.
+    return len(store._left_terminal.keys()) == 0

@@ -13,7 +13,7 @@
 # =============================================================================
 
 .PHONY: help install install-mcps lint lint-fix typecheck static-typing deadcode depcheck unit-tests \
-	verify-hypothesis-oracles mutation-tests \
+	verify-hypothesis-oracles mutation-tests verify-fizz verify-fizz-simulation \
 	client docker-build docker-build-tei \
 	docker-build-all docker-publish docker-publish-tei \
 	docker-publish-all \
@@ -81,6 +81,34 @@ verify-hypothesis-oracles: install ## Run executable oracles (tests/verification
 mutation-tests: ## L3: mutmut over Tier A/B/C + gardens (manual/nightly; ephemeral install via uv)
 	$(UV) run --with mutmut mutmut run
 	$(UV) run --with mutmut mutmut results
+
+FIZZ ?= fizz
+SPEC_DIR := specs/fizz
+
+# Opt-in locally via RUN_VERIFY=1 (same pattern as verify-nagini); CI always
+# sets it. Without RUN_VERIFY the targets are a no-op so an environment
+# without the fizz binary can never break the standard gate set.
+verify-fizz: ## L4: exhaustive FizzBee model checks over specs/fizz/ (RUN_VERIFY=1)
+	@if [ -z "$(RUN_VERIFY)" ]; then \
+		echo "verify-fizz: opt-in via RUN_VERIFY=1 (CI sets it unconditionally)"; exit 0; fi
+	@if ! command -v $(FIZZ) >/dev/null 2>&1; then \
+		echo "fizz binary not found: brew install fizzbee, or set FIZZ=scripts/fizz-docker.sh"; exit 1; fi
+	@set -e; for spec in $(SPEC_DIR)/*.fizz; do \
+		echo ">> $$(date +%H:%M:%S) exhaustive check: $$spec"; \
+		$(FIZZ) "$$spec" || exit 1; \
+	done
+	@echo "verify-fizz: all specs green (exhaustive, bounds per fizz.yaml)"
+
+verify-fizz-simulation: ## L4: seeded parallel FizzBee simulation (nightly relief valve)
+	@if [ -z "$(RUN_VERIFY)" ]; then \
+		echo "verify-fizz-simulation: opt-in via RUN_VERIFY=1"; exit 0; fi
+	@if ! command -v $(FIZZ) >/dev/null 2>&1; then \
+		echo "fizz binary not found: brew install fizzbee, or set FIZZ=scripts/fizz-docker.sh"; exit 1; fi
+	@set -e; seed=$$(date +%s); workers=$$(nproc); \
+	echo ">> seeded simulation seed=$$seed workers=$$workers"; \
+	for spec in $(SPEC_DIR)/*.fizz; do \
+		$(FIZZ) -x --seed $$seed --parallel $$workers "$$spec" || exit 1; \
+	done
 
 ##@ Demo
 client: ## Run the pipes-and-filters MCP client demo (synchronous design_architecture)

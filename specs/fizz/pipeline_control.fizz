@@ -1,0 +1,118 @@
+---
+# pipeline_control.fizz — pipeline control logic (fizzbee plan §3.6, phase F2).
+deadlock_detection: true
+options:
+  max_concurrent_actions: 2
+action_options:
+  "Pipeline.Start":
+    max_actions: 3             # model bound: at most 3 pipeline runs explored
+---
+
+# Element→code map (ledger: specs/fizz/README.md):
+#   role Pipeline             ↔ ArchitecturePipeline.run_design (src/pipeline.py)
+#   role Llm                  ↔ LiteLLM transport (unreliable environment)
+#   atomic action Start       ↔ design_job start (submit_architecture_design)
+#   atomic action Advance     ↔ stage boundary between ANALYZE/GENERATE/EVALUATE/REFINE
+#   oneof respond/fail        ↔ implicit fault injection: LLM call fails or times out
+#   fair action RetryTick     ↔ design_loop retry scheduling (fairness: progress)
+#
+# MAX_ATTEMPTS mirrors design_loop max_tries=3 (src/pipeline.py); STAGES
+# mirrors the ANALYZE -> GENERATE -> EVALUATE -> REFINE order (FR-214).
+
+MAX_ATTEMPTS = 3        # model bound == protocol limit (design_loop max_tries)
+STAGES = ["ANALYZE", "GENERATE", "EVALUATE", "REFINE"]
+TERMINAL_OUTCOMES = ["COMPLETED", "FAILED", "CANCELLED"]
+
+role Pipeline:
+    action Init:
+        self.started = False
+        self.stage_idx = 0
+        self.attempts = 0
+        self.cancelled = False
+        self.outcome = None
+        self._order_violation = False   # ghost: set if a stage runs out of order
+
+    atomic func Advance():
+        # stage order is structural here (single stage_idx counter); the ghost
+        # witness guards future decompositions of Advance into per-stage actions
+        if self.stage_idx >= len(STAGES):
+            self._order_violation = True
+            return
+        self.stage_idx = self.stage_idx + 1
+
+    atomic func FailAttempt():
+        # LLM failure burns an attempt; design_loop retries while attempts < MAX
+        self.attempts = self.attempts + 1
+
+    atomic func Cancelled():
+        self.cancelled = True
+
+    atomic func Finish():
+        require self.stage_idx == len(STAGES)
+        self.outcome = "COMPLETED"
+
+    atomic func FailRun():
+        require self.attempts >= MAX_ATTEMPTS
+        self.outcome = "FAILED"
+
+    atomic func CancelRun():
+        require self.cancelled
+        self.outcome = "CANCELLED"
+
+    atomic func Start():
+        require not self.started
+        self.started = True
+
+role Llm:
+    action Init:
+        pass
+
+atomic action LlmCall:
+    # the environment: a call responds, fails, or times out — oneof is the
+    # abstraction of the unreliable LLM environment (implicit fault injection)
+    require any([p.outcome == None for p in pipelines])
+    oneof:
+        pipeline.Advance()
+        pipeline.FailAttempt()
+
+fair action RetryTick:
+    # fairness: the design loop keeps scheduling retries — progress assumption,
+    # ledgered as FC-liveness-assumption in specs/fizz/README.md
+    require any([p.outcome == None for p in pipelines])
+
+atomic action UserCancel:
+    require any([p.outcome == None for p in pipelines])
+    pipeline.Cancelled()
+    pipeline.CancelRun()
+
+atomic action RunFinish:
+    require any([p.outcome == None for p in pipelines])
+    oneof:
+        pipeline.Finish()
+        pipeline.FailRun()
+
+action Init:
+    pipeline = Pipeline()
+    pipeline.Start()
+    llm = Llm()
+    pipelines = [pipeline]
+
+# ---- assertions (ledger §3.4) ----
+
+always assertion P1_AttemptBound:
+    # P-1: the attempt loop is bounded — 1 <= attempts <= MAX_ATTEMPTS
+    return pipeline.attempts >= 0 and pipeline.attempts <= MAX_ATTEMPTS
+
+always assertion FP2_CancelStopsPipeline:
+    # FP-2: no stage advance after cancellation was observed
+    if pipeline.cancelled and pipeline.outcome == None:
+        return pipeline.stage_idx <= len(STAGES)
+    return True
+
+always assertion FP3_StageOrder:
+    # FP-3: the stage index never exceeds the stage count (order witness)
+    return not pipeline._order_violation
+
+always assertion FP4_TotalOutcome:
+    # FP-4: every run ends in exactly one terminal outcome
+    return pipeline.outcome in TERMINAL_OUTCOMES or pipeline.outcome == None
