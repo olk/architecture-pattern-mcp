@@ -42,6 +42,30 @@ ERROR_INVALID_ARCHITECTURE = "ERR_012"
 ERROR_REQUIREMENTS_VALIDATION = "ERR_001"
 
 
+class JobStateError(RuntimeError):
+    """
+    Internal transition-guard signal (Week-0 W0-1): a guarded JobsStore
+    transition was rejected because the job's current status is outside the
+    setter's guard set (a terminal write lost a race to a concurrent cancel
+    or completion). Mapped by callers; never exposed as a tool error code.
+
+    Attributes:
+        job_id:          ID of the job whose transition was rejected.
+        current_status:  Status re-read from the store at rejection time, when known.
+    """
+
+    def __init__(
+        self,
+        job_id: str,
+        current_status: str | None = None,
+    ) -> None:
+        self.job_id = job_id
+        self.current_status = current_status
+        super().__init__(
+            f"job {job_id!r} transition rejected (current status: {current_status or 'unknown'})"
+        )
+
+
 class MalformedArchitectureOverviewError(ValueError):
     """
     Raised by adapter helpers when an ArchitectureOverview dict

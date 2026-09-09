@@ -43,6 +43,7 @@ from fastmcp.tools import tool
 from mcp.types import ToolAnnotations
 
 from src.pipeline import CancellationToken
+from src.errors import JobStateError
 from src.tools.jobs import JobStatus, JobsStore
 
 logger = logging.getLogger(__name__)
@@ -57,6 +58,28 @@ class CancelArchitectureDesignTool:
         self._job_tasks: dict[str, tuple[asyncio.Task[None], CancellationToken]] = (
             job_tasks if job_tasks is not None else {}
         )
+
+    async def _terminal_race_response(
+        self,
+        store: JobsStore,
+        job_id: str,
+        fallback_status: str,
+        task: asyncio.Task[None] | None,
+    ) -> dict[str, Any]:
+        """W0-1: the guarded set_cancelled was rejected because the job went
+        terminal between the status check and the setter — report the honest
+        current status instead of a successful cancel."""
+        job_now = await store.get_job(job_id)
+        status_now = str(job_now["status"]) if job_now is not None else fallback_status
+        response: dict[str, Any] = {
+            "job_id": job_id,
+            "status": status_now,
+            "cancelled": False,
+            "message": f"Job is already {status_now}; cannot cancel.",
+        }
+        if task is not None:
+            response["task_was_running"] = not task.done()
+        return response
 
     @tool(
         name="cancel_architecture_design",
@@ -99,7 +122,10 @@ class CancelArchitectureDesignTool:
 
         entry = self._job_tasks.get(job_id)
         if entry is None:
-            await store.set_cancelled(job_id)
+            try:
+                await store.set_cancelled(job_id)
+            except JobStateError:
+                return await self._terminal_race_response(store, job_id, status, None)
             logger.info("Job %s cancelled (no live task found — DB flag set only)", job_id)
             return {
                 "job_id": job_id,
@@ -115,7 +141,10 @@ class CancelArchitectureDesignTool:
         task, token = entry
         token.cancel()
         task.cancel()
-        await store.set_cancelled(job_id)
+        try:
+            await store.set_cancelled(job_id)
+        except JobStateError:
+            return await self._terminal_race_response(store, job_id, status, task)
         logger.info("Job %s cancelled", job_id)
 
         return {

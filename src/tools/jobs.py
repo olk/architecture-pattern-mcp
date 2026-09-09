@@ -36,6 +36,8 @@ import uuid
 from datetime import datetime, UTC
 from typing import Any
 
+from src.errors import JobStateError
+
 logger = logging.getLogger(__name__)
 
 
@@ -56,24 +58,34 @@ class JobStatus:
 
 
 class JobsStore:
-    """Singleton async SQLite store for design_architecture job state."""
+    """Singleton async SQLite store for design_architecture job state.
+
+    W0-1: transition setters are guarded (``WHERE ... AND status IN (...)``) —
+    the guard is atomic inside SQLite, which makes J-1 (terminal-state
+    immutability) and J-2 (cancel effective only from pending/running) true of
+    the implementation. This is the deliberate bug-fix exemption from the
+    no-runtime-change rule (nagini-verification-plan.md §3.9).
+    """
 
     _instance: "JobsStore | None" = None
-    _lock: asyncio.Lock = asyncio.Lock()
     _db: aiosqlite.Connection | None = None
+    _lock: asyncio.Lock = asyncio.Lock()
+    _init_lock: asyncio.Lock
 
-    def __new__(cls) -> "JobsStore":
+    def __new__(cls, lock: asyncio.Lock | None = None) -> "JobsStore":
         if cls._instance is None:
             cls._instance = super().__new__(cls)
+            cls._instance._init_lock = lock if lock is not None else cls._lock
+            cls._instance._db = None
         return cls._instance
 
     @classmethod
-    async def get_instance(cls) -> "JobsStore":
+    async def get_instance(cls, lock: asyncio.Lock | None = None) -> "JobsStore":
         """Get or create the singleton instance, initialising the DB on first call."""
         if cls._instance is None or cls._db is None:
-            async with cls._lock:
+            async with (lock if lock is not None else cls._lock):
                 if cls._instance is None or cls._db is None:
-                    cls._instance = super().__new__(cls)
+                    cls._instance = cls(lock=lock)
                     await cls._instance._init()
         return cls._instance
 
@@ -156,37 +168,52 @@ class JobsStore:
             return None
         return dict(row)
 
-    async def set_running(self, job_id: str) -> None:
-        now = self._now()
-        await self._conn().execute(
-            "UPDATE jobs SET status = ?, updated_at = ? WHERE id = ?",
-            (JobStatus.RUNNING, now, job_id),
-        )
+    async def _guarded_update(self, job_id: str, sql: str, params: tuple[Any, ...]) -> None:
+        """Execute a guarded transition UPDATE and raise JobStateError on rejection.
+
+        W0-1 (J-1/J-2): the ``AND status ...`` clause in ``sql`` is the guard —
+        the check-and-set is atomic inside SQLite, so no caller-side
+        check-then-act window exists. On rowcount 0 the current status is
+        re-read for the error message.
+        """
+        cursor = await self._conn().execute(sql, params)
         await self._conn().commit()
+        if cursor.rowcount == 0:
+            job = await self.get_job(job_id)
+            current_status: str | None = str(job["status"]) if job is not None else None
+            raise JobStateError(job_id=job_id, current_status=current_status)
+
+    async def set_running(self, job_id: str) -> None:
+        """Transition pending -> running (guard: pending only)."""
+        await self._guarded_update(
+            job_id,
+            "UPDATE jobs SET status = ?, updated_at = ? WHERE id = ? AND status = ?",
+            (JobStatus.RUNNING, self._now(), job_id, JobStatus.PENDING),
+        )
 
     async def set_completed(self, job_id: str, result: str) -> None:
-        now = self._now()
-        await self._conn().execute(
-            "UPDATE jobs SET status = ?, result = ?, updated_at = ? WHERE id = ?",
-            (JobStatus.COMPLETED, result, now, job_id),
+        """Transition running -> completed (guard: running only)."""
+        await self._guarded_update(
+            job_id,
+            "UPDATE jobs SET status = ?, result = ?, updated_at = ? WHERE id = ? AND status = ?",
+            (JobStatus.COMPLETED, result, self._now(), job_id, JobStatus.RUNNING),
         )
-        await self._conn().commit()
 
     async def set_failed(self, job_id: str, error: str) -> None:
-        now = self._now()
-        await self._conn().execute(
-            "UPDATE jobs SET status = ?, error = ?, updated_at = ? WHERE id = ?",
-            (JobStatus.FAILED, error, now, job_id),
+        """Transition running -> failed (guard: running only)."""
+        await self._guarded_update(
+            job_id,
+            "UPDATE jobs SET status = ?, error = ?, updated_at = ? WHERE id = ? AND status = ?",
+            (JobStatus.FAILED, error, self._now(), job_id, JobStatus.RUNNING),
         )
-        await self._conn().commit()
 
     async def set_cancelled(self, job_id: str) -> None:
-        now = self._now()
-        await self._conn().execute(
-            "UPDATE jobs SET status = ?, updated_at = ? WHERE id = ?",
-            (JobStatus.CANCELLED, now, job_id),
+        """Transition pending/running -> cancelled (J-2: cancel never leaves a terminal state)."""
+        await self._guarded_update(
+            job_id,
+            "UPDATE jobs SET status = ?, updated_at = ? WHERE id = ? AND status IN (?, ?)",
+            (JobStatus.CANCELLED, self._now(), job_id, JobStatus.PENDING, JobStatus.RUNNING),
         )
-        await self._conn().commit()
 
     async def is_cancelled(self, job_id: str) -> bool:
         cursor = await self._conn().execute(

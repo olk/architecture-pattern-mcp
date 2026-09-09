@@ -30,12 +30,14 @@ Covers:
 - get_architecture_design_status returns parsed result with all fields intact
 """
 
+import asyncio
 import json
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from src.agent import SoftwareArchitectAgent
+from src.errors import JobStateError
 from src.pipeline import ArchitecturePipeline, CancellationToken
 from src.schemas.analysis import MatchedDomain
 from src.schemas.contracts import ApiContract, ApiEndpoint, EventContract
@@ -50,8 +52,9 @@ from src.schemas.evaluation import (
 )
 from src.schemas.quality import QualityMetrics
 from src.tools.design import DesignArchitectureOutput, pipeline_result_to_output
+from src.tools.cancel_architecture_design import CancelArchitectureDesignTool
 from src.tools.get_architecture_design_status import GetArchitectureDesignStatusTool
-from src.tools.jobs import JobsStore
+from src.tools.jobs import JobStatus, JobsStore
 from src.tools.submit_architecture_design import (
     SubmitArchitectureDesignJobTool,
     submit_architecture_design_job_tool,
@@ -469,3 +472,127 @@ class TestGetArchitectureDesignStatusReturnsAllFields:
         assert status["status"] == "failed"
         assert "error" in status
         assert "LLM provider" in status["error"]
+
+
+class TestGuardedTransitionRaces:
+    """W0-1: tool handlers map guarded-transition rejections (JobStateError) honestly."""
+
+    @pytest.mark.asyncio
+    async def test_run_job_exits_when_cancel_wins_running_race(
+        self, mock_agent, mock_pipeline, jobs_store: JobsStore
+    ):
+        """Cancel lands before set_running: the background task exits without
+        running the pipeline and without reporting a failure."""
+        job_id = await jobs_store.create_job(requirements="req", domain="dom")
+        await jobs_store.set_cancelled(job_id)
+
+        tool = SubmitArchitectureDesignJobTool(agent=mock_agent, pipeline=mock_pipeline)
+        await asyncio.wait_for(
+            tool._run_job(
+                job_id=job_id,
+                requirements="req",
+                domain="dom",
+                override_style=None,
+                ctx=None,
+                cancellation=CancellationToken(),
+            ),
+            timeout=10,
+        )
+
+        mock_pipeline.run_design.assert_not_called()
+        job = await jobs_store.get_job(job_id)
+        assert job["status"] == JobStatus.CANCELLED
+
+    @pytest.mark.asyncio
+    async def test_run_job_failed_write_losing_cancel_race_stays_cancelled(
+        self, mock_agent, mock_pipeline, jobs_store: JobsStore, monkeypatch
+    ):
+        """A FAILED write that lost a race to cancel is suppressed — the job
+        stays CANCELLED and _run_job does not raise."""
+        job_id = await jobs_store.create_job(requirements="req", domain="dom")
+        mock_pipeline.run_design.side_effect = RuntimeError("LLM provider unreachable")
+
+        original_set_failed = jobs_store.set_failed
+
+        async def _cancel_wins_first(job_id: str, error: str) -> None:
+            await jobs_store.set_cancelled(job_id)
+            await original_set_failed(job_id, error)
+
+        monkeypatch.setattr(jobs_store, "set_failed", _cancel_wins_first)
+
+        tool = SubmitArchitectureDesignJobTool(agent=mock_agent, pipeline=mock_pipeline)
+        await asyncio.wait_for(
+            tool._run_job(
+                job_id=job_id,
+                requirements="req",
+                domain="dom",
+                override_style=None,
+                ctx=None,
+                cancellation=CancellationToken(),
+            ),
+            timeout=10,
+        )
+
+        job = await jobs_store.get_job(job_id)
+        assert job["status"] == JobStatus.CANCELLED
+
+    @pytest.mark.asyncio
+    async def test_run_job_completed_write_losing_cancel_race_stays_cancelled(
+        self,
+        mock_agent,
+        mock_pipeline,
+        jobs_store: JobsStore,
+        monkeypatch,
+        sample_pipeline_result,
+    ):
+        """A COMPLETED write that lost a race to cancel is suppressed — the job
+        stays CANCELLED and the result is discarded."""
+        job_id = await jobs_store.create_job(requirements="req", domain="dom")
+        mock_pipeline.run_design.return_value = sample_pipeline_result
+
+        original_set_completed = jobs_store.set_completed
+
+        async def _cancel_wins_first(job_id: str, result: str) -> None:
+            await jobs_store.set_cancelled(job_id)
+            await original_set_completed(job_id, result)
+
+        monkeypatch.setattr(jobs_store, "set_completed", _cancel_wins_first)
+
+        tool = SubmitArchitectureDesignJobTool(agent=mock_agent, pipeline=mock_pipeline)
+        await asyncio.wait_for(
+            tool._run_job(
+                job_id=job_id,
+                requirements="req",
+                domain="dom",
+                override_style=None,
+                ctx=None,
+                cancellation=CancellationToken(),
+            ),
+            timeout=10,
+        )
+
+        job = await jobs_store.get_job(job_id)
+        assert job["status"] == JobStatus.CANCELLED
+        assert job["result"] is None
+
+    @pytest.mark.asyncio
+    async def test_cancel_tool_guard_race_reports_terminal_honestly(
+        self, jobs_store: JobsStore, monkeypatch
+    ):
+        """A store-level guard rejection during cancel yields the
+        'already terminal' response shape with cancelled: False."""
+        job_id = await jobs_store.create_job(requirements="req", domain="dom")
+        await jobs_store.set_running(job_id)
+
+        async def _job_completes_midflight(job_id: str) -> None:
+            await jobs_store.set_completed(job_id, '{"ok": true}')
+            raise JobStateError(job_id=job_id, current_status=JobStatus.COMPLETED)
+
+        monkeypatch.setattr(jobs_store, "set_cancelled", _job_completes_midflight)
+
+        tool = CancelArchitectureDesignTool()
+        response = await tool.cancel(job_id)
+
+        assert response["cancelled"] is False
+        assert response["status"] == JobStatus.COMPLETED
+        assert response["message"] == f"Job is already {JobStatus.COMPLETED}; cannot cancel."

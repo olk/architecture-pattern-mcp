@@ -45,7 +45,7 @@ from fastmcp.tools import tool
 from mcp.types import ToolAnnotations
 
 from src.agent import ERROR_LLM_PROVIDER, LLMError, SoftwareArchitectAgent
-from src.errors import ERROR_REQUIREMENTS_VALIDATION
+from src.errors import ERROR_REQUIREMENTS_VALIDATION, JobStateError
 from src.pipeline import ArchitecturePipeline, CancellationToken
 from src.text_validation import DomainName, PrintableText, ensure_printable_text
 from src.tools.design import pipeline_result_to_output
@@ -153,7 +153,12 @@ class SubmitArchitectureDesignJobTool:
                 await ctx.info(msg)
 
         try:
-            await store.set_running(job_id)
+            # W0-1 deliberate exemption: cancel won the race before the job
+            # went running — exit honestly instead of reporting a failure.
+            try:
+                await store.set_running(job_id)
+            except JobStateError:
+                return
             await _info(f"Job {job_id}: running design pipeline for domain='{domain}'")
 
             if await store.is_cancelled(job_id):
@@ -174,7 +179,10 @@ class SubmitArchitectureDesignJobTool:
             await _info(f"Job {job_id}: pipeline finished, storing result (attempts={refined.attempts})")
 
             output = pipeline_result_to_output(refined).model_dump()
-            await store.set_completed(job_id, json.dumps(output))
+            # W0-1 deliberate exemption: a terminal write that lost a race to
+            # cancel is not an error — the job stays CANCELLED, result discarded.
+            with suppress(JobStateError):
+                await store.set_completed(job_id, json.dumps(output))
             logger.info("Job completed", extra={"job_id": job_id})
 
         except asyncio.CancelledError:
@@ -189,7 +197,10 @@ class SubmitArchitectureDesignJobTool:
                 error_text = f"{ERROR_LLM_PROVIDER}: {error_text}"
             elif not isinstance(e, ToolError):
                 error_text = f"ERR_999: {error_text}"
-            await store.set_failed(job_id, error_text)
+            # W0-1 deliberate exemption: a FAILED write that lost a race to
+            # cancel is not an error — the job stays CANCELLED.
+            with suppress(JobStateError):
+                await store.set_failed(job_id, error_text)
             logger.error("Job failed", extra={"job_id": job_id, "error": error_text})
             await _info(f"Job {job_id}: failed — {error_text}")
 
