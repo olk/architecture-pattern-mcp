@@ -1,0 +1,116 @@
+# Copyright (c) 2026 Oliver Kowalke
+# SPDX-License-Identifier: MIT
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+
+"""
+L10 performance smoke canary over the verified cores (nagini plan §5.5;
+testing-strategies §3.10).
+
+Rationale (AxDafny lesson): proofs guarantee functional correctness, NOT
+performance — a refactor of a verified core cannot be allowed to silently
+regress latency. Budgets are deliberately coarse (regression canary, not a
+benchmark): orders-of-magnitude headroom, generous multipliers over the
+observed baseline so CI noise never trips them.
+
+Skipped unless RUN_PERF=1 (the perf marker's opt-in contract). Nightly TCB
+canary job runs it (see .github/workflows/verification.yml).
+"""
+
+import os
+import time
+from collections.abc import Callable
+
+import pytest
+
+from src.design_normalization_core import denormalize_core
+from src.text_validation_core import ensure_printable_text
+from verify.twin.jobs_state_twin import JobsStateTwin
+from verify.twin.pipeline_control_twin import PipelineControlTwin
+
+ITERATIONS = 2_000
+# Coarse budgets (seconds for ITERATIONS ops): >= 50x observed headroom.
+BUDGET_TEXT_VALIDATION = 2.0
+BUDGET_NORMALIZATION = 4.0
+BUDGET_TWIN_OPS = 2.0
+
+
+def _time_budgeted(name: str, fn: Callable[[], object], budget_s: float) -> None:
+    start = time.perf_counter()
+    for _ in range(ITERATIONS):
+        fn()
+    elapsed = time.perf_counter() - start
+    assert elapsed < budget_s, (
+        f"{name}: {elapsed:.2f}s for {ITERATIONS} ops exceeds canary budget "
+        f"{budget_s}s — verified-core latency regressed; triage the refactor"
+    )
+
+
+@pytest.mark.perf
+@pytest.mark.skipif(not os.getenv("RUN_PERF", ""), reason="RUN_PERF=1 perf canary")
+class TestVerifiedCorePerfSmoke:
+    def test_text_validation_core(self) -> None:
+        _time_budgeted(
+            "text_validation_core.ensure_printable_text",
+            lambda: ensure_printable_text("  design a scalable system  ", field="value"),
+            BUDGET_TEXT_VALIDATION,
+        )
+
+    def test_design_normalization_core(self) -> None:
+        design: object = _sample_design()
+        _time_budgeted(
+            "design_normalization_core.denormalize_core",
+            lambda: denormalize_core(design),  # type: ignore[arg-type]
+            BUDGET_NORMALIZATION,
+        )
+
+    def test_twin_operations(self) -> None:
+        twin = JobsStateTwin()
+        pipeline = PipelineControlTwin()
+
+        def twin_ops() -> object:
+            twin.create("perf-job")
+            twin.transition("perf-job", "running")
+            twin.transition("perf-job", "completed")
+            twin._status.pop("perf-job")
+            twin._created.pop("perf-job")
+            twin._updated.pop("perf-job")
+            return pipeline.run((False,))
+
+        _time_budgeted("verify/twin ops", twin_ops, BUDGET_TWIN_OPS)
+
+
+class _Contract:
+    component_id = "ingest"
+
+
+class _Component:
+    api_contract: "_Contract | None" = _Contract()
+    data_models: list[object] = []
+
+
+class _Design:
+    api_contracts = [_Contract()]
+    components = [_Component(), _Component(), _Component()]
+    shared_data_models: list[object] = []
+    event_contracts: list[object] = []
+
+
+def _sample_design() -> "_Design":
+    return _Design()
