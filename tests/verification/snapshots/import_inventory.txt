@@ -1,0 +1,12 @@
+aiosqlite
+click
+dotenv
+faiss
+fastmcp
+httpx
+litellm
+llama_index
+mcp
+numpy
+pydantic
+workflows

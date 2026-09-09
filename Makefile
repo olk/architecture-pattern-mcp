@@ -14,7 +14,7 @@
 
 .PHONY: help install install-mcps lint lint-fix typecheck static-typing deadcode depcheck unit-tests \
 	verify-hypothesis-oracles mutation-tests verify-fizz verify-fizz-simulation \
-	verify-nagini verify-coverage \
+	verify-nagini verify-coverage verify-import-inventory verify-deps-audit \
 	client docker-build docker-build-tei \
 	docker-build-all docker-publish docker-publish-tei \
 	docker-publish-all \
@@ -129,6 +129,21 @@ verify-nagini: ## L5: Nagini deductive verification over NAGINI_FILES (RUN_VERIF
 
 verify-coverage: ## L5: contract-coverage report over NAGINI_FILES
 	@$(UV) run python scripts/verify_coverage.py
+
+IMPORT_SNAPSHOT := tests/verification/snapshots/import_inventory.txt
+
+verify-import-inventory: ## L7: third-party import inventory drift check (slopsquatting defence)
+	@$(UV) run python scripts/import_inventory.py --check $(IMPORT_SNAPSHOT)
+
+# Advisory vulnerability scan (pip-audit over the project environment).
+# Not part of the standard gate set; promotes per testing-strategies §4.4.
+verify-deps-audit: ## L7: pip-audit vulnerability scan (advisory; STRICT=1 to enforce)
+	@if $(UV) run python -c "import importlib.util, sys; sys.exit(0 if importlib.util.find_spec('pip_audit') else 1)"; then \
+		$(UV) run python -m pip_audit --progress-spinner off --desc off || [ -n "$(STRICT)" ] && exit $$?; \
+	else \
+		echo "pip-audit not installed — advisory skip (strict run: STRICT=1 $(UV) run --with pip-audit python -m pip_audit)"; \
+		[ -z "$(STRICT)" ] || { $(UV) run --with pip-audit python -m pip_audit --progress-spinner off --desc off; exit $$?; } ; \
+	fi
 
 ##@ Demo
 client: ## Run the pipes-and-filters MCP client demo (synchronous design_architecture)
