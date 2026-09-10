@@ -35,8 +35,8 @@ add: cheap layers (types, unit tests) run always; expensive layers
 | L1b | Hypothesis (payload strategies) | MCP tool-call boundary robustness: malformed/nested/oversized payloads — structured errors only, no tracebacks | collected by `make test-oracles` (advisory → blocking Phase 1) | harness active, generators expanding |
 | L2 | Hypothesis | input-space properties: job-lifecycle interleavings vs shadow automaton (J-1..J-4), LLM-boundary timeout/retry discipline (E5), normalization idempotence/dedup (N-1..N-4) | `make test-oracles` | active |
 | L3 | mutmut + planted-bug gardens | tests-the-tests: tautological oracles, vacuous contracts/assertions; the garden is the vacuity authority | `make test-mutations` (manual/nightly) | garden active; mutmut nightly |
-| L4 | FizzBee (`.fizz` models) | **all interleavings up to bounds**: races, crash windows, guard gaps, deadlock freedom, fault injection; protocol view of job lifecycle + pipeline control | `make verify-fizz` (`RUN_VERIFY=1`; CI-authoritative) | artifact-complete; tool-gated |
-| L5 | Nagini (Viper/Z3) | **DISABLED** — Nagini 1.3.1 cannot translate Unicode operations in text_validation_core, and has Python 3.14+ compatibility issues | `make verify-nagini` (`RUN_VERIFY=1`) | disabled |
+| L4 | FizzBee (`.fizz` models) | **all interleavings up to bounds**: races, crash windows, guard gaps, deadlock freedom, fault injection; protocol view of job lifecycle + pipeline control | `make verify-fizz` (CI-authoritative) | artifact-complete; tool-gated |
+| L5 | Nagini (Viper/Z3) | **DISABLED** — Nagini 1.3.1 cannot translate Unicode operations in text_validation_core, and has Python 3.14+ compatibility issues | `make verify-nagini` | disabled |
 | L6 | deterministic simulation (native now; simloom/frontrun on provisioning) | real asyncio schedules of the **real implementation**: bounded, seeded, replayable proof of J-1/J-2 under all race schedules | `tests/verification/test_jobs_dst.py` (always on) | active (native), proven |
 | L7 | deptry, uv.lock pinning, pip-audit, import-inventory diff | supply chain: hallucinated/unused/vulnerable deps; slopsquatting defence (new package names need human decision) | `make check-depcheck`, `make verify-import-inventory`, `make verify-deps-audit` (advisory) | active |
 | L8 | ledger checker, NL-Doc cross-consistency | intent drift: code ≠ docstring ≠ contract ≠ model; property-ID mapping mechanically checked | `make verify-ledger`, `make verify-cross-consistency` (advisory) | active (mechanical subset) |
@@ -194,8 +194,8 @@ One ID per property across all layers (drift is reviewable 1:1 via the
 | `make test-unit` | L1 | every commit |
 | `make test-oracles` | L1b, L2, plus L4 traces / L5 conformance / L6 DST / L1 canary | pre-push + CI |
 | `make test-mutations` | L3 | manual / nightly |
-| `make verify-fizz` / `make verify-fizz-simulation` | L4 | opt-in `RUN_VERIFY=1` locally; CI authoritative |
-| `make verify-nagini` / `make verify-coverage` | L5 | opt-in `RUN_VERIFY=1` locally; CI authoritative |
+| `make verify-fizz` / `make verify-fizz-simulation` | L4 | CI authoritative |
+| `make verify-nagini` / `make verify-coverage` | L5 | CI authoritative |
 | `make verify-import-inventory` / `make verify-deps-audit` | L7 | commit / nightly |
 | `make verify-ledger` / `make verify-cross-consistency` | L8 | commit (advisory) |
 | `ARCH_BENCH_LLM=1 pytest tests/eval/ -m llm` | L9 | prompt/model changes |

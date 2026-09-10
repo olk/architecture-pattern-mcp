@@ -36,11 +36,9 @@ them never break the standard gate set:
 
 | Variable | Targets | Without it |
 |---|---|---|
-| `RUN_VERIFY=1` | `verify-fizz`, `verify-fizz-simulation`, `verify-nagini` | prints a one-line "opt-in via RUN_VERIFY=1" note, exits 0 |
 | `STRICT=1` | `verify-deps-audit`, `verify-cross-consistency` (promotion trigger) | advisory: findings are leads to triage, not failures |
 
-CI sets these unconditionally (`.github/workflows/verification.yml`); a
-pushed branch can never skip verification.
+CI sets `STRICT=1` for certain targets; a pushed branch can never skip verification.
 
 **Removed targets.** `lint-fix` (and its `check-lint-fix` successor idea) was
 removed from the project. To auto-fix, run the tools directly:
@@ -131,7 +129,7 @@ Aggregator: `test-unit` + `test-oracles`. The PR-time test entry point.
 
 ### `verify-fizz` — L4
 Runs `fizz` exhaustively over every `specs/fizz/*.fizz` model (bounds per
-`fizz.yaml`). Gate: `RUN_VERIFY=1`; requires the `fizz` binary (or
+`fizz.yaml`). Requires the `fizz` binary (or
 `FIZZ=scripts/fizz-docker.sh`). CI-authoritative for control-flow claims
 (J-1/J-2, P-1, FP-2..FP-5, FC-1/FC-2). fizz v0.5.3 exits 0 even on
 invariant failure (only panics exit non-zero), so the gate captures each
@@ -143,10 +141,10 @@ fails the gate (first provisioning run, 2026-09-10).
 ### `verify-fizz-simulation` — L4
 Seeded parallel FizzBee simulation (`fizz -x --seed $(date +%s) --parallel
 $(nproc)`) over all specs — the nightly statistical relief valve for the
-exhaustive checks. Gate: `RUN_VERIFY=1`. Simulation mode prints no PASSED
-verdict on success, so the gate fails on any `FAILED` line or non-zero
-exit; a lucky seed can miss a violation (statistical by design — the
-exhaustive target is the authority).
+exhaustive checks. Simulation mode prints no PASSED verdict on success,
+so the gate fails on any `FAILED` line or non-zero exit; a lucky seed can
+miss a violation (statistical by design — the exhaustive target is the
+authority).
 
 ### `verify-nagini` — L5 (DISABLED)
 Deductive verification (`nagini --counterexample`) over `NAGINI_FILES` — the
@@ -266,8 +264,8 @@ regenerated wholesale by `test-mutations` and gitignored.)
 | `test-unit` (as `uv run pytest tests/unit/`) | `ci.yml` #Unit Tests | every push/PR |
 | oracle suite (as `uv run pytest tests/verification/`), `verify-ledger`, `verify-cross-consistency`, `verify-import-inventory` | `verification.yml` #bug-gardens | nightly + manual dispatch |
 | `test-mutations` | `verification.yml` #mutmut-sweep | nightly (advisory) |
-| `verify-coverage`, `verify-nagini` (`RUN_VERIFY=1`) | `verification.yml` #verify-nagini | nightly (advisory) |
-| `verify-fizz` (`RUN_VERIFY=1`) | `verification.yml` #verify-fizz | nightly (advisory) |
+| `verify-coverage`, `verify-nagini` | `verification.yml` #verify-nagini | nightly (advisory) |
+| `verify-fizz` | `verification.yml` #verify-fizz | nightly (advisory) |
 | `verify-deps-audit` (`STRICT=1`) | `verification.yml` #deps-audit | nightly (advisory) |
 | `check-all`, `test-all`, `verify-all`, demo/docker targets | — | local / release use |
 
@@ -282,7 +280,7 @@ make check-all                  # before pushing (lint + types + dead code + dep
 make test-unit                  # every commit
 make test-oracles               # pre-push
 make test-mutations             # occasionally / before risky merges (slow)
-RUN_VERIFY=1 make verify-fizz   # after control-flow changes (needs fizz)
+make verify-fizz                # after control-flow changes (needs fizz)
 make docker-build-all           # before first docker-up or after dep changes
 make docker-up                  # serve on :8060
 make docker-logs-follow         # tail logs

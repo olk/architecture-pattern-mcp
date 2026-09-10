@@ -65,10 +65,10 @@ Delivered with the L1 layer commit (testing-strategies §3.2): see
 
 The local environment cannot resolve the external verifier toolchains
 (`nagini[mcp]`, `fizzbee`, `simloom`/`frontrun`, `mutmut`). Per the plans'
-opt-in design (`RUN_VERIFY=1`, Docker routes), their artifacts are delivered
-complete and tool-gated: the Make targets check for the binary/package and
-fail with install guidance only when actually run. Consequences recorded per
-layer in the respective commits:
+opt-in design (Docker routes), their artifacts are delivered complete and
+tool-gated: the Make targets check for the binary/package and fail with
+install guidance only when actually run. Consequences recorded per layer in
+the respective commits:
 
 - **Nagini (L5):** DISABLED — `nagini-contracts` not installable, Python 3.14+
   compatibility issues with contract library, and Nagini 1.3.1 cannot translate

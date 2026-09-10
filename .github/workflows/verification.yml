@@ -83,8 +83,6 @@ jobs:
         run: make verify-coverage
       - name: Nagini verification
         run: make verify-nagini
-        env:
-          RUN_VERIFY: "1"
 
   verify-fizz:
     name: L4 — FizzBee exhaustive checks (opt-in toolchain)
@@ -104,8 +102,6 @@ jobs:
         # (docs/phase-0-decisions.md); until then this job surfaces the gap.
       - name: Exhaustive model checks
         run: make verify-fizz
-        env:
-          RUN_VERIFY: "1"
 
   deps-audit:
     name: L7 — pip-audit vulnerability scan (advisory)

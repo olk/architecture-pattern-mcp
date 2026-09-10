@@ -105,13 +105,8 @@ FIZZ ?= fizz
 SPEC_DIR := specs/fizz
 FIZZ_PASS := ^PASSED: Model checker completed successfully
 
-# Opt-in locally via RUN_VERIFY=1 (same pattern as verify-nagini); CI always
-# sets it. Without RUN_VERIFY the targets are a no-op so an environment
-# without the fizz binary can never break the standard gate set.
-verify-fizz: ## L4: exhaustive FizzBee model checks over specs/fizz/ (RUN_VERIFY=1)
-	@if [ -z "$(RUN_VERIFY)" ]; then \
-		echo "verify-fizz: opt-in via RUN_VERIFY=1 (CI sets it unconditionally)"; \
-	elif ! command -v $(FIZZ) >/dev/null 2>&1; then \
+verify-fizz: ## L4: exhaustive FizzBee model checks over specs/fizz/
+	@if ! command -v $(FIZZ) >/dev/null 2>&1; then \
 		echo "fizz binary not found: brew install fizzbee, or set FIZZ=scripts/fizz-docker.sh"; exit 1; \
 	else \
 		set -e; for spec in $(SPEC_DIR)/*.fizz; do \
@@ -126,9 +121,7 @@ verify-fizz: ## L4: exhaustive FizzBee model checks over specs/fizz/ (RUN_VERIFY
 	fi
 
 verify-fizz-simulation: ## L4: seeded parallel FizzBee simulation (nightly relief valve)
-	@if [ -z "$(RUN_VERIFY)" ]; then \
-		echo "verify-fizz-simulation: opt-in via RUN_VERIFY=1"; \
-	elif ! command -v $(FIZZ) >/dev/null 2>&1; then \
+	@if ! command -v $(FIZZ) >/dev/null 2>&1; then \
 		echo "fizz binary not found: brew install fizzbee, or set FIZZ=scripts/fizz-docker.sh"; exit 1; \
 	else \
 		set -e; seed=$$(date +%s); workers=$$(nproc); \
@@ -150,7 +143,7 @@ NAGINI_FILES := $(shell $(UV) run python scripts/verify_coverage.py --files 2>/d
 # - The digital twins (verify/twin/) were removed
 # - The contract library (verify/_contracts.py) had Python 3.14+ compatibility issues
 # To re-enable: fix the Nagini toolchain and restore verify/ files.
-verify-nagini: ## L5: Nagini deductive verification over NAGINI_FILES (RUN_VERIFY=1)
+verify-nagini: ## L5: Nagini deductive verification over NAGINI_FILES
 	@echo "verify-nagini: disabled - Nagini toolchain needs updates"; exit 0
 
 verify-coverage: ## L5: contract-coverage report over NAGINI_FILES
@@ -182,7 +175,7 @@ verify-deps-audit: ## L7: pip-audit vulnerability scan (advisory; STRICT=1 to en
 
 # Nightly aggregator over the formal/audit verify-* targets. The tool-gated
 # members (verify-fizz, verify-fizz-simulation, verify-nagini) self-skip
-# without RUN_VERIFY=1 and verify-deps-audit is advisory without STRICT=1 —
+# when toolchain is missing and verify-deps-audit is advisory without STRICT=1 —
 # safe on toolchain-less boxes. test-oracles is a test-*, not a verify-*.
 verify-all: ## Run every verify-* target (nightly entry point)
 	@echo "==> [1/8] verify-fizz";              $(MAKE) --no-print-directory verify-fizz
