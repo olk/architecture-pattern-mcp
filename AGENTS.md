@@ -34,3 +34,7 @@
 - Every `Requires`/`Ensures` contract must survive the phase-0 mutation set
   (`tests/verification/gardens/`); a contract that planted bugs survive must
   be rejected — non-trivial contracts only.
+- Use the Nagini MCP server tools (`nagini_verify_file`, `nagini_verify_method`,
+  `nagini_verify_snippet`) for deductive verification of Python code contracts.
+  Run `nagini_verify_file` over changed files to confirm no contract violations;
+  do not merge code that introduces new Nagini violations.
