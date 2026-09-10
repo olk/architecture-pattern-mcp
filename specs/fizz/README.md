@@ -53,6 +53,7 @@
 | `DL-3` | Once cancellation is observed no further attempt starts | `always` | `design_loop.fizz::DL3_CancelFreezesAttempts` (FG-29 must violate) | n/a | planned | planned |
 | `DL-4` | A malformed attempt retries, never ends the loop early | `always` | `design_loop.fizz::DL4_MalformedContinues` (FG-30 must violate) | n/a | planned | planned |
 | `DL-5` | Early stop only fires at/above the quality threshold | `always` | `design_loop.fizz::DL5_EarlyStopThreshold` (FG-31 must violate) | n/a | planned | planned |
+| `N-1..N-4` | normalization idempotence (N-1) and dedup/coverage/subset (N-2..N-4) | n/a | n/a — pure decision core, no interleavings; Nagini's charter (L5), not a `.fizz` model | twin contracts (planned) | `test_normalization_idempotence.py` | `tests/unit/test_normalization.py` |
 
 ## Spec garden (vacuity authority for model assertions, testing-strategies §3.4)
 
