@@ -70,11 +70,10 @@ complete and tool-gated: the Make targets check for the binary/package and
 fail with install guidance only when actually run. Consequences recorded per
 layer in the respective commits:
 
-- **Nagini (L5):** `nagini-contracts` is not installable here, so the twin
-  contract calls go through `verify/twin/_contracts.py` — a typed runtime
-  no-op shim mirroring the `nagini_contracts.contracts` surface; the import
-  is swapped when the toolchain is provisioned. The `*_core.py` splits are
-  contract-ready (pure, typed, mypy-strict).
+- **Nagini (L5):** DISABLED — `nagini-contracts` not installable, Python 3.14+
+  compatibility issues with contract library, and Nagini 1.3.1 cannot translate
+  Unicode operations in text_validation_core. The `verify/twin/` directory was
+  removed. The `*_core.py` splits remain contract-ready (pure, typed, mypy-strict).
 - **FizzBee (L4):** specs and ledger are complete; `make verify-fizz` runs
   the exhaustive checks when the `fizz` binary (or
   `scripts/fizz-docker.sh`) is on PATH.

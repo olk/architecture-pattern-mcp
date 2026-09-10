@@ -28,7 +28,6 @@ LEDGER = REPO_ROOT / "specs/fizz/README.md"
 ID_PATTERN = re.compile(r"\b(?:J|P|FP|FC)-\d+\b")
 ARTIFACT_GLOBS = (
     "specs/fizz/*.fizz",
-    "verify/twin/*.py",
     "tests/verification/*.py",
     "tests/verification/gardens/*.py",
     "src/*_core.py",

@@ -148,12 +148,16 @@ verdict on success, so the gate fails on any `FAILED` line or non-zero
 exit; a lucky seed can miss a violation (statistical by design — the
 exhaustive target is the authority).
 
-### `verify-nagini` — L5
+### `verify-nagini` — L5 (DISABLED)
 Deductive verification (`nagini --counterexample`) over `NAGINI_FILES` — the
-file set reported by `scripts/verify_coverage.py --files` (pure cores + sync
-twins). Proves totality, no undeclared exceptions, and Requires/Ensures
-contracts for all inputs. Gate: `RUN_VERIFY=1`; needs Java 11+ with
-`JAVA_HOME` set and `nagini[mcp,lsp,server]` installed.
+file set reported by `scripts/verify_coverage.py --files`.
+
+**Currently disabled** because:
+- Nagini 1.3.1 cannot translate Unicode operations in text_validation_core
+- The digital twins (verify/twin/) were removed
+- Python 3.14+ compatibility issues with the contract library
+
+To re-enable: upgrade Nagini toolchain and restore verification files.
 
 ### `verify-coverage` — L5
 `scripts/verify_coverage.py` — reports which modules are covered by the

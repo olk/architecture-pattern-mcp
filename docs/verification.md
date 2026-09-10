@@ -36,7 +36,7 @@ add: cheap layers (types, unit tests) run always; expensive layers
 | L2 | Hypothesis | input-space properties: job-lifecycle interleavings vs shadow automaton (J-1..J-4), LLM-boundary timeout/retry discipline (E5), normalization idempotence/dedup (N-1..N-4) | `make test-oracles` | active |
 | L3 | mutmut + planted-bug gardens | tests-the-tests: tautological oracles, vacuous contracts/assertions; the garden is the vacuity authority | `make test-mutations` (manual/nightly) | garden active; mutmut nightly |
 | L4 | FizzBee (`.fizz` models) | **all interleavings up to bounds**: races, crash windows, guard gaps, deadlock freedom, fault injection; protocol view of job lifecycle + pipeline control | `make verify-fizz` (`RUN_VERIFY=1`; CI-authoritative) | artifact-complete; tool-gated |
-| L5 | Nagini (Viper/Z3) | **∀ inputs**: totality, no undeclared exceptions, termination, state invariants — over `NAGINI_FILES` (pure cores + sync twins) | `make verify-nagini` (`RUN_VERIFY=1`) + `make verify-coverage` | artifact-complete; tool-gated |
+| L5 | Nagini (Viper/Z3) | **DISABLED** — Nagini 1.3.1 cannot translate Unicode operations in text_validation_core, and has Python 3.14+ compatibility issues | `make verify-nagini` (`RUN_VERIFY=1`) | disabled |
 | L6 | deterministic simulation (native now; simloom/frontrun on provisioning) | real asyncio schedules of the **real implementation**: bounded, seeded, replayable proof of J-1/J-2 under all race schedules | `tests/verification/test_jobs_dst.py` (always on) | active (native), proven |
 | L7 | deptry, uv.lock pinning, pip-audit, import-inventory diff | supply chain: hallucinated/unused/vulnerable deps; slopsquatting defence (new package names need human decision) | `make check-depcheck`, `make verify-import-inventory`, `make verify-deps-audit` (advisory) | active |
 | L8 | ledger checker, NL-Doc cross-consistency | intent drift: code ≠ docstring ≠ contract ≠ model; property-ID mapping mechanically checked | `make verify-ledger`, `make verify-cross-consistency` (advisory) | active (mechanical subset) |
@@ -107,28 +107,16 @@ protocol-level view no other layer can produce. Artifacts:
 Frozen counterexamples are replayed against the real store in
 `tests/verification/test_fizz_traces.py`, independent of tool availability.
 
-### L5 — Deductive verification (`Nagini` / Viper-Z3)
+### L5 — Deductive verification (`Nagini` / Viper-Z3) — DISABLED
 The only layer whose verdict is universal over inputs, scoped to the critical
-5–10% (`NAGINI_FILES`, reported by `make verify-coverage`):
+5–10% (`NAGINI_FILES`, reported by `make verify-coverage`).
 
-- `src/text_validation_core.py` and `src/design_normalization_core.py` —
-  pure, typed, stdlib-only cores (Pydantic is opaque to Nagini); adapters
-  keep the public API and the single `model_copy`.
-- `verify/twin/jobs_state_twin.py` — sync model of the guarded 5-state
-  automaton (J-1..J-4, logical clock for J-3) with executable invariants.
-- `verify/twin/pipeline_control_twin.py` — bounded attempt loop with
-  cancellation checkpoints (P-1).
-- `verify/stubs/` — annotated stubs declaring unproven oracle assumptions
-  (reviewed like source, spot-checked where feasible).
-- `verify/_contracts.py` — typed runtime no-op shim mirroring
-  `nagini_contracts.contracts`; swapped for the real package when the
-  toolchain is provisioned.
+**Disabled** because:
+- Nagini 1.3.1 cannot translate `unicodedata.category().startswith()` and other string operations
+- Python 3.14+ compatibility issues with the contract library
+- Digital twins (`verify/twin/`) were removed
 
-Coupling to the implementation is executable:
-`tests/verification/test_jobs_conformance.py` drives twin and real store
-through identical Hypothesis-generated interleavings
-(`RuleBasedStateMachine` + per-test sync facade) and asserts agreement after
-every step.
+To re-enable: upgrade Nagini toolchain and restore verification files.
 
 ### L6 — Deterministic simulation (DST)
 Exercises the **real implementation's actual schedules** — no model, no twin,

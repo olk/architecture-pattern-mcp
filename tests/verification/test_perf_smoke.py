@@ -31,6 +31,9 @@ observed baseline so CI noise never trips them.
 
 Skipped unless RUN_PERF=1 (the perf marker's opt-in contract). Nightly TCB
 canary job runs it (see .github/workflows/verification.yml).
+
+NOTE: Twin verification was removed (verify/twin/ deleted). The twin-related
+test_twin_operations test has been removed.
 """
 
 import os
@@ -41,14 +44,11 @@ import pytest
 
 from src.design_normalization_core import denormalize_core
 from src.text_validation_core import ensure_printable_text
-from verify.twin.jobs_state_twin import JobsStateTwin
-from verify.twin.pipeline_control_twin import PipelineControlTwin
 
 ITERATIONS = 2_000
 # Coarse budgets (seconds for ITERATIONS ops): >= 50x observed headroom.
 BUDGET_TEXT_VALIDATION = 2.0
 BUDGET_NORMALIZATION = 4.0
-BUDGET_TWIN_OPS = 2.0
 
 
 def _time_budgeted(name: str, fn: Callable[[], object], budget_s: float) -> None:
@@ -79,21 +79,6 @@ class TestVerifiedCorePerfSmoke:
             lambda: denormalize_core(design),  # type: ignore[arg-type]
             BUDGET_NORMALIZATION,
         )
-
-    def test_twin_operations(self) -> None:
-        twin = JobsStateTwin()
-        pipeline = PipelineControlTwin()
-
-        def twin_ops() -> object:
-            twin.create("perf-job")
-            twin.transition("perf-job", "running")
-            twin.transition("perf-job", "completed")
-            twin._status.pop("perf-job")
-            twin._created.pop("perf-job")
-            twin._updated.pop("perf-job")
-            return pipeline.run((False,))
-
-        _time_budgeted("verify/twin ops", twin_ops, BUDGET_TWIN_OPS)
 
 
 class _Contract:

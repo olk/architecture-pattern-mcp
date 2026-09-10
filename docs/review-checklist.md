@@ -11,7 +11,7 @@
 |---|---|---|
 | `src/tools/jobs.py` transition setters / guards | J-1/J-2 live here; every later proof (twin, `.fizz`, DST) claims what this file does | Guard sets unchanged or deliberately changed WITH the matching twin + `.fizz` + oracle + ledger updates in the same PR (AGENTS.md rule) |
 | `src/pipeline.py` control flow (stage order, attempt bound, cancellation checkpoints) | P-1/FP-2..FP-4 claims | `.fizz` model updated in the same PR; `make verify-fizz` re-run |
-| `verify/**` (twins, stubs, contracts shim) | Unproven oracle assumptions — reviewed like source (nagini plan §3.1 principle 4) | Stub assumptions flagged; twin contracts crash-free at call time; no ghost machinery in `src/` |
+| `verify/**` (twins, stubs, contracts shim) | DISABLED — Nagini verification was disabled due to Python 3.14+ compatibility | N/A — verification disabled |
 | `specs/fizz/**` property-claim changes | Model assertions are claims about the implementation | Ledger row updated; assertion kills ≥ 1 spec-garden mutant or carries `# spec-explains:`; bounds still justified |
 | `tests/verification/gardens/` | The vacuity authority | New mutants have working kills; weakened mutants documented |
 | Secret canary surfaces (`tests/verification/test_secret_canary.py`) | Tier-E information-flow assurance | Capture surfaces still cover payloads/logs/persisted state; negative controls intact |
