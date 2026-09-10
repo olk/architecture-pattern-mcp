@@ -53,9 +53,13 @@ makes store actions non-atomic (`# spec-explains:`).
 
 | Spec | Status | Unique states | Wall time | Peak RSS |
 |---|---|---|---|---|
-| `jobs_protocol.fizz` | pending (`fizz` not yet provisioned; target < 1 min) | — | — | — |
-| `pipeline_control.fizz` | pending (budget-capped ≤ 5 min) | — | — | — |
-| `jobs_protocol.fizz` A/B flip `GUARDED=False` | pending; expected: `J1` violation trace reproducing the pre-Week-0 bug | — | — | — |
+| `jobs_protocol.fizz` | PASSED (fizz v0.5.3, 2026-09-10; first provisioning run — spec init pattern fixed: role `action Init` + for-loop creation + terminal `Idle`) | 925 | 2.0 s | ~104 MiB |
+| `pipeline_control.fizz` | PASSED (fizz v0.5.3, 2026-09-10; first provisioning run — `FailAttempt` bound guard + `Advance` boundary require + terminal `Idle`) | 49 | 48 ms | ~26 MiB |
+| `jobs_protocol.fizz` A/B flip `GUARDED=False` | validated 2026-09-10: `J1_TerminalImmutable` violation trace reproduces the pre-Week-0 bug; `make verify-fizz` gate fails (exit ≠ 0) | — | — | — |
+
+Note: fizz v0.5.3 exits 0 even on invariant failure — the `verify-fizz`
+Make targets therefore check for the `PASSED` verdict line (exhaustive) /
+absence of `FAILED` (simulation) in addition to the exit code.
 
 The frozen counterexample replayed against the real implementation lives in
 `tests/verification/test_fizz_traces.py` and runs in every

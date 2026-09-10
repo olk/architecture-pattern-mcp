@@ -173,3 +173,7 @@ cython_debug/
 
 # mutmut generated scratch tree (mutation-test output, regenerable)
 mutants/
+
+# fizz run artifacts (compiled spec ASTs + out/ graphs; regenerable per run)
+specs/fizz/*.json
+specs/fizz/out/

@@ -35,6 +35,10 @@ role Pipeline:
     atomic func Advance():
         # stage order is structural here (single stage_idx counter); the ghost
         # witness guards future decompositions of Advance into per-stage actions
+        # (J4-tripwire pattern: the require makes the boundary unreachable in
+        # the reference — found reachable on the first real fizz run, v0.5.3 —
+        # so FP3 fires only under mutation, e.g. FG-08 dropping this guard)
+        require self.stage_idx < len(STAGES)
         if self.stage_idx >= len(STAGES):
             self._order_violation = True
             return
@@ -42,6 +46,10 @@ role Pipeline:
 
     atomic func FailAttempt():
         # LLM failure burns an attempt; design_loop retries while attempts < MAX
+        # (the bound is in the guard, mirroring design_loop max_tries: without
+        # it attempts reaches MAX+1 before FailRun fires and P1 is genuinely
+        # violated — found on the first real fizz run, v0.5.3)
+        require self.attempts < MAX_ATTEMPTS
         self.attempts = self.attempts + 1
 
     atomic func Cancelled():
@@ -63,6 +71,14 @@ role Pipeline:
         require not self.started
         self.started = True
 
+    # Terminal-state relief valve (fizzbee MODELING_GUIDE NoOp idiom):
+    # enabled only once this run has a terminal outcome, so the bounded
+    # model's legitimate end states are not flagged as deadlocks while
+    # mid-run wedges still are. Non-fair (review-checklist §3.7).
+    action Idle:
+        require self.outcome != None
+        pass
+
 role Llm:
     action Init:
         pass
@@ -78,7 +94,10 @@ atomic action LlmCall:
 fair action RetryTick:
     # fairness: the design loop keeps scheduling retries — progress assumption,
     # ledgered as FC-liveness-assumption in specs/fizz/README.md
+    # (`pass` body required: body-less actions do not register as
+    # schedulable transitions — found on the first real fizz run, v0.5.3)
     require any([p.outcome == None for p in pipelines])
+    pass
 
 atomic action UserCancel:
     require any([p.outcome == None for p in pipelines])

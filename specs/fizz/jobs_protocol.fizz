@@ -17,8 +17,8 @@ action_options:
 #   always assertion J3     ↔ oracle J-3 (tests/verification/test_jobs_properties.py)
 #
 # JobStore models the SQLite store: durable, no mid-statement crash —
-# crash_on_yield: false is the explicit, justified choice (models SQLite
-# durability; the DB does not crash mid-statement).
+# structural via atomic funcs (yield-free, so no crash_on_yield config is
+# needed; the option is global/per-action, not per-role).
 # JobClient models a tool caller: crash-on-yield ON (default) — a crashed
 # client is exactly the fault class the checker must explore.
 
@@ -31,7 +31,11 @@ GUARDED = True         # models the Week-0 guarded UPDATEs in src/tools/jobs.py
                        # J1; guard on (current implementation) must hold.
 
 role JobStore:
-    func Init():
+    # action Init (not func Init + explicit call): fizzbee auto-runs a role's
+    # action Init at instantiation. The explicit-call form made invariants
+    # evaluate at a pre-Init yield state where `store` was still undefined
+    # (first real fizz run, v0.5.3 — spec was authored tool-gated).
+    action Init:
         self.status = {}       # job_id -> status string
         self.created = {}      # logical creation clock
         self.updated = {}      # logical update clock
@@ -84,10 +88,25 @@ symmetric role JobClient:
         store.Trans(self.inflight, "FAILED")      # models set_failed's UPDATE
         self.inflight = None
 
+    # Terminal-state relief valve (fizzbee MODELING_GUIDE NoOp idiom for
+    # bounded models): disabled while this client can still act, so
+    # mid-protocol wedges still report as deadlocks; enabled only once the
+    # submission budget is exhausted. Non-fair on purpose — no fairness
+    # assumption to justify (review-checklist §3.7); `pass` body required,
+    # body-less actions do not register as schedulable transitions.
+    action Idle:
+        require self.submitted >= 2
+        pass
+
 action Init:
     store = JobStore()
-    store.Init()
-    clients = [JobClient() for i in range(MAX_CLIENTS)]
+    # for-loop + append, not a list comprehension: fizzbee does not support
+    # creating multiple roles in a single step ("multiple roles in single
+    # step" panic, v0.5.3). `clients` stays a named global so the checker
+    # schedules the symmetric clients' actions (SimpleRoles2 pattern).
+    clients = []
+    for i in range(MAX_CLIENTS):
+        clients.append(JobClient())
 
 # ---- assertions (ledger §3.4) ----
 

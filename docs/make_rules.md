@@ -133,12 +133,20 @@ Aggregator: `test-unit` + `test-oracles`. The PR-time test entry point.
 Runs `fizz` exhaustively over every `specs/fizz/*.fizz` model (bounds per
 `fizz.yaml`). Gate: `RUN_VERIFY=1`; requires the `fizz` binary (or
 `FIZZ=scripts/fizz-docker.sh`). CI-authoritative for control-flow claims
-(J-1/J-2, P-1, FP-2..FP-5, FC-1/FC-2).
+(J-1/J-2, P-1, FP-2..FP-5, FC-1/FC-2). fizz v0.5.3 exits 0 even on
+invariant failure (only panics exit non-zero), so the gate captures each
+run's output and requires the `PASSED: Model checker completed
+successfully` verdict line in addition to a zero exit — `|| exit 1` alone
+would be vacuous. Verified non-vacuous: the FG-01 `GUARDED=False` flip
+fails the gate (first provisioning run, 2026-09-10).
 
 ### `verify-fizz-simulation` — L4
 Seeded parallel FizzBee simulation (`fizz -x --seed $(date +%s) --parallel
 $(nproc)`) over all specs — the nightly statistical relief valve for the
-exhaustive checks. Gate: `RUN_VERIFY=1`.
+exhaustive checks. Gate: `RUN_VERIFY=1`. Simulation mode prints no PASSED
+verdict on success, so the gate fails on any `FAILED` line or non-zero
+exit; a lucky seed can miss a violation (statistical by design — the
+exhaustive target is the authority).
 
 ### `verify-nagini` — L5
 Deductive verification (`nagini --counterexample`) over `NAGINI_FILES` — the

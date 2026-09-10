@@ -98,8 +98,12 @@ test-all: ## Run the fast test gates (PR-time; test-mutations is nightly-only)
 	@echo "==> [1/2] test-unit";    $(MAKE) --no-print-directory test-unit
 	@echo "==> [2/2] test-oracles"; $(MAKE) --no-print-directory test-oracles
 
+# fizz v0.5.3 exits 0 even on invariant failure (only panics exit non-zero),
+# so `|| exit 1` alone is a vacuous gate — every run must also print the
+# PASSED line. Both conditions are checked per spec.
 FIZZ ?= fizz
 SPEC_DIR := specs/fizz
+FIZZ_PASS := ^PASSED: Model checker completed successfully
 
 # Opt-in locally via RUN_VERIFY=1 (same pattern as verify-nagini); CI always
 # sets it. Without RUN_VERIFY the targets are a no-op so an environment
@@ -112,7 +116,11 @@ verify-fizz: ## L4: exhaustive FizzBee model checks over specs/fizz/ (RUN_VERIFY
 	else \
 		set -e; for spec in $(SPEC_DIR)/*.fizz; do \
 			echo ">> $$(date +%H:%M:%S) exhaustive check: $$spec"; \
-			$(FIZZ) "$$spec" || exit 1; \
+			out=`$(FIZZ) "$$spec" 2>&1`; st=$$?; \
+			printf '%s\n' "$$out"; \
+			if [ $$st -ne 0 ] || ! printf '%s\n' "$$out" | grep -q "$(FIZZ_PASS)"; then \
+				echo "verify-fizz: FAILED: $$spec (exit $$st)"; exit 1; \
+			fi; \
 		done; \
 		echo "verify-fizz: all specs green (exhaustive, bounds per fizz.yaml)"; \
 	fi
@@ -126,7 +134,12 @@ verify-fizz-simulation: ## L4: seeded parallel FizzBee simulation (nightly relie
 		set -e; seed=$$(date +%s); workers=$$(nproc); \
 		echo ">> seeded simulation seed=$$seed workers=$$workers"; \
 		for spec in $(SPEC_DIR)/*.fizz; do \
-			$(FIZZ) -x --seed $$seed --parallel $$workers "$$spec" || exit 1; \
+			echo ">> $$(date +%H:%M:%S) simulation: $$spec"; \
+			out=`$(FIZZ) -x --seed $$seed --parallel $$workers "$$spec" 2>&1`; st=$$?; \
+			printf '%s\n' "$$out"; \
+			if [ $$st -ne 0 ] || printf '%s\n' "$$out" | grep -q '^FAILED'; then \
+				echo "verify-fizz-simulation: FAILED: $$spec (exit $$st)"; exit 1; \
+			fi; \
 		done; \
 	fi
 
