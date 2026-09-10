@@ -94,7 +94,7 @@ Issues = "https://github.com/architecture-pattern/architecture-pattern-mcp/issue
 architecture-pattern-mcp = "src.main:cli"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src"]
+packages = ["src", "nagini_contracts"]
 
 [tool.hatch.build.targets.sdist]
 include = [
@@ -161,6 +161,14 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
+# Nagini-verified cores (L5): the contract idiom requires quantifier lambdas
+# inside loop bodies (B023), list concatenation instead of starred literals
+# (RUF005), and classic TypeVar generics in the contract stub — PEP 695 is
+# not parseable by Nagini's bundled mypy (UP047).
+"src/text_validation_core.py" = ["B023", "RUF005"]
+"src/design_normalization_core.py" = ["B023", "RUF005"]
+"nagini_contracts/contracts.pyi" = ["UP047"]
+
 # L3 planted-bug garden: mutants deliberately encode the bug classes the
 # oracles must catch (zip-without-strict and manual loop indices ARE the
 # mutations; "fixing" them would delete the bugs the garden exists to plant).
@@ -194,7 +202,7 @@ markers = [
 # "verify_coverage" = scripts/verify_coverage.py (NAGINI_FILES, shared by the
 # L5 coverage report and the L8 cross-consistency gate) — a repo-local module,
 # not a package dependency.
-known_first_party = ["src", "verify_coverage"]# Treat the docs extras (sphinx toolchain) as build-time-only, not runtime deps.
+known_first_party = ["src", "nagini_contracts", "verify_coverage"]# Treat the docs extras (sphinx toolchain) as build-time-only, not runtime deps.
 optional_dependencies_dev_groups = ["docs"]
 
 [tool.deptry.package_module_name_map]

@@ -131,6 +131,7 @@ celerybeat.pid
 # Environments
 .env
 .venv
+.venv-nagini
 env/
 venv/
 ENV/

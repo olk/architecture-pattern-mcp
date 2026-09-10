@@ -137,14 +137,21 @@ verify-fizz-simulation: ## L4: seeded parallel FizzBee simulation (nightly relie
 	fi
 
 NAGINI_FILES := $(shell $(UV) run python scripts/verify_coverage.py --files 2>/dev/null)
+NAGINI_VERIFY_FILES := $(shell $(UV) run python scripts/verify_coverage.py --verify-files 2>/dev/null)
 
-# Nagini verification is disabled because:
-# - Nagini 1.3.1 cannot translate the Unicode operations in text_validation_core
-# - The digital twins (verify/twin/) were removed
-# - The contract library (verify/_contracts.py) had Python 3.14+ compatibility issues
-# To re-enable: fix the Nagini toolchain and restore verify/ files.
-verify-nagini: ## L5: Nagini deductive verification over NAGINI_FILES
-	@echo "verify-nagini: disabled - Nagini toolchain needs updates"; exit 0
+# The nagini CLI pins mypy==1.5.0 and cannot share the dev env, so L5 runs
+# from a dedicated venv (.venv-nagini, provisioned on first use). Requires a
+# JVM for the Viper backend. The Nagini MCP server tools (nagini_verify_file)
+# remain the interactive/agent-facing way to run the same checks.
+NAGINI_VENV := .venv-nagini
+NAGINI := $(NAGINI_VENV)/bin/nagini
+
+$(NAGINI):
+	$(UV) venv --python 3.12 $(NAGINI_VENV)
+	$(UV) pip install --python $(NAGINI_VENV)/bin/python nagini==1.3.1
+
+verify-nagini: $(NAGINI) ## L5: Nagini deductive verification over the annotated cores
+	@failed=0; 	for f in $(NAGINI_VERIFY_FILES); do 		echo "==> verify-nagini: $$f"; 		$(NAGINI) $$f || failed=1; 	done; 	if [ $$failed -ne 0 ]; then 		echo "verify-nagini: FAILED"; exit 1; 	fi; 	echo "verify-nagini: all files verified"
 
 verify-coverage: ## L5: contract-coverage report over NAGINI_FILES
 	@$(UV) run python scripts/verify_coverage.py
@@ -158,9 +165,9 @@ verify-ledger: ## L8: property-ID ledger consistency (specs/fizz/README.md <-> a
 verify-cross-consistency: ## L8: NL-Doc/docstring consistency over NAGINI_FILES (advisory)
 	@$(UV) run python scripts/cross_consistency.py
 
-# Nightly aggregator over the formal/audit verify-* targets. The tool-gated
-# members (verify-fizz, verify-fizz-simulation, verify-nagini) self-skip
-# when toolchain is missing — safe on toolchain-less boxes. test-oracles is
+# Nightly aggregator over the formal/audit verify-* targets. verify-nagini
+# provisions its own venv; verify-fizz/verify-fizz-simulation self-skip when
+# their toolchain is missing — safe on toolchain-less boxes. test-oracles is
 # a test-*, not a verify-*.
 verify-all: ## Run every verify-* target (nightly entry point)
 	@echo "==> [1/6] verify-fizz";              $(MAKE) --no-print-directory verify-fizz

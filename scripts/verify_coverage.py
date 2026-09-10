@@ -24,16 +24,25 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 # The verification set: pure cores in src/ (contract-ready).
 # Scope discipline: the critical ~5-10% of modules, never the whole tree.
 #
-# NOTE: Verification is disabled due to Nagini 1.3.1 limitations:
-# - text_validation_core.py and design_normalization_core.py use Python constructs
-#   that Nagini cannot translate (unicodedata operations, typing.Protocol)
-# - The sync twins (verify/twin/) have been removed - they were only used for
-#   formal verification which is blocked by Nagini limitations
-#
-# To re-enable verification:
-# - Upgrade to a Nagini version with proper Python 3.12+ support
-# - Or fix the Nagini 1.3.1 contract library compatibility issues
-NAGINI_FILES: tuple[str, ...] = ()
+# Verified with the Nagini MCP server (nagini_verify_file); see
+# docs/verification.md L5. The two *_core modules carry the explicit
+# Requires/Ensures/Invariant contracts; their Pydantic adapters
+# (text_validation.py, design_normalization.py) are the runtime glue that
+# precomputes the Unicode facts / extracts the plain keys Nagini cannot
+# model, and are listed for coverage reporting (default-safety-only).
+NAGINI_FILES: tuple[str, ...] = (
+    "src/text_validation_core.py",
+    "src/text_validation.py",
+    "src/design_normalization_core.py",
+    "src/design_normalization.py",
+)
+
+# The annotated cores — the files `make verify-nagini` actually runs the
+# Nagini CLI over (the adapters import Pydantic and are coverage-report only).
+VERIFY_FILES: tuple[str, ...] = (
+    "src/text_validation_core.py",
+    "src/design_normalization_core.py",
+)
 
 CONTRACT_CALLS = {"Requires", "Ensures", "Exsures", "Invariant", "Assert", "Assume"}
 CONTRACT_DECORATORS = {"Pure", "Predicate", "Inline", "Opaque"}
@@ -89,9 +98,18 @@ def report() -> str:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--files", action="store_true", help="print NAGINI_FILES")
+    parser.add_argument(
+        "--verify-files",
+        action="store_true",
+        help="print the annotated cores (VERIFY_FILES) for make verify-nagini",
+    )
     args = parser.parse_args()
     if args.files:
         for rel in NAGINI_FILES:
+            print(rel)
+        return 0
+    if args.verify_files:
+        for rel in VERIFY_FILES:
             print(rel)
         return 0
     print(report())

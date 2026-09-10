@@ -36,7 +36,7 @@ add: cheap layers (types, unit tests) run always; expensive layers
 | L2 | Hypothesis | input-space properties: job-lifecycle interleavings vs shadow automaton (J-1..J-4), LLM-boundary timeout/retry discipline (E5), normalization idempotence/dedup (N-1..N-4) | `make test-oracles` | active |
 | L3 | mutmut + planted-bug gardens | tests-the-tests: tautological oracles, vacuous contracts/assertions; the garden is the vacuity authority | `make test-mutations` (manual/nightly) | garden active; mutmut nightly |
 | L4 | FizzBee (`.fizz` models) | **all interleavings up to bounds**: races, crash windows, guard gaps, deadlock freedom, fault injection; protocol view of job lifecycle + pipeline control | `make verify-fizz` (CI-authoritative) | artifact-complete; tool-gated |
-| L5 | Nagini (Viper/Z3) | **DISABLED** — Nagini 1.3.1 cannot translate Unicode operations in text_validation_core, and has Python 3.14+ compatibility issues | `make verify-nagini` | disabled |
+| L5 | Nagini (Viper/Z3) | **active** — the pure decision cores (text_validation_core, design_normalization_core) carry explicit Requires/Ensures/Invariant contracts and verify with the Nagini CLI (`make verify-nagini`, dedicated `.venv-nagini` venv) and the MCP server (`nagini_verify_file`); Unicode facts and Pydantic object graphs are trusted adapter precomputations | `make verify-nagini` / `make verify-coverage` | active |
 | L6 | deterministic simulation (native now; simloom/frontrun on provisioning) | real asyncio schedules of the **real implementation**: bounded, seeded, replayable proof of J-1/J-2 under all race schedules | `tests/verification/test_jobs_dst.py` (always on) | active (native), proven |
 | L7 | deptry, uv.lock pinning, pip-audit, import-inventory diff | supply chain: hallucinated/unused/vulnerable deps; slopsquatting defence (new package names need human decision) | `make check-depcheck`, `make verify-import-inventory` | active |
 | L8 | ledger checker, NL-Doc cross-consistency | intent drift: code ≠ docstring ≠ contract ≠ model; property-ID mapping mechanically checked | `make verify-ledger`, `make verify-cross-consistency` (advisory) | active (mechanical subset) |
@@ -107,16 +107,68 @@ protocol-level view no other layer can produce. Artifacts:
 Frozen counterexamples are replayed against the real store in
 `tests/verification/test_fizz_traces.py`, independent of tool availability.
 
-### L5 — Deductive verification (`Nagini` / Viper-Z3) — DISABLED
+### L5 — Deductive verification (`Nagini` / Viper-Z3) — active via MCP
 The only layer whose verdict is universal over inputs, scoped to the critical
 5–10% (`NAGINI_FILES`, reported by `make verify-coverage`).
 
-**Disabled** because:
-- Nagini 1.3.1 cannot translate `unicodedata.category().startswith()` and other string operations
-- Python 3.14+ compatibility issues with the contract library
-- Digital twins (`verify/twin/`) were removed
+Verification runs with the Nagini CLI (`make verify-nagini`, which provisions
+a dedicated `.venv-nagini` venv because the CLI pins `mypy==1.5.0`) and with
+the Nagini MCP server tools (`nagini_verify_file`) over the two pure decision
+cores:
 
-To re-enable: upgrade Nagini toolchain and restore verification files.
+- `src/text_validation_core.py` — the printable-text decision engine.
+  Nagini cannot translate the Unicode operations (`unicodedata.category`,
+  `str.isspace`, `ord`, `strip`), so the Pydantic adapter
+  (`src/text_validation.py`) precomputes per-character facts (category codes,
+  strip-whitespace flags, allowed-whitespace flags) and the core decides over
+  plain lists. Verified properties: totality (no crash on any input), verdict
+  well-formedness, the first-disallowed-character scan, the maximal strip
+  window, the length check, and the letter/digit presence check.
+- `src/design_normalization_core.py` — the denormalization decision core.
+  The Pydantic object graphs and `typing.Protocol` are outside Nagini's
+  subset, so the adapter (`src/design_normalization.py`) extracts plain keys
+  (component_ids, (name, is_shared) tuples, event names) and maps the core's
+  key lists back onto the original objects with a first-occurrence scan.
+  Verified properties: N-2 dedup (no duplicate keys), coverage (no loss) and
+  subset (no hallucinated keys) for all three promotion rules.
+
+The contract vocabulary is provided by a local, typed, runtime-inert stub
+package (`nagini_contracts/`) — Nagini recognises contract calls by name and
+ignores that module; the real `nagini-contracts` distribution cannot be
+installed here (it pins `mypy==1.5.0`, conflicting with the dev group).
+Quantifier results that feed runtime decisions (the membership tests in the
+promotion loops) evaluate for real in the stub; contract-position quantifiers
+are inert, so the contracts cost nothing at runtime.
+
+The honest-claims boundary stands: the verified fragments are correct on all
+inputs, assuming the adapter precomputations (Unicode oracles, key
+extraction) are correct — those are pinned by the L1/L2 behavioral oracles
+(`tests/unit/test_text_validation.py`, `tests/unit/test_normalization.py`,
+`tests/verification/test_normalization_idempotence.py`).
+
+#### Why not the whole tree
+
+`make verify-nagini` deliberately covers only the annotated cores. Nagini
+verifies the target file **and all transitive imports** (CAV'18), so a module
+can enter the set only if its entire import graph is inside the supported
+subset. Empirically (nagini MCP server, per module):
+
+| src/ module class | Verdict | Reason |
+|---|---|---|
+| `text_validation_core`, `design_normalization_core` | verifies | pure decision logic, annotated |
+| `errors.py` | untranslatable | module-level constants violate the static-field subset |
+| `schemas/enums.py` | untranslatable | `class X(str, Enum)` — subclassing a builtin type unsupported |
+| `prompts/style_guidance.py` | untranslatable | 300-line module-level dict constant overflows the prover |
+| `config_expansion.py` | untranslatable | `re` module, `Any`-typed recursion |
+| everything else (`tools/*`, `schemas/*`, `pipeline.py`, `agent.py`, `patterns/*`, `server.py`, ...) | untranslatable | imports pydantic / fastmcp / llama_index / litellm / httpx / aiosqlite / numpy / faiss / click / dotenv |
+
+Scope discipline adds a second reason: the documented L5 decision (critical
+5–10%, never the tree). Every verified fragment costs prover time and every
+contract must be non-vacuous (AGENTS.md); verifying error constants or enums
+would add minutes without adding decision-logic assurance. The critical
+decision logic in this codebase is exactly the two cores — the rest is
+LLM/Pydantic/FastMCP plumbing whose behavior is pinned by the L1/L2/L4/L6
+layers instead.
 
 ### L6 — Deterministic simulation (DST)
 Exercises the **real implementation's actual schedules** — no model, no twin,
@@ -194,7 +246,7 @@ One ID per property across all layers (drift is reviewable 1:1 via the
 | `make test-oracles` | L1b, L2, plus L4 traces / L5 conformance / L6 DST / L1 canary | pre-push + CI |
 | `make test-mutations` | L3 | manual / nightly |
 | `make verify-fizz` / `make verify-fizz-simulation` | L4 | CI authoritative |
-| `make verify-nagini` / `make verify-coverage` | L5 | CI authoritative |
+| `make verify-nagini` / `nagini_verify_file` (MCP server) / `make verify-coverage` | L5 | agent-run per change; CI authoritative |
 | `make verify-import-inventory` | L7 | commit / nightly |
 | `make verify-ledger` / `make verify-cross-consistency` | L8 | commit (advisory) |
 | `ARCH_BENCH_LLM=1 pytest tests/eval/ -m llm` | L9 | prompt/model changes |

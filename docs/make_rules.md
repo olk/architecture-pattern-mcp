@@ -142,16 +142,19 @@ so the gate fails on any `FAILED` line or non-zero exit; a lucky seed can
 miss a violation (statistical by design — the exhaustive target is the
 authority).
 
-### `verify-nagini` — L5 (DISABLED)
-Deductive verification (`nagini --counterexample`) over `NAGINI_FILES` — the
-file set reported by `scripts/verify_coverage.py --files`.
+### `verify-nagini` — L5
+Deductive verification over the annotated cores (`scripts/verify_coverage.py
+--verify-files`: `src/text_validation_core.py` and
+`src/design_normalization_core.py`).
 
-**Currently disabled** because:
-- Nagini 1.3.1 cannot translate Unicode operations in text_validation_core
-- The digital twins (verify/twin/) were removed
-- Python 3.14+ compatibility issues with the contract library
-
-To re-enable: upgrade Nagini toolchain and restore verification files.
+The `nagini` CLI pins `mypy==1.5.0` and cannot share the dev environment, so
+the target provisions a dedicated venv (`.venv-nagini`, `nagini==1.3.1`) on
+first use and runs the CLI over each annotated core; the target fails on the
+first verification error. Requires a JVM for the Viper backend. The Nagini
+MCP server tools (`nagini_verify_file`) remain the interactive/agent-facing
+way to run the same checks (AGENTS.md). The contract vocabulary is provided
+by the local runtime-inert stub package `nagini_contracts/` (Nagini
+recognises contract calls by name).
 
 ### `verify-coverage` — L5
 `scripts/verify_coverage.py` — reports which modules are covered by the

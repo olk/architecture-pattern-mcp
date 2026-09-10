@@ -42,8 +42,9 @@ from collections.abc import Callable
 
 import pytest
 
-from src.design_normalization_core import denormalize_core
-from src.text_validation_core import ensure_printable_text
+from src.design_normalization import denormalize_contracts
+from src.schemas import ArchitectureDesign
+from src.text_validation import ensure_printable_text
 
 ITERATIONS = 2_000
 # Coarse budgets (seconds for ITERATIONS ops): >= 50x observed headroom.
@@ -73,16 +74,18 @@ class TestVerifiedCorePerfSmoke:
         )
 
     def test_design_normalization_core(self) -> None:
-        design: object = _sample_design()
+        design = _sample_design()
         _time_budgeted(
             "design_normalization_core.denormalize_core",
-            lambda: denormalize_core(design),  # type: ignore[arg-type]
+            lambda: denormalize_contracts(design),
             BUDGET_NORMALIZATION,
         )
 
 
 class _Contract:
     component_id = "ingest"
+    base_path = "/api/v1/ingest"
+    endpoints: list[object] = []
 
 
 class _Component:
@@ -97,5 +100,45 @@ class _Design:
     event_contracts: list[object] = []
 
 
-def _sample_design() -> "_Design":
-    return _Design()
+def _sample_design() -> ArchitectureDesign:
+    from src.schemas import (
+        ApiContract,
+        ArchitectureOverview,
+        ArchitectureStyle,
+        Component,
+        DataModel,
+        EventContract,
+        PatternCategory,
+    )
+
+    return ArchitectureDesign(
+        overview=ArchitectureOverview(
+            style=ArchitectureStyle.MICROSERVICES,
+            category=PatternCategory.STRUCTURAL,
+            principles=["single responsibility"],
+        ),
+        components=[
+            Component(
+                id="svc",
+                name="Service",
+                type="service",
+                description="A service",
+                responsibilities=["process"],
+                api_contract=ApiContract(
+                    component_id="ingest",
+                    base_path="/api/v1/ingest",
+                    endpoints=[],
+                ),
+                data_models=[
+                    DataModel(name="shared-model", fields=[], is_shared=True)
+                ],
+            )
+        ],
+        relationships=[],
+        patterns=[],
+        api_contracts=[ApiContract(component_id="ingest", base_path="/x", endpoints=[])],
+        shared_data_models=[],
+        event_contracts=[EventContract(event_name="created", payload_schema={}, published_by="svc")],
+        quality_attributes={},
+        domain="test",
+    )
