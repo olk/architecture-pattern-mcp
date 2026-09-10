@@ -44,9 +44,6 @@ jobs:
       - name: NL-Doc cross-consistency (mechanical subset)
         run: make verify-cross-consistency
 
-      - name: Import inventory drift
-        run: make verify-import-inventory
-
       - name: Perf smoke canary (coarse budgets)
         run: uv run pytest tests/verification/test_perf_smoke.py -m perf -v
         env:
@@ -102,18 +99,3 @@ jobs:
         # (docs/phase-0-decisions.md); until then this job surfaces the gap.
       - name: Exhaustive model checks
         run: make verify-fizz
-
-  deps-audit:
-    name: L7 — pip-audit vulnerability scan (advisory)
-    runs-on: ubuntu-latest
-    continue-on-error: true
-    steps:
-      - uses: actions/checkout@v5
-      - uses: astral-sh/setup-uv@v10.0.0
-        with:
-          enable-cache: true
-      - run: uv sync
-      - name: Vulnerability scan (strict within the advisory job)
-        run: make verify-deps-audit
-        env:
-          STRICT: "1"

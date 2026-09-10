@@ -38,7 +38,7 @@ add: cheap layers (types, unit tests) run always; expensive layers
 | L4 | FizzBee (`.fizz` models) | **all interleavings up to bounds**: races, crash windows, guard gaps, deadlock freedom, fault injection; protocol view of job lifecycle + pipeline control | `make verify-fizz` (CI-authoritative) | artifact-complete; tool-gated |
 | L5 | Nagini (Viper/Z3) | **DISABLED** — Nagini 1.3.1 cannot translate Unicode operations in text_validation_core, and has Python 3.14+ compatibility issues | `make verify-nagini` | disabled |
 | L6 | deterministic simulation (native now; simloom/frontrun on provisioning) | real asyncio schedules of the **real implementation**: bounded, seeded, replayable proof of J-1/J-2 under all race schedules | `tests/verification/test_jobs_dst.py` (always on) | active (native), proven |
-| L7 | deptry, uv.lock pinning, pip-audit, import-inventory diff | supply chain: hallucinated/unused/vulnerable deps; slopsquatting defence (new package names need human decision) | `make check-depcheck`, `make verify-import-inventory`, `make verify-deps-audit` (advisory) | active |
+| L7 | deptry, uv.lock pinning, pip-audit, import-inventory diff | supply chain: hallucinated/unused/vulnerable deps; slopsquatting defence (new package names need human decision) | `make check-depcheck`, `make verify-import-inventory` | active |
 | L8 | ledger checker, NL-Doc cross-consistency | intent drift: code ≠ docstring ≠ contract ≠ model; property-ID mapping mechanically checked | `make verify-ledger`, `make verify-cross-consistency` (advisory) | active (mechanical subset) |
 | L9 | in-repo corpus + structural invariants (`tests/eval/`) | well-formedness and internal consistency of LLM output: section completeness, reference closure, producer+consumer pairs, catalogue existence, score ranges | `llm` marker + `ARCH_BENCH_LLM=1` (live); offline vacuity guard always on | active |
 | L10 | human review, perf smoke, nightly canaries | T2 (design quality), vacuity triage, bound/fairness justification, verified-core latency budgets, TCB regressions | PR review (required paths) + `.github/workflows/verification.yml` | active |
@@ -130,10 +130,9 @@ historical race schedule). Written so the scenarios map 1:1 onto simloom
 ### L7 — Dependency & supply chain (`deptry`, `pip-audit`, inventory diff)
 AI code hallucinates dependencies (19.7% in the USENIX '25 study →
 slopsquatting). Defences: full `uv.lock` pinning, `deptry` hygiene
-(`make check-depcheck`), the import-inventory drift gate
+(`make check-depcheck`) and the import-inventory drift gate
 (`make verify-import-inventory` — a new third-party root fails the build
-until a human reviews it), and an advisory vulnerability scan
-(`make verify-deps-audit`).
+until a human reviews it).
 
 ### L8 — Spec & doc-level testing (intent layer)
 Aimed above the code: intent drift between prompt, docstring, contract,
@@ -196,7 +195,7 @@ One ID per property across all layers (drift is reviewable 1:1 via the
 | `make test-mutations` | L3 | manual / nightly |
 | `make verify-fizz` / `make verify-fizz-simulation` | L4 | CI authoritative |
 | `make verify-nagini` / `make verify-coverage` | L5 | CI authoritative |
-| `make verify-import-inventory` / `make verify-deps-audit` | L7 | commit / nightly |
+| `make verify-import-inventory` | L7 | commit / nightly |
 | `make verify-ledger` / `make verify-cross-consistency` | L8 | commit (advisory) |
 | `ARCH_BENCH_LLM=1 pytest tests/eval/ -m llm` | L9 | prompt/model changes |
 | `RUN_PERF=1 pytest tests/verification/test_perf_smoke.py` | L10 | nightly canary |

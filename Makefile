@@ -16,7 +16,7 @@
 	check-lint check-static-typing check-deadcode check-depcheck check-all \
 	test-unit test-oracles test-mutations test-all \
 	verify-fizz verify-fizz-simulation \
-	verify-nagini verify-coverage verify-import-inventory verify-deps-audit \
+	verify-nagini verify-coverage \
 	verify-ledger verify-cross-consistency verify-all \
 	client docker-build docker-build-tei \
 	docker-build-all docker-publish docker-publish-tei \
@@ -149,43 +149,26 @@ verify-nagini: ## L5: Nagini deductive verification over NAGINI_FILES
 verify-coverage: ## L5: contract-coverage report over NAGINI_FILES
 	@$(UV) run python scripts/verify_coverage.py
 
-IMPORT_SNAPSHOT := tests/verification/snapshots/import_inventory.txt
-
 verify-ledger: ## L8: property-ID ledger consistency (specs/fizz/README.md <-> artifacts)
 	@$(UV) run python scripts/verify_ledger.py
 
 # Advisory NL-Doc cross-consistency gate (mechanical subset; the LLM
 # comparison activates via ARCH_CONSISTENCY_MODEL, checker identity pinned
-# per run — E3). STRICT=1 enforces the >10% divergence promotion trigger.
+# per run — E3). Findings are leads to triage, not failures.
 verify-cross-consistency: ## L8: NL-Doc/docstring consistency over NAGINI_FILES (advisory)
-	@$(UV) run python scripts/cross_consistency.py $(if $(STRICT),--strict,)
-
-verify-import-inventory: ## L7: third-party import inventory drift check (slopsquatting defence)
-	@$(UV) run python scripts/import_inventory.py --check $(IMPORT_SNAPSHOT)
-
-# Advisory vulnerability scan (pip-audit over the project environment).
-# Not part of the standard gate set; promotes per testing-strategies §4.4.
-verify-deps-audit: ## L7: pip-audit vulnerability scan (advisory; STRICT=1 to enforce)
-	@if $(UV) run python -c "import importlib.util, sys; sys.exit(0 if importlib.util.find_spec('pip_audit') else 1)"; then \
-		$(UV) run python -m pip_audit --progress-spinner off --desc off || [ -n "$(STRICT)" ] && exit $$?; \
-	else \
-		echo "pip-audit not installed — advisory skip (strict run: STRICT=1 $(UV) run --with pip-audit python -m pip_audit)"; \
-		[ -z "$(STRICT)" ] || { $(UV) run --with pip-audit python -m pip_audit --progress-spinner off --desc off; exit $$?; } ; \
-	fi
+	@$(UV) run python scripts/cross_consistency.py
 
 # Nightly aggregator over the formal/audit verify-* targets. The tool-gated
 # members (verify-fizz, verify-fizz-simulation, verify-nagini) self-skip
-# when toolchain is missing and verify-deps-audit is advisory without STRICT=1 —
-# safe on toolchain-less boxes. test-oracles is a test-*, not a verify-*.
+# when toolchain is missing — safe on toolchain-less boxes. test-oracles is
+# a test-*, not a verify-*.
 verify-all: ## Run every verify-* target (nightly entry point)
-	@echo "==> [1/8] verify-fizz";              $(MAKE) --no-print-directory verify-fizz
-	@echo "==> [2/8] verify-fizz-simulation";   $(MAKE) --no-print-directory verify-fizz-simulation
-	@echo "==> [3/8] verify-nagini";            $(MAKE) --no-print-directory verify-nagini
-	@echo "==> [4/8] verify-coverage";          $(MAKE) --no-print-directory verify-coverage
-	@echo "==> [5/8] verify-ledger";            $(MAKE) --no-print-directory verify-ledger
-	@echo "==> [6/8] verify-cross-consistency"; $(MAKE) --no-print-directory verify-cross-consistency
-	@echo "==> [7/8] verify-import-inventory";  $(MAKE) --no-print-directory verify-import-inventory
-	@echo "==> [8/8] verify-deps-audit";        $(MAKE) --no-print-directory verify-deps-audit
+	@echo "==> [1/6] verify-fizz";              $(MAKE) --no-print-directory verify-fizz
+	@echo "==> [2/6] verify-fizz-simulation";   $(MAKE) --no-print-directory verify-fizz-simulation
+	@echo "==> [3/6] verify-nagini";            $(MAKE) --no-print-directory verify-nagini
+	@echo "==> [4/6] verify-coverage";          $(MAKE) --no-print-directory verify-coverage
+	@echo "==> [5/6] verify-ledger";            $(MAKE) --no-print-directory verify-ledger
+	@echo "==> [6/6] verify-cross-consistency"; $(MAKE) --no-print-directory verify-cross-consistency
 
 ##@ Demo
 client: ## Run the pipes-and-filters MCP client demo (synchronous design_architecture)

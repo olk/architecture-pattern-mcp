@@ -21,8 +21,7 @@ output — the E3 pinning rule: a silently downgraded checker is a
 gate-avoidance finding, and the promotion trigger is scored against a named
 model.
 
-Advisory by default; STRICT=1 enforces (divergence > 10% blocks, per the
-nagini plan promotion trigger).
+Advisory by default; findings are leads to triage, not failures.
 """
 
 import argparse

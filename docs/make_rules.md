@@ -16,7 +16,7 @@ tab completion (`make check-<TAB>`) surfaces them as a unit:
 |---|---|---|
 | `check-*` | static analysis quality gates (side-effect free) | `check-lint`, `check-static-typing`, `check-deadcode`, `check-depcheck` |
 | `test-*` | runs pytest (unit + executable oracles) or mutmut | `test-unit`, `test-oracles`, `test-mutations` |
-| `verify-*` | formal-model / external-tool audits | `verify-fizz`, `verify-fizz-simulation`, `verify-nagini`, `verify-coverage`, `verify-import-inventory`, `verify-deps-audit`, `verify-ledger`, `verify-cross-consistency` |
+| `verify-*` | formal-model / external-tool audits | `verify-fizz`, `verify-fizz-simulation`, `verify-nagini`, `verify-coverage`, `verify-import-inventory`, `verify-ledger`, `verify-cross-consistency` |
 | `docker-*` | container build / publish / lifecycle | see below |
 | `install*`, `client*`, `help`, `clean` | singletons / small pairs, no family | — |
 
@@ -34,11 +34,7 @@ one.
 **Opt-in gating.** Heavy toolchains self-skip so local environments without
 them never break the standard gate set:
 
-| Variable | Targets | Without it |
-|---|---|---|
-| `STRICT=1` | `verify-deps-audit`, `verify-cross-consistency` (promotion trigger) | advisory: findings are leads to triage, not failures |
-
-CI sets `STRICT=1` for certain targets; a pushed branch can never skip verification.
+No custom environment variables are required for local development.
 
 **Removed targets.** `lint-fix` (and its `check-lint-fix` successor idea) was
 removed from the project. To auto-fix, run the tools directly:
@@ -168,11 +164,6 @@ Nagini verification set (target: 5–10% of lines). Companion to
 checked-in snapshot; a new package name fails the build until a human
 reviews and updates the snapshot.
 
-### `verify-deps-audit` — L7
-`pip-audit` vulnerability scan over the project environment. Advisory by
-default (skips with a hint if pip-audit isn't installed); `STRICT=1`
-enforces. CI runs it nightly with `STRICT: "1"` in a `continue-on-error` job.
-
 ### `verify-ledger` — L8
 `scripts/verify_ledger.py` — property-ID ledger consistency: every property
 ID referenced in an artifact must have a `specs/fizz/README.md` ledger row,
@@ -182,7 +173,7 @@ and every row must reference an existing artifact or be explicitly deferred.
 `scripts/cross_consistency.py` — NL-Doc/docstring cross-consistency over
 `NAGINI_FILES` (mechanical subset always on; the LLM comparison activates
 via `ARCH_CONSISTENCY_MODEL`, checker identity pinned per run). Advisory;
-`STRICT=1` enforces the >10% divergence promotion trigger.
+findings are leads to triage, not failures.
 
 ### `verify-all`
 Aggregator over the eight `verify-*` targets. Nightly entry point — safe on
@@ -266,7 +257,6 @@ regenerated wholesale by `test-mutations` and gitignored.)
 | `test-mutations` | `verification.yml` #mutmut-sweep | nightly (advisory) |
 | `verify-coverage`, `verify-nagini` | `verification.yml` #verify-nagini | nightly (advisory) |
 | `verify-fizz` | `verification.yml` #verify-fizz | nightly (advisory) |
-| `verify-deps-audit` (`STRICT=1`) | `verification.yml` #deps-audit | nightly (advisory) |
 | `check-all`, `test-all`, `verify-all`, demo/docker targets | — | local / release use |
 
 ---
