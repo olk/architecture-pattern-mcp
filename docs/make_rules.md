@@ -16,7 +16,7 @@ tab completion (`make check-<TAB>`) surfaces them as a unit:
 |---|---|---|
 | `check-*` | static analysis quality gates (side-effect free) | `check-lint`, `check-static-typing`, `check-deadcode`, `check-depcheck` |
 | `test-*` | runs pytest (unit + executable oracles) or mutmut | `test-unit`, `test-oracles`, `test-mutations` |
-| `verify-*` | formal-model / external-tool audits | `verify-fizz`, `verify-fizz-simulation`, `verify-nagini`, `verify-coverage`, `verify-import-inventory`, `verify-ledger`, `verify-cross-consistency` |
+| `verify-*` | formal-model / external-tool audits | `verify-fizz`, `verify-fizz-simulation`, `verify-nagini`, `verify-ledger`, `verify-cross-consistency`, `verify-all` |
 | `docker-*` | container build / publish / lifecycle | see below |
 | `install*`, `client*`, `help`, `clean` | singletons / small pairs, no family | — |
 
@@ -160,16 +160,19 @@ way to run the same checks (AGENTS.md). The contract vocabulary is provided
 by the local runtime-inert stub package `nagini_contracts/` (Nagini
 recognises contract calls by name).
 
-### `verify-coverage` — L5
-`scripts/verify_coverage.py` — reports which modules are covered by the
-Nagini verification set (target: 5–10% of lines). Companion to
-`verify-nagini`.
+### `verify-coverage` — L5 (script, not a make target)
+`scripts/verify_coverage.py` — computes the `NAGINI_FILES` verification set
+and reports which modules are covered by it (target: 5–10% of lines). The
+Makefile consumes it directly (`$(NAGINI_FILES)`) — there is no
+`make verify-coverage` target; run `uv run python scripts/verify_coverage.py`
+for the report.
 
-### `verify-import-inventory` — L7
+### `verify-import-inventory` — L7 (script, not a make target)
 `scripts/import_inventory.py --check tests/verification/snapshots/import_inventory.txt`
 — slopsquatting defence: diffs the actual third-party import roots against a
 checked-in snapshot; a new package name fails the build until a human
-reviews and updates the snapshot.
+reviews and updates the snapshot. The drift gate is planned but not yet
+wired as a make target.
 
 ### `verify-ledger` — L8
 `scripts/verify_ledger.py` — property-ID ledger consistency: every property
@@ -261,9 +264,9 @@ regenerated wholesale by `test-mutations` and gitignored.)
 | `check-deadcode`, `check-depcheck` | `ci.yml` #Dead Code & Dependency Hygiene | every push/PR |
 | `test-unit` (as `uv run pytest tests/unit/`) | `ci.yml` #Unit Tests | every push/PR |
 | `test-unit` | `verification.yml` #unit-suite | nightly + manual dispatch |
-| oracle suite (as `make test-oracles`), `verify-ledger`, `verify-cross-consistency`, `verify-import-inventory` | `verification.yml` #bug-gardens | nightly + manual dispatch |
+| oracle suite (as `make test-oracles`), `verify-ledger`, `verify-cross-consistency` | `verification.yml` #bug-gardens | nightly + manual dispatch |
 | `test-mutations` | `verification.yml` #mutmut-sweep | nightly (advisory, 180-min cap) |
-| `verify-coverage`, `verify-nagini` | `verification.yml` #verify-nagini | nightly (advisory) |
+| `verify-nagini` | `verification.yml` #verify-nagini | nightly (advisory) |
 | `verify-fizz` | `verification.yml` #verify-fizz | nightly (advisory) |
 | `check-all`, `test-all`, `verify-all`, demo/docker targets | — | local / release use |
 

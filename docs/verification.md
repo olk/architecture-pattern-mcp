@@ -5,11 +5,8 @@
 > exists, which frameworks it uses, what it tests/verifies, and where its
 > gate lives. It summarizes; it does not replace the owning documents:
 > [`testing-strategies.md`](testing-strategies.md) (the stack),
-> [`nagini-verification-plan.md`](nagini-verification-plan.md) (L5/L6),
-> [`fizzbee-verification-plan.md`](fizzbee-verification-plan.md) (L4),
 > [`formal_verification.md`](formal_verification.md) (rationale),
-> [`phase-0-decisions.md`](phase-0-decisions.md) (run outcomes and
-> provisioning notes), [`review-checklist.md`](review-checklist.md) (L10).
+> [`review-checklist.md`](review-checklist.md) (L10).
 
 ## The trust model in one paragraph
 
@@ -36,9 +33,9 @@ add: cheap layers (types, unit tests) run always; expensive layers
 | L2 | Hypothesis | input-space properties: job-lifecycle interleavings vs shadow automaton (J-1..J-4), LLM-boundary timeout/retry discipline (E5), normalization idempotence/dedup (N-1..N-4) | `make test-oracles` | active |
 | L3 | mutmut + planted-bug gardens | tests-the-tests: tautological oracles, vacuous contracts/assertions; the garden is the vacuity authority | `make test-mutations` (manual/nightly) | garden active; mutmut nightly |
 | L4 | FizzBee (`.fizz` models) | **all interleavings up to bounds**: races, crash windows, guard gaps, deadlock freedom, fault injection; 7 models over the job protocol, the background-task lifecycle + cancel tool, the pipeline stage machine, design-loop triage, reasoning-client deadline/retry/cache, TEI rerank verdicts, retrieval resolution | `make verify-fizz` (CI-authoritative) | active (7 specs, 31 garden mutants) |
-| L5 | Nagini (Viper/Z3) | **active** — the pure decision cores (text_validation_core, design_normalization_core) carry explicit Requires/Ensures/Invariant contracts and verify with the Nagini CLI (`make verify-nagini`, dedicated `.venv-nagini` venv) and the MCP server (`nagini_verify_file`); Unicode facts and Pydantic object graphs are trusted adapter precomputations | `make verify-nagini` / `make verify-coverage` | active |
+| L5 | Nagini (Viper/Z3) | **active** — the pure decision cores (text_validation_core, design_normalization_core) carry explicit Requires/Ensures/Invariant contracts and verify with the Nagini CLI (`make verify-nagini`, dedicated `.venv-nagini` venv) and the MCP server (`nagini_verify_file`); Unicode facts and Pydantic object graphs are trusted adapter precomputations | `make verify-nagini` / `nagini_verify_file` (MCP) | active |
 | L6 | deterministic simulation (native now; simloom/frontrun on provisioning) | real asyncio schedules of the **real implementation**: bounded, seeded, replayable proof of J-1/J-2 under all race schedules | `tests/verification/test_jobs_dst.py` (always on) | active (native), proven |
-| L7 | deptry, uv.lock pinning, pip-audit, import-inventory diff | supply chain: hallucinated/unused/vulnerable deps; slopsquatting defence (new package names need human decision) | `make check-depcheck`, `make verify-import-inventory` | active |
+| L7 | deptry, uv.lock pinning, import-inventory listing | supply chain: hallucinated/unused deps; slopsquatting defence (new package names need human decision) | `make check-depcheck` | active |
 | L8 | ledger checker, NL-Doc cross-consistency | intent drift: code ≠ docstring ≠ contract ≠ model; property-ID mapping mechanically checked | `make verify-ledger`, `make verify-cross-consistency` (advisory) | active (mechanical subset) |
 | L9 | in-repo corpus + structural invariants (`tests/eval/`) | well-formedness and internal consistency of LLM output: section completeness, reference closure, producer+consumer pairs, catalogue existence, score ranges | `llm` marker + `ARCH_BENCH_LLM=1` (live); offline vacuity guard always on | active |
 | L10 | human review, perf smoke, nightly canaries | T2 (design quality), vacuity triage, bound/fairness justification, verified-core latency budgets, TCB regressions | PR review (required paths) + `.github/workflows/verification.yml` | active |
@@ -129,7 +126,7 @@ Frozen counterexamples are replayed against the real store in
 
 ### L5 — Deductive verification (`Nagini` / Viper-Z3) — active via MCP
 The only layer whose verdict is universal over inputs, scoped to the critical
-5–10% (`NAGINI_FILES`, reported by `make verify-coverage`).
+5–10% (`NAGINI_FILES`, computed by `scripts/verify_coverage.py`).
 
 Verification runs with the Nagini CLI (`make verify-nagini`, which provisions
 a dedicated `.venv-nagini` venv because the CLI pins `mypy==1.5.0`) and with
@@ -199,12 +196,13 @@ J-2 on the real store with a can-fail oracle (the guard must reject the
 historical race schedule). Written so the scenarios map 1:1 onto simloom
 (`systematic=True`) / frontrun (DPOR) when provisioned.
 
-### L7 — Dependency & supply chain (`deptry`, `pip-audit`, inventory diff)
+### L7 — Dependency & supply chain (`deptry`, inventory listing)
 AI code hallucinates dependencies (19.7% in the USENIX '25 study →
 slopsquatting). Defences: full `uv.lock` pinning, `deptry` hygiene
-(`make check-depcheck`) and the import-inventory drift gate
-(`make verify-import-inventory` — a new third-party root fails the build
-until a human reviews it).
+(`make check-depcheck`), and the import-inventory listing
+(`scripts/import_inventory.py`) — the drift gate that diffs the listing
+against a checked-in snapshot is planned but not yet wired as a make
+target.
 
 ### L8 — Spec & doc-level testing (intent layer)
 Aimed above the code: intent drift between prompt, docstring, contract,
@@ -212,12 +210,15 @@ model, and implementation.
 
 - `make verify-ledger` — every property ID referenced in an artifact must
   have a `specs/fizz/README.md` ledger row, and every row must reference an
-  existing artifact or be explicitly deferred.
+  existing artifact or be explicitly deferred (range rows like
+  `` `N-1..N-4` `` supported).
 - `make verify-cross-consistency` — the NL-Doc gate (VLP evidence: validating
   an intermediate artifact beats direct code review 84% vs 40%). Mechanical
   subset now (every public function in `NAGINI_FILES` carries a docstring);
   the LLM comparison activates via `ARCH_CONSISTENCY_MODEL`, with the checker
   model identity pinned per run (E3).
+
+Both run in the nightly canary workflow (`verification.yml` #bug-gardens).
 
 ### L9 — LLM-output contract corpus (`tests/eval/`)
 The mechanizable slice between T1 and T2: deterministic structural invariants
@@ -236,8 +237,8 @@ justification, fairness assumptions, No-Go decisions. Programmed elements:
 `docs/review-checklist.md` (required-review paths), the perf smoke canary
 (`tests/verification/test_perf_smoke.py`, RUN_PERF — proofs guarantee
 functional correctness, not performance), and the nightly TCB canary workflow
-(`.github/workflows/verification.yml`: gardens, oracle suites, ledger,
-inventory, perf smoke blocking; mutmut/Nagini/FizzBee/pip-audit advisory).
+(`.github/workflows/verification.yml`: unit suite, oracle suites, gardens,
+ledger, NL-Doc, perf smoke blocking; mutmut/Nagini/FizzBee advisory).
 
 ## Shared property vocabulary
 
@@ -270,9 +271,8 @@ One ID per property across all layers (drift is reviewable 1:1 via the
 | `make test-oracles` | L1b, L2, plus L4 traces / L5 conformance / L6 DST / L1 canary | pre-push + CI + nightly canary (`verification.yml` #bug-gardens) |
 | `make test-mutations` | L3 | manual / nightly |
 | `make verify-fizz` / `make verify-fizz-simulation` | L4 | CI authoritative |
-| `make verify-nagini` / `nagini_verify_file` (MCP server) / `make verify-coverage` | L5 | agent-run per change; CI authoritative |
-| `make verify-import-inventory` | L7 | commit / nightly |
-| `make verify-ledger` / `make verify-cross-consistency` | L8 | commit (advisory) |
+| `make verify-nagini` / `nagini_verify_file` (MCP server) | L5 | agent-run per change; CI authoritative |
+| `make verify-ledger` / `make verify-cross-consistency` | L8 | commit (advisory) + nightly canary (`verification.yml` #bug-gardens) |
 | `ARCH_BENCH_LLM=1 pytest tests/eval/ -m llm` | L9 | prompt/model changes |
 | `RUN_PERF=1 pytest tests/verification/test_perf_smoke.py` | L10 | nightly canary |
 
