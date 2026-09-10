@@ -82,9 +82,11 @@ class JobsStore:
     @classmethod
     async def get_instance(cls, lock: asyncio.Lock | None = None) -> "JobsStore":
         """Get or create the singleton instance, initialising the DB on first call."""
-        if cls._instance is None or cls._db is None:
+        # Read _db off the instance: self._db assignments shadow the class
+        # attribute, so cls._db is always None and must not be used here.
+        if cls._instance is None or cls._instance._db is None:
             async with (lock if lock is not None else cls._lock):
-                if cls._instance is None or cls._db is None:
+                if cls._instance is None or cls._instance._db is None:
                     cls._instance = cls(lock=lock)
                     await cls._instance._init()
         return cls._instance
@@ -96,9 +98,15 @@ class JobsStore:
         Use this with a temporarily overridden ``ARCHITECTURE_PATTERN_JOBS_DB``
         env-var to point at a per-test temporary directory.
         """
-        if cls._instance is not None and cls._db is not None:
-            await cls._db.close()
-        cls._instance = None
+        # Close via the instance attribute (see get_instance): cls._db is a
+        # shadowed class attribute that stays None. Awaiting close() also
+        # joins the aiosqlite worker thread before the caller's event loop
+        # closes — otherwise the worker races the loop shutdown and raises
+        # "RuntimeError: Event loop is closed".
+        instance = cls._instance
+        if instance is not None:
+            await instance.close()
+            cls._instance = None
         cls._db = None
         db_path = _get_db_path()
         if os.path.exists(db_path):

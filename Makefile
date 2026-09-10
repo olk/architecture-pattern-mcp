@@ -12,7 +12,7 @@
 # Docker files: docker/Dockerfile, docker/docker-compose.yml
 # =============================================================================
 
-.PHONY: help install install-mcps lint lint-fix typecheck static-typing deadcode depcheck unit-tests \
+.PHONY: help install install-mcps lint lint-fix static-typing deadcode depcheck unit-tests \
 	verify-hypothesis-oracles mutation-tests verify-fizz verify-fizz-simulation \
 	verify-nagini verify-coverage verify-import-inventory verify-deps-audit \
 	verify-ledger verify-cross-consistency \
@@ -81,7 +81,7 @@ verify-hypothesis-oracles: install ## Run executable oracles (tests/verification
 	$(UV) run pytest tests/verification/ -v
 
 mutation-tests: ## L3: mutmut over Tier A/B/C + gardens (manual/nightly; ephemeral install via uv)
-	$(UV) run --with mutmut mutmut run
+	$(UV) run --with mutmut python -c "import verify.mutmut_compat as compat; compat.apply(); from mutmut.__main__ import cli; raise SystemExit(cli())" run
 	$(UV) run --with mutmut mutmut results
 
 FIZZ ?= fizz
