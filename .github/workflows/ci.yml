@@ -49,12 +49,12 @@ jobs:
         run: uv sync
 
       - name: Vulture dead-code scan
-        run: make deadcode
+        run: make check-deadcode
 
       - name: Deptry dependency scan
-        run: make depcheck
+        run: make check-depcheck
 
-  unit-tests:
+  test-unit:
     name: Unit Tests
     runs-on: ubuntu-latest
     steps:

@@ -25,7 +25,7 @@ L4 trace-replay regression tests (fizzbee plan §5.1).
 Every real FizzBee counterexample — a trace exposing a genuine
 design/implementation violation — is frozen as a deterministic pytest case
 here and replays the traced interleaving against the REAL implementation.
-These tests run in every `make verify-hypothesis-oracles` pass, independent
+These tests run in every `make test-oracles` pass, independent
 of `fizz` tool availability.
 
 Frozen traces:

@@ -19,8 +19,9 @@
 - Scope: `src/` only (`tests/`, `examples/` currently unchecked).
 
 ## Quality gates
-- `make lint` (ruff), `make static-typing` (mypy), `make unit-tests`,
-  `make deadcode`, `make depcheck` — all must pass before task completion.
+- `make check-lint` (ruff), `make check-static-typing` (mypy), `make test-unit`,
+  `make check-deadcode`, `make check-depcheck` — all must pass before task
+  completion (`make check-all` runs the four check-* gates in one go).
 - Runtime behavior of existing code must not change while fixing type errors;
   `tests/unit/` is the behavioral oracle.
 

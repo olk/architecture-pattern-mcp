@@ -12,10 +12,12 @@
 # Docker files: docker/Dockerfile, docker/docker-compose.yml
 # =============================================================================
 
-.PHONY: help install install-mcps lint lint-fix static-typing deadcode depcheck unit-tests \
-	verify-hypothesis-oracles mutation-tests verify-fizz verify-fizz-simulation \
+.PHONY: help install install-mcps \
+	check-lint check-static-typing check-deadcode check-depcheck check-all \
+	test-unit test-oracles test-mutations test-all \
+	verify-fizz verify-fizz-simulation \
 	verify-nagini verify-coverage verify-import-inventory verify-deps-audit \
-	verify-ledger verify-cross-consistency \
+	verify-ledger verify-cross-consistency verify-all \
 	client docker-build docker-build-tei \
 	docker-build-all docker-publish docker-publish-tei \
 	docker-publish-all \
@@ -40,7 +42,7 @@ TEI_RERANK_GHCR_REPO := ghcr.io/olk/pattern-tei-rerank
 .DEFAULT_GOAL := help
 
 help: ## Show this help
-	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n"} /^[a-zA-Z_-]+:.*?##/ { printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
+	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n"} /^[a-zA-Z_-]+:.*?##/ { printf "  \033[36m%-25s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
 
 install: ## Sync dependencies into .venv (dev group included by default)
 	$(UV) sync
@@ -49,16 +51,12 @@ install-mcps: ## Install reasoning MCP servers globally (local dev; Docker embed
 	npm install -g server-shannon-thinking@0.1.1 @mettamatt/code-reasoning@0.8.1
 
 ##@ Quality
-lint: ## Run ruff check
+check-lint: ## Run ruff check
 	$(UV) run ruff check .
-
-lint-fix: install ## Auto-fix linting issues
-	$(UV) run ruff check --fix .
-	$(UV) run ruff format .
 
 # mypy strict check on src/. --strict is redundant with [tool.mypy] strict=true —
 # kept explicit so the gate survives future config edits.
-static-typing: install ## Run mypy --strict static type check on src/
+check-static-typing: install ## Run mypy --strict static type check on src/
 	$(UV) run mypy --strict
 
 # Decorators that register callables with a framework (llama-index Workflow,
@@ -66,23 +64,39 @@ static-typing: install ## Run mypy --strict static type check on src/
 # live even without a static call site. Keep in sync with whitelist.py.
 VULTURE_IGNORE_DECORATORS := "@step,@field_validator,@model_validator,@*.resource,@*.prompt"
 
-deadcode: ## Run vulture dead-code scan on src/ and examples/
+check-deadcode: ## Run vulture dead-code scan on src/ and examples/
 	$(UV) run vulture src examples whitelist.py --min-confidence 80 \
 		--ignore-decorators $(VULTURE_IGNORE_DECORATORS)
 
-depcheck: ## Run deptry dependency-hygiene scan
+check-depcheck: ## Run deptry dependency-hygiene scan
 	$(UV) run deptry .
 
+# Side-effect-free gate aggregator — auto-fix/format targets must never join:
+# a gate must not mutate the working tree. (lint-fix was removed; run
+# `uv run ruff check --fix .` / `uv run ruff format .` directly when wanted.)
+# Steps echo a banner and run strictly sequentially, fail-fast by cost.
+check-all: ## Run every check-* gate (CI entry point)
+	@echo "==> [1/4] check-lint";          $(MAKE) --no-print-directory check-lint
+	@echo "==> [2/4] check-static-typing"; $(MAKE) --no-print-directory check-static-typing
+	@echo "==> [3/4] check-deadcode";      $(MAKE) --no-print-directory check-deadcode
+	@echo "==> [4/4] check-depcheck";      $(MAKE) --no-print-directory check-depcheck
+
 ##@ Tests
-unit-tests: install ## Run unit tests with uv (tests/unit/)
+test-unit: install ## Run unit tests with uv (tests/unit/)
 	$(UV) run pytest tests/unit/ -v
 
-verify-hypothesis-oracles: install ## Run executable oracles (tests/verification/): L1 canary, L2 PBT oracles, trace replay
+test-oracles: install ## Run executable oracles (tests/verification/): L1 canary, L2 PBT oracles, trace replay
 	$(UV) run pytest tests/verification/ -v
 
-mutation-tests: ## L3: mutmut over Tier A/B/C + gardens (manual/nightly; ephemeral install via uv)
+test-mutations: ## L3: mutmut over Tier A/B/C + gardens (manual/nightly; ephemeral install via uv)
 	$(UV) run --with mutmut python -c "import verify.mutmut_compat as compat; compat.apply(); from mutmut.__main__ import cli; raise SystemExit(cli())" run
 	$(UV) run --with mutmut mutmut results
+
+# Fast-path aggregator: unit + oracles only. test-mutations is deliberately
+# outside — mutmut is a manual/nightly gate (ephemeral toolchain, long runtime).
+test-all: ## Run the fast test gates (PR-time; test-mutations is nightly-only)
+	@echo "==> [1/2] test-unit";    $(MAKE) --no-print-directory test-unit
+	@echo "==> [2/2] test-oracles"; $(MAKE) --no-print-directory test-oracles
 
 FIZZ ?= fizz
 SPEC_DIR := specs/fizz
@@ -161,6 +175,20 @@ verify-deps-audit: ## L7: pip-audit vulnerability scan (advisory; STRICT=1 to en
 		[ -z "$(STRICT)" ] || { $(UV) run --with pip-audit python -m pip_audit --progress-spinner off --desc off; exit $$?; } ; \
 	fi
 
+# Nightly aggregator over the formal/audit verify-* targets. The tool-gated
+# members (verify-fizz, verify-fizz-simulation, verify-nagini) self-skip
+# without RUN_VERIFY=1 and verify-deps-audit is advisory without STRICT=1 —
+# safe on toolchain-less boxes. test-oracles is a test-*, not a verify-*.
+verify-all: ## Run every verify-* target (nightly entry point)
+	@echo "==> [1/8] verify-fizz";              $(MAKE) --no-print-directory verify-fizz
+	@echo "==> [2/8] verify-fizz-simulation";   $(MAKE) --no-print-directory verify-fizz-simulation
+	@echo "==> [3/8] verify-nagini";            $(MAKE) --no-print-directory verify-nagini
+	@echo "==> [4/8] verify-coverage";          $(MAKE) --no-print-directory verify-coverage
+	@echo "==> [5/8] verify-ledger";            $(MAKE) --no-print-directory verify-ledger
+	@echo "==> [6/8] verify-cross-consistency"; $(MAKE) --no-print-directory verify-cross-consistency
+	@echo "==> [7/8] verify-import-inventory";  $(MAKE) --no-print-directory verify-import-inventory
+	@echo "==> [8/8] verify-deps-audit";        $(MAKE) --no-print-directory verify-deps-audit
+
 ##@ Demo
 client: ## Run the pipes-and-filters MCP client demo (synchronous design_architecture)
 	@ARCHITECTURE_CLIENT_URL=http://localhost:8060/mcp uv run python examples/architecture_client.py
@@ -181,7 +209,9 @@ docker-build-tei: ## Build both TEI images (embedder + reranker)
 		-t $(TEI_RERANK_IMAGE):$(DOCKER_TAG) \
 		-t $(TEI_RERANK_IMAGE):latest .
 
-docker-build-all: docker-build docker-build-tei ## Build all Docker images
+docker-build-all: ## Build all Docker images
+	@echo "==> [1/2] docker-build (MCP server)"; $(MAKE) --no-print-directory docker-build
+	@echo "==> [2/2] docker-build-tei";          $(MAKE) --no-print-directory docker-build-tei
 
 # Tag and push a local image to both Docker Hub and GHCR.
 # Args: local_image hub_repo ghcr_repo

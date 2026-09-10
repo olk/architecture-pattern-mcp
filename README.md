@@ -723,15 +723,15 @@ docker compose -f docker/docker-compose.yml logs pattern-tei
 
 ## Building & Development
 
-**Common make targets:**
+**Common make targets** (full reference: [docs/make_rules.md](docs/make_rules.md)):
 
 | Target | Description |
 |---|---|
 | `make install` | Install package in editable mode with dev dependencies |
-| `make lint` | Run ruff linting |
-| `make lint-fix` | Auto-fix lint issues and format |
-| `make typecheck` | Run pyright type checking |
-| `make unit-tests` | Run unit tests with uv (tests/unit/) |
+| `make check-lint` | Run ruff linting |
+| `make check-static-typing` | Run mypy --strict type checking on src/ |
+| `make check-all` | Run every check-* quality gate (lint, types, dead code, deps) |
+| `make test-unit` | Run unit tests with uv (tests/unit/) |
 | `make client` | Run the example MCP client demo (requires server running) |
 | `make docker-build` | Build the MCP server Docker image |
 | `make docker-build-all` | Build MCP server + TEI embedder images |
@@ -742,7 +742,7 @@ docker compose -f docker/docker-compose.yml logs pattern-tei
 
 ```bash
 make install                      # First-time setup
-make lint typecheck              # Before pushing
+make check-all                    # Before pushing (lint + types + dead code + deps)
 make docker-build-all             # Build both images (first time and after code changes)
 make docker-up   # Start services
 make docker-logs-follow          # Watch logs

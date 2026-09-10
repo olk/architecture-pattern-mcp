@@ -222,7 +222,7 @@ DEP003 = ["litellm", "workflows", "mcp"]
 # L3 mutation testing (testing-strategies.md §3.4, nagini plan §5.2):
 # mutmut audits the oracles themselves — the answer to same-model circularity
 # (68% of AI test suites validate bugs instead of catching them). Scope is the
-# Tier A/B/C modules; run via `make mutation-tests` (manual/nightly gate).
+# Tier A/B/C modules; run via `make test-mutations` (manual/nightly gate).
 # Caveat (mutmut docs): the mypy-based mutant filter can hide valid mutants —
 # the planted-bug garden (tests/verification/gardens/) stays the vacuity
 # authority; filter survivor counts are a hint, never a verdict.

@@ -63,7 +63,7 @@ jobs:
           enable-cache: true
       - run: uv sync
       - name: mutmut incremental sweep
-        run: make mutation-tests
+        run: make test-mutations
 
   verify-nagini:
     name: L5 — Nagini over NAGINI_FILES (opt-in toolchain)

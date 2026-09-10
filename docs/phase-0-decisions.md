@@ -36,7 +36,7 @@ raises `JobStateError` and the job stays `COMPLETED`.
   `_run_job` race outcomes. Three existing tests that encoded the old
   unconditional-overwrite behaviour were updated under the exemption.
 
-**Acceptance outcome:** `make lint static-typing unit-tests deadcode depcheck`
+**Acceptance outcome:** `make check-lint check-static-typing test-unit check-deadcode check-depcheck`
 green (905 unit tests); pre-fix reproduction executed (see above).
 
 **Property IDs made true of the implementation:** `J-1` (terminal states are

@@ -14,16 +14,16 @@
 repos:
   - repo: local
     hooks:
-      # 1. make lint — on changed .py files repo-wide; --force-exclude keeps
+      # 1. make check-lint — on changed .py files repo-wide; --force-exclude keeps
       #    whitelist.py (extend-exclude in pyproject) out when pre-commit
       #    passes it explicitly.
       - id: ruff-check
-        name: ruff check (make lint)
+        name: ruff check (make check-lint)
         entry: uv run ruff check --force-exclude
         language: system
         types: [python]
 
-      # 2. make static-typing
+      # 2. make check-static-typing
       - id: mypy-strict
         name: mypy --strict (changed src/ files)
         entry: uv run mypy --strict
@@ -32,20 +32,20 @@ repos:
         files: ^src/
         require_serial: true
 
-      # 3. make deadcode — whole-tree name analysis; per-diff runs would emit
+      # 3. make check-deadcode — whole-tree name analysis; per-diff runs would emit
       #    false positives for cross-module references, hence pass_filenames.
       #    Decorator list mirrors VULTURE_IGNORE_DECORATORS in the Makefile.
       - id: vulture-deadcode
-        name: vulture dead-code scan (make deadcode)
+        name: vulture dead-code scan (make check-deadcode)
         entry: uv run vulture src examples whitelist.py --min-confidence 80 --ignore-decorators '@step,@field_validator,@model_validator,@*.resource,@*.prompt'
         language: system
         pass_filenames: false
         files: ^(src|examples)/.*\.py$|^whitelist\.py$
 
-      # 4. make depcheck — imports vs pyproject metadata; also re-runs when
+      # 4. make check-depcheck — imports vs pyproject metadata; also re-runs when
       #    the dependency declaration itself changes.
       - id: deptry-depcheck
-        name: deptry dependency-hygiene scan (make depcheck)
+        name: deptry dependency-hygiene scan (make check-depcheck)
         entry: uv run deptry .
         language: system
         pass_filenames: false

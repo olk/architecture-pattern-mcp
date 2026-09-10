@@ -59,4 +59,4 @@ makes store actions non-atomic (`# spec-explains:`).
 
 The frozen counterexample replayed against the real implementation lives in
 `tests/verification/test_fizz_traces.py` and runs in every
-`make verify-hypothesis-oracles` pass regardless of tool availability.
+`make test-oracles` pass regardless of tool availability.

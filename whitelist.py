@@ -1,7 +1,7 @@
 # Vulture whitelist: symbol references invisible to static analysis.
 # https://github.com/jendrikseipp/vulture#whitelists
 #
-# Used by `make deadcode` / CI:
+# Used by `make check-deadcode` / CI:
 #   vulture src examples whitelist.py --min-confidence 80 \
 #       --ignore-decorators "@step,@field_validator,@model_validator,@*.resource,@*.prompt"
 #
