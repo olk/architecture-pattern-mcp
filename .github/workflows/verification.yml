@@ -5,6 +5,11 @@ name: Nightly Verification Canaries
 # base; a garden mutant that survives a dependency bump BLOCKS the bump until
 # triaged. Advisory jobs are marked continue-on-error — findings are leads
 # that must be triaged, not silent green.
+#
+# Runs the full test-toolchain surface nightly: make test-unit (L1),
+# make test-oracles (L1b/L2 + trace replay + DST + gardens), and
+# make test-mutations (L3, advisory) — plus the tool-gated verifiers.
+# Schedule: 03:00 UTC daily; manual dispatch from the Actions tab.
 
 on:
   schedule:
@@ -14,7 +19,32 @@ on:
 permissions:
   contents: read
 
+# One nightly run at a time: a manual dispatch while the scheduled run is
+# still going (or a >24 h sweep) must not pile up duplicate jobs. Runs on
+# different refs do not cancel each other either — nightly is a canary, and
+# a partial run still yields triageable leads.
+concurrency:
+  group: nightly-verification
+  cancel-in-progress: false
+
 jobs:
+  unit-suite:
+    name: L1 canary — unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.0.0
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Unit tests (make test-unit)
+        run: make test-unit
+
   bug-gardens:
     name: TCB canary — bug gardens + oracle suites
     runs-on: ubuntu-latest
@@ -30,7 +60,7 @@ jobs:
         run: uv sync
 
       - name: Executable oracles (canary, PBT, trace replay, conformance, DST)
-        run: uv run pytest tests/verification/ -v
+        run: make test-oracles
 
       - name: Planted-bug garden kill check
         run: uv run pytest tests/verification/test_bug_garden.py -v
@@ -46,6 +76,10 @@ jobs:
   mutmut-sweep:
     name: TCB canary — mutmut over Tier A/B/C (advisory)
     runs-on: ubuntu-latest
+    # Mutation testing runs every mutant against its test slice in series;
+    # the cap keeps an over-grown mutant surface from burning the whole
+    # night — a timeout still emits the partial results for triage.
+    timeout-minutes: 180
     continue-on-error: true
     steps:
       - uses: actions/checkout@v5

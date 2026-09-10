@@ -266,8 +266,8 @@ One ID per property across all layers (drift is reviewable 1:1 via the
 | Target | Layer(s) | When |
 |---|---|---|
 | `make check-lint` / `make check-static-typing` / `make check-deadcode` / `make check-depcheck` | L0 | every commit (pre-commit + CI); `make check-all` runs all four |
-| `make test-unit` | L1 | every commit |
-| `make test-oracles` | L1b, L2, plus L4 traces / L5 conformance / L6 DST / L1 canary | pre-push + CI |
+| `make test-unit` | L1 | every commit + nightly canary (`verification.yml` #unit-suite) |
+| `make test-oracles` | L1b, L2, plus L4 traces / L5 conformance / L6 DST / L1 canary | pre-push + CI + nightly canary (`verification.yml` #bug-gardens) |
 | `make test-mutations` | L3 | manual / nightly |
 | `make verify-fizz` / `make verify-fizz-simulation` | L4 | CI authoritative |
 | `make verify-nagini` / `nagini_verify_file` (MCP server) / `make verify-coverage` | L5 | agent-run per change; CI authoritative |

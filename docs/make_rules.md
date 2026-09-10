@@ -260,8 +260,9 @@ regenerated wholesale by `test-mutations` and gitignored.)
 | `check-lint` (as `uv run ruff check .`), `check-static-typing` (as `uv run mypy --strict`) | `ci.yml` #Lint & Type Check | every push/PR |
 | `check-deadcode`, `check-depcheck` | `ci.yml` #Dead Code & Dependency Hygiene | every push/PR |
 | `test-unit` (as `uv run pytest tests/unit/`) | `ci.yml` #Unit Tests | every push/PR |
-| oracle suite (as `uv run pytest tests/verification/`), `verify-ledger`, `verify-cross-consistency`, `verify-import-inventory` | `verification.yml` #bug-gardens | nightly + manual dispatch |
-| `test-mutations` | `verification.yml` #mutmut-sweep | nightly (advisory) |
+| `test-unit` | `verification.yml` #unit-suite | nightly + manual dispatch |
+| oracle suite (as `make test-oracles`), `verify-ledger`, `verify-cross-consistency`, `verify-import-inventory` | `verification.yml` #bug-gardens | nightly + manual dispatch |
+| `test-mutations` | `verification.yml` #mutmut-sweep | nightly (advisory, 180-min cap) |
 | `verify-coverage`, `verify-nagini` | `verification.yml` #verify-nagini | nightly (advisory) |
 | `verify-fizz` | `verification.yml` #verify-fizz | nightly (advisory) |
 | `check-all`, `test-all`, `verify-all`, demo/docker targets | — | local / release use |
