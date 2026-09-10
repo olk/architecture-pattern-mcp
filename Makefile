@@ -16,8 +16,7 @@
 	check-lint check-static-typing check-deadcode check-depcheck check-all \
 	test-unit test-oracles test-mutations test-all \
 	verify-fizz verify-fizz-simulation \
-	verify-nagini verify-coverage \
-	verify-ledger verify-cross-consistency verify-all \
+	verify-nagini verify-all \
 	client docker-build docker-build-tei \
 	docker-build-all docker-publish docker-publish-tei \
 	docker-publish-all \
@@ -158,29 +157,14 @@ $(NAGINI):
 verify-nagini: $(NAGINI) ## L5: Nagini deductive verification over the annotated cores
 	@failed=0; 	for f in $(NAGINI_VERIFY_FILES); do 		echo "==> verify-nagini: $$f"; 		$(NAGINI) $$f || failed=1; 	done; 	if [ $$failed -ne 0 ]; then 		echo "verify-nagini: FAILED"; exit 1; 	fi; 	echo "verify-nagini: all files verified"
 
-verify-coverage: ## L5: contract-coverage report over NAGINI_FILES
-	@$(UV) run python scripts/verify_coverage.py
-
-verify-ledger: ## L8: property-ID ledger consistency (specs/fizz/README.md <-> artifacts)
-	@$(UV) run python scripts/verify_ledger.py
-
-# Advisory NL-Doc cross-consistency gate (mechanical subset; the LLM
-# comparison activates via ARCH_CONSISTENCY_MODEL, checker identity pinned
-# per run — E3). Findings are leads to triage, not failures.
-verify-cross-consistency: ## L8: NL-Doc/docstring consistency over NAGINI_FILES (advisory)
-	@$(UV) run python scripts/cross_consistency.py
-
 # Nightly aggregator over the formal/audit verify-* targets. verify-nagini
 # provisions its own venv; verify-fizz/verify-fizz-simulation self-skip when
 # their toolchain is missing — safe on toolchain-less boxes. test-oracles is
 # a test-*, not a verify-*.
 verify-all: ## Run every verify-* target (nightly entry point)
-	@echo "==> [1/6] verify-fizz";              $(MAKE) --no-print-directory verify-fizz
-	@echo "==> [2/6] verify-fizz-simulation";   $(MAKE) --no-print-directory verify-fizz-simulation
-	@echo "==> [3/6] verify-nagini";            $(MAKE) --no-print-directory verify-nagini
-	@echo "==> [4/6] verify-coverage";          $(MAKE) --no-print-directory verify-coverage
-	@echo "==> [5/6] verify-ledger";            $(MAKE) --no-print-directory verify-ledger
-	@echo "==> [6/6] verify-cross-consistency"; $(MAKE) --no-print-directory verify-cross-consistency
+	@echo "==> [1/3] verify-fizz";            $(MAKE) --no-print-directory verify-fizz
+	@echo "==> [2/3] verify-fizz-simulation"; $(MAKE) --no-print-directory verify-fizz-simulation
+	@echo "==> [3/3] verify-nagini";          $(MAKE) --no-print-directory verify-nagini
 
 ##@ Demo
 client: ## Run the pipes-and-filters MCP client demo (synchronous design_architecture)

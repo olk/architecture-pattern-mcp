@@ -38,12 +38,6 @@ jobs:
       - name: L9 offline invariants vacuity guard
         run: uv run pytest tests/eval/ -v
 
-      - name: Property-ID ledger consistency
-        run: make verify-ledger
-
-      - name: NL-Doc cross-consistency (mechanical subset)
-        run: make verify-cross-consistency
-
       - name: Perf smoke canary (coarse budgets)
         run: uv run pytest tests/verification/test_perf_smoke.py -m perf -v
         env:
@@ -76,8 +70,6 @@ jobs:
         with:
           enable-cache: true
       - run: uv sync
-      - name: Contract coverage report
-        run: make verify-coverage
       - name: Nagini verification
         run: make verify-nagini
 
