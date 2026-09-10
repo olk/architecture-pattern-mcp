@@ -88,9 +88,14 @@ test-unit: install ## Run unit tests with uv (tests/unit/)
 test-oracles: install ## Run executable oracles (tests/verification/): L1 canary, L2 PBT oracles, trace replay
 	$(UV) run pytest tests/verification/ -v
 
+# Hypothesis isolation: the gate re-runs the same tests under many executors;
+# a per-run database keeps the shared repo database free of foreign executors
+# (the normal suite's differing_executors health check stays meaningful).
+MUTMUT_HYPO_DIR := $(shell mktemp -d)
 test-mutations: ## L3: mutmut over Tier A/B/C + gardens (manual/nightly; ephemeral install via uv)
-	$(UV) run --with mutmut python -c "import verify.mutmut_compat as compat; compat.apply(); from mutmut.__main__ import cli; raise SystemExit(cli())" run
+	HYPOTHESIS_STORAGE_DIRECTORY=$(MUTMUT_HYPO_DIR) $(UV) run --with mutmut python -c "import verify.mutmut_compat as compat; compat.apply(); from mutmut.__main__ import cli; raise SystemExit(cli())" run
 	$(UV) run --with mutmut mutmut results
+	rm -rf $(MUTMUT_HYPO_DIR)
 
 # Fast-path aggregator: unit + oracles only. test-mutations is deliberately
 # outside — mutmut is a manual/nightly gate (ephemeral toolchain, long runtime).

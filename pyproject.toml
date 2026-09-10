@@ -199,10 +199,12 @@ markers = [
 ]
 
 [tool.deptry]
+extend_exclude = ["verify"]
 # "verify_coverage" = scripts/verify_coverage.py (NAGINI_FILES, shared by the
 # L5 coverage report and the L8 cross-consistency gate) — a repo-local module,
 # not a package dependency.
-known_first_party = ["src", "nagini_contracts", "verify_coverage"]# Treat the docs extras (sphinx toolchain) as build-time-only, not runtime deps.
+known_first_party = ["src", "nagini_contracts", "verify_coverage"]
+# Treat the docs extras (sphinx toolchain) as build-time-only, not runtime deps.
 optional_dependencies_dev_groups = ["docs"]
 
 [tool.deptry.package_module_name_map]
@@ -240,15 +242,16 @@ DEP003 = ["litellm", "workflows", "mcp"]
 # the Tier A/B/C modules via do_not_mutate — everything else is copied
 # unmutated (nagini plan §5.2 scope: the critical 5-10%, never the tree).
 source_paths = ["src/"]
-# mutmut executes pytest from mutants/ — the twins (verify/) must be present
-# there for the conformance suite's imports (copied unmutated).
-also_copy = ["verify/"]
+# mutmut executes pytest from mutants/ — the shim (verify/) and the contract
+# stub package (nagini_contracts/, imported by the verified cores) must be
+# present there (copied unmutated).
+also_copy = ["verify/", "nagini_contracts/"]
 # In-process shim: mutmut 3.7 asserts trampoline-hit module names never
 # start with "src." (an src-LAYOUT convention guard) — this repo's import
 # package IS `src`, so the stats run asserts on every legitimate hit. The
 # plugin (copied into mutants/ via also_copy) relaxes exactly that assert;
 # regular pytest runs never import it.
-pytest_add_cli_args = ["-p", "verify.mutmut_compat"]
+pytest_add_cli_args = ["-p", "verify.mutmut_compat", "--hypothesis-profile=mutmut"]
 do_not_mutate = [
     "src/agent.py",
     "src/config.py",
