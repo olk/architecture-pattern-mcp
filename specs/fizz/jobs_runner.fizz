@@ -1,0 +1,298 @@
+---
+# jobs_runner.fizz — background job runner lifecycle + cancel tool (F2+F3).
+# deadlock_detection: true
+options:
+  max_actions: 200
+  max_concurrent_actions: 2
+action_options:
+  "Runner.RunStart":
+    crash_on_yield: false
+  "Runner.RunFinish":
+    crash_on_yield: false
+---
+
+# Element→code map (ledger: specs/fizz/README.md):
+#   role Submitter         ↔ submit_architecture_design_job (src/tools/submit_architecture_design.py)
+#   role Runner            ↔ the background asyncio task: _run_job (same file)
+#   role Canceller         ↔ cancel_architecture_design (src/tools/cancel_architecture_design.py)
+#   role Store             ↔ JobsStore (src/tools/jobs.py)
+#   Runner.Run yields      ↔ the W0-1 cancel checkpoints + terminal write race
+#   Runner.fate ghost      ↔ the runner's observable triage outcome
+#   Runner.active ghost    ↔ the in-memory job_tasks map entry (done-callback pop)
+#   Canceller.ack ghost    ↔ "cancelled: true" responses (only after the guarded write)
+#   Canceller.raced ghost  ↔ _terminal_race_response: honest terminal status instead
+#
+# Scope boundary: process death (server restart orphaning RUNNING jobs) is
+# modelled in jobs_protocol.fizz as the FC-1 ownership qualifier; here the
+# process is alive — Runner.Run therefore disables crash_on_yield, because a
+# crashed asyncio task still fires its done-callback (map cleanup) before
+# the process dies, and the interesting failures are the explicit cancel
+# races, which the non-atomic Run yields expose.
+
+MAX_JOBS = 1            # model bound: one background task's full lifecycle.
+                        # Cross-job store contention is jobs_protocol's
+                        # charter (multi-client view); here the W0-1 races
+                        # of a single task against the cancel tool are what
+                        # matters — and the bound keeps the 2-concurrent
+                        # exploration in the hundreds of states (budget
+                        # principle 4/5, fizzbee plan §3.1).
+MAX_CANCELLERS = 2      # model bound — symmetric concurrent cancel requests
+MAX_STUCK = 3           # ghost stuck-timer bound: the fair StoreTick advances
+                        # a live task's RUNNING job timer; the bound keeps the
+                        # tick chain finite in the reference — the unbounded
+                        # flip is FG-19 and must violate RUN4 (first real
+                        # fizz run: an unbounded fair tick self-loops with a
+                        # live RUNNING job and fails the liveness check).
+TERMINAL = ["COMPLETED", "FAILED", "CANCELLED"]
+GUARDED = True          # models the Week-0 guarded UPDATEs (W0-1). Set to
+                        # False to reproduce the pre-Week-0 unconditional
+                        # semantics: the runner's COMPLETED write on a
+                        # CANCELLED job then violates J1 (FG-01 moved here
+                        # from jobs_protocol, where unique jids leave no
+                        # second-write path).
+
+role Store:
+    action Init:
+        self.status = {}
+        self.created = {}
+        self.updated = {}
+        self._left_terminal = {}   # ghost: J1 witness
+        self.stuck = {}            # ghost: RUN4 stuck-timer (StoreTick witness)
+        self.clock = 0
+        self.next_jid = 0
+
+    atomic func Submit(jid):
+        self.clock = self.clock + 1
+        self.status[jid] = "PENDING"
+        self.created[jid] = self.clock
+        self.updated[jid] = self.clock
+
+    # The guarded terminal write: the single source of truth every W0-1
+    # race resolves against (reject iff already terminal).
+    atomic func Trans(jid, new_status):
+        self.clock = self.clock + 1
+        old = self.status[jid]
+        if GUARDED and old in TERMINAL:
+            return
+        if old in TERMINAL:
+            self._left_terminal[jid] = True       # J1 witness
+        self.status[jid] = new_status
+        self.updated[jid] = self.clock
+
+role Submitter:
+    action Init:
+        self.submitted = 0
+
+    atomic action Submit:
+        require self.submitted < MAX_JOBS
+        jid = "j" + str(store.next_jid)
+        store.next_jid = store.next_jid + 1
+        self.submitted = self.submitted + 1
+        store.Submit(jid)
+        # the tool creates the asyncio task and registers it in job_tasks:
+        runner.active[jid] = True
+        runner.active_count = runner.active_count + 1
+        runner.env[jid] = "NONE"
+        runner.phase[jid] = "NONE"
+        store.stuck[jid] = 0
+
+role Runner:
+    action Init:
+        self.active = {}       # jid -> True while the task map holds an entry
+        self.active_count = 0
+        self.env = {}          # jid -> pipeline outcome: NONE / OK / FAIL
+        self.fate = {}         # jid -> triage outcome (RUN1 witness)
+        self.finished = {}     # jid -> True once the task body completed
+        self.phase = {}        # jid -> NONE / STARTED (RunStart's trailing chunk)
+
+    # The task body, split into non-blocking actions: a single action that
+    # waits on the environment (env-require) would occupy the runner's
+    # concurrency slot and deadlock the model — the real system runs one
+    # asyncio task per job, so each phase is its own schedulable action
+    # (found on the first real fizz run: two mid-flight Runs wedged the
+    # checker while EnvOk stayed fireable). crash_on_yield is off for both:
+    # a crashed task still runs its done-callback (map pop) before process
+    # death — see header.
+    fair action RunStart:
+        any jid in store.status.keys():
+            require runner.active[jid] == True
+            require runner.phase[jid] == "NONE"
+            # set_running is ATTEMPTED even if cancel already won the race
+            # (the real code runs the guarded UPDATE and catches the W0-1
+            # rejection) — the store guard decides, so a cancelled-before-
+            # start job still gets its done-callback cleanup.
+            require store.status[jid] != "RUNNING"
+            store.Trans(jid, "RUNNING")
+            if store.status[jid] != "RUNNING":
+                runner.fate[jid] = "race_lost_set_running"
+                runner.finish(jid)
+                return
+            runner.phase[jid] = "STARTED"
+
+    fair action RunFinish:
+        require runner.active.get("j0") == True
+        require runner.phase.get("j0") == "STARTED"
+        require store.status.get("j0") != "PENDING"
+        # checkpoint: cancelled before/after the pipeline, discard the
+        # result (W0-1 checkpoints 1 and 2 share this triage branch —
+        # the store write below is what decides the race).
+        if store.status["j0"] == "CANCELLED":
+            runner.fate["j0"] = "discard_cancel"
+            runner.finish("j0")
+            return
+        # the pipeline ran to completion (environment-settled ghost).
+        require runner.env.get("j0") != "NONE"
+        if runner.env["j0"] == "OK":
+            # terminal write wrapped in suppress(JobStateError): a
+            # rejected write is not an error — the job stays CANCELLED.
+            store.Trans("j0", "COMPLETED")
+            if store.status["j0"] == "COMPLETED":
+                runner.fate["j0"] = "stored"
+            else:
+                runner.fate["j0"] = "discard_race"
+        else:
+            store.Trans("j0", "FAILED")
+            if store.status["j0"] == "FAILED":
+                runner.fate["j0"] = "failed"
+            else:
+                runner.fate["j0"] = "discard_race"
+        runner.finish("j0")
+
+    # Done-callback: task body complete → pop the job_tasks entry. Atomic
+    # and idempotent: two concurrent RunFinish actions for the same job can
+    # both reach their trailing chunk (max_concurrent_actions=2), and the
+    # real implementation has exactly one done-callback per task — the
+    # finished-witness guard makes a repeat call a no-op (first real fizz
+    # run: the double-finish drove active_count negative and wedged Idle).
+    atomic func finish(jid):
+        if self.finished.get(jid) != True:
+            self.finished[jid] = True
+            self.active[jid] = False
+            self.active_count = self.active_count - 1
+
+    # Environment actions: the pipeline's outcome settles (OK / FAIL).
+    # Fair: while a task is live the pipeline always progresses — the
+    # FC-liveness-assumption class; load-bearing for RUN4 (FG-19).
+    atomic fair action EnvOk:
+        require runner.env.get("j0") == "NONE"
+        require runner.active.get("j0") == True
+        require runner.phase.get("j0") == "STARTED"
+        require store.status.get("j0") == "RUNNING"
+        runner.env["j0"] = "OK"
+
+    atomic fair action EnvFail:
+        require runner.env.get("j0") == "NONE"
+        require runner.active.get("j0") == True
+        require runner.phase.get("j0") == "STARTED"
+        require store.status.get("j0") == "RUNNING"
+        runner.env["j0"] = "FAIL"
+
+symmetric role Canceller:
+    action Init:
+        self.ack = []      # jids acknowledged as cancelled (only after the write)
+        self.raced = []    # jids whose cancel lost the race to a terminal write
+
+    atomic fair action Cancel:
+        # cancel tool: status already terminal → honest early response, no
+        # write, no ack (the "Job is already X" response is invisible here).
+        # Otherwise the guarded write decides: success → ack; rejection →
+        # _terminal_race_response reports the honest current status.
+        require store.status.get("j0") == "PENDING" or store.status.get("j0") == "RUNNING"
+        store.Trans("j0", "CANCELLED")
+        if store.status["j0"] == "CANCELLED":
+            self.ack.append("j0")
+        else:
+            self.raced.append("j0")
+
+action Init:
+    store = Store()
+    submitter = Submitter()
+    runner = Runner()
+    cancellers = []
+    for i in range(MAX_CANCELLERS):
+        cancellers.append(Canceller())
+
+# Ghost stuck-timer (RUN4's progress witness): a fair tick that advances
+# the timer of a live task's RUNNING job. The bound (MAX_STUCK) keeps the
+# reference cycle-free; the unbounded flip (FG-19) gives the checker an
+# infinite fair path that never leaves RUNNING and must violate RUN4.
+# Fairness assumption ledgered (FC-liveness-assumption class).
+atomic fair action StoreTick:
+    require store.status.get("j0") == "RUNNING"
+    require runner.active.get("j0") == True
+    require store.stuck.get("j0") < MAX_STUCK
+    store.stuck["j0"] = store.stuck["j0"] + 1
+
+# Terminal-state relief valve: enabled only once every task-map entry is
+# gone (the done-callback popped them all). Non-fair; pass body required.
+action Idle:
+    require runner.active_count == 0
+    pass
+
+# ---- assertions (ledger §3.4) ----
+
+always assertion J1_TerminalImmutable:
+    # terminal states immutable — the runner-level form: the W0-1 write
+    # race is the genuine second-write path, so the GUARDED A/B flip
+    # (FG-01) kills it here. jobs_protocol.fizz keeps the caller-view
+    # twin (structural there — unique jids leave one writer per job).
+    return len(store._left_terminal.keys()) == 0
+
+always assertion RUN1_FateMatchesStore:
+    # the runner's triage outcome is consistent with the final store state:
+    # stored ⇒ COMPLETED, failed ⇒ FAILED, every discard/race ⇒ CANCELLED.
+    for jid in runner.fate.keys():
+        f = runner.fate[jid]
+        s = store.status[jid]
+        if f == "stored":
+            if s != "COMPLETED":
+                return False
+        elif f == "failed":
+            if s != "FAILED":
+                return False
+        else:
+            if s != "CANCELLED":
+                return False
+    return True
+
+always assertion RUN3_TaskMapInvariant:
+    # a finished task's job_tasks entry is always popped (done-callback):
+    # no jid is both finished and active. FG-14 (drop the finish cleanup)
+    # must violate.
+    for jid in runner.finished.keys():
+        if runner.finished[jid] == True:
+            if runner.active[jid] == True:
+                return False
+    return True
+
+always eventually assertion RUN4_NoStuckRunning:
+    # every RUNNING job with a live task eventually leaves RUNNING — the
+    # runner-level FC-1. Progress witnesses: the fair EnvOk/EnvFail/
+    # RunFinish/Cancel actions (every P-false state has a continuously
+    # enabled fair exit, so a stutter-only schedule is excluded) and the
+    # cycle-free non-terminal region (guards are one-shot, the store clock
+    # is monotone). FG-19 (relief valve made fair and enabled while tasks
+    # live) must violate.
+    for jid in store.status.keys():
+        if store.status[jid] == "RUNNING":
+            if runner.active[jid] == True:
+                return False
+    return True
+
+exists assertion RUN4_Coverage:
+    # coverage witness: owned-RUNNING states were actually explored.
+    for jid in store.status.keys():
+        if store.status[jid] == "RUNNING":
+            if runner.active[jid] == True:
+                return True
+    return False
+
+always assertion C1_AckCancelEndsCancelled:
+    # an acknowledged cancel ends CANCELLED and stays CANCELLED (J1); the
+    # ack is recorded only after the guarded write landed. FG-15 (ack
+    # without the write) must violate.
+    for c in cancellers:
+        for jid in c.ack:
+            if store.status[jid] != "CANCELLED":
+                return False
+    return True

@@ -1,0 +1,139 @@
+---
+# design_loop.fizz — design-loop retry/early-stop discipline (F6b).
+deadlock_detection: true
+options:
+  max_actions: 100
+  max_concurrent_actions: 2
+---
+
+# Element→code map (ledger: specs/fizz/README.md):
+#   role Loop ↔ ArchitecturePipeline.design_loop (src/pipeline.py:1015):
+#     for attempt in 1..max_tries: cancel checkpoint → generate → evaluate →
+#     guarded best update (current_score > best_score) → early stop
+#     (current_score >= min_quality_score) → break; malformed → continue.
+#     The attempts counter itself is P-1's charter (pipeline_control.fizz);
+#     this spec covers the loop's triage decisions.
+
+MAX_TRIES = 3
+MIN_QUALITY = 10       # early-stop threshold (implementation default 100.0
+                       # disables it — the model exercises the mechanism)
+
+role Loop:
+    action Init:
+        self.attempts = 0
+        self.best_score = -1
+        self.prev_best = -1        # DL2 witness: best at the attempt start
+        self.inflight = False      # an attempt is running (scored/malformed next)
+        self.cancelled = False
+        self.outcome = "NONE"      # NONE / DONE / CANCELLED / RAISED
+        self.attempts_at_cancel = 0
+        self.early_stopped = False
+        self.raised = False
+        self.malformed = 0
+
+    atomic action StartAttempt:
+        # loop-top cancellation checkpoint + attempt bookkeeping; the
+        # attempts bound is the range(1, max_tries + 1) structure (P-1's
+        # charter at the pipeline level)
+        require self.outcome == "NONE"
+        require not self.cancelled
+        require self.attempts < MAX_TRIES
+        self.prev_best = self.best_score
+        self.attempts = self.attempts + 1
+        self.inflight = True
+
+    atomic action ScoreGood:
+        require self.inflight == True and self.outcome == "NONE"
+        if 5 > self.best_score:
+            self.best_score = 5
+        self.inflight = False
+
+    atomic action ScoreBad:
+        require self.inflight == True and self.outcome == "NONE"
+        if 2 > self.best_score:
+            self.best_score = 2
+        self.inflight = False
+
+    atomic action ScoreEarlyStop:
+        require self.inflight == True and self.outcome == "NONE"
+        self.best_score = 10       # >= MIN_QUALITY: the break fires
+        self.early_stopped = True
+        self.inflight = False
+        self.outcome = "DONE"
+
+    atomic action AttemptMalformed:
+        # MalformedArchitectureOverviewError → continue, no score update
+        require self.inflight == True and self.outcome == "NONE"
+        self.malformed = self.malformed + 1
+        self.inflight = False
+
+    atomic action Exhausted:
+        # all tries burned, a best design exists → return it
+        require self.outcome == "NONE"
+        require not self.inflight
+        require self.attempts >= MAX_TRIES
+        require self.best_score >= 0
+        self.outcome = "DONE"
+
+    atomic action RaiseNoDesign:
+        # every attempt malformed → raise last_error
+        require self.outcome == "NONE"
+        require not self.inflight
+        require self.attempts >= MAX_TRIES
+        require self.best_score < 0
+        self.raised = True
+        self.outcome = "RAISED"
+
+    atomic action ObserveCancel:
+        # asyncio.CancelledError / token check between attempts → break
+        require self.outcome == "NONE"
+        require not self.inflight
+        require not self.cancelled
+        self.cancelled = True
+        self.attempts_at_cancel = self.attempts
+
+    atomic action FinishCancel:
+        require self.cancelled == True and self.outcome == "NONE"
+        self.outcome = "CANCELLED"
+
+    action Idle:
+        require self.outcome != "NONE"
+        pass
+
+action Init:
+    loop = Loop()
+
+action Idle:
+    require loop.outcome != "NONE"
+    pass
+
+# ---- assertions (ledger §3.4) ----
+
+always assertion DL2_BestScoreMonotone:
+    # the best score never decreases: the guarded update (current >
+    # best) is the only writer (FG-28: unconditional best update must
+    # violate).
+    return loop.best_score >= loop.prev_best
+
+always assertion DL3_CancelFreezesAttempts:
+    # once cancellation is observed no further attempt starts — the
+    # loop-top checkpoint (FG-29: drop the `not cancelled` guard must
+    # violate).
+    if loop.cancelled == True:
+        return loop.attempts <= loop.attempts_at_cancel
+    return True
+
+always assertion DL4_MalformedContinues:
+    # a malformed attempt retries, never ends the loop early: a non-
+    # cancelled terminal outcome requires early-stop or exhaustion or the
+    # no-design raise (FG-30: Malformed terminating the loop must violate).
+    if loop.outcome == "DONE":
+        return loop.early_stopped or loop.attempts >= MAX_TRIES
+    return True
+
+always assertion DL5_EarlyStopThreshold:
+    # early stop only fires at or above the quality threshold
+    # (FG-31: early stop below the threshold must violate).
+    if loop.early_stopped == True:
+        return loop.best_score >= MIN_QUALITY
+    return True

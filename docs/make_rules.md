@@ -127,12 +127,16 @@ Aggregator: `test-unit` + `test-oracles`. The PR-time test entry point.
 Runs `fizz` exhaustively over every `specs/fizz/*.fizz` model (bounds per
 `fizz.yaml`). Requires the `fizz` binary (or
 `FIZZ=scripts/fizz-docker.sh`). CI-authoritative for control-flow claims
-(J-1/J-2, P-1, FP-2..FP-5, FC-1/FC-2). fizz v0.5.3 exits 0 even on
-invariant failure (only panics exit non-zero), so the gate captures each
-run's output and requires the `PASSED: Model checker completed
-successfully` verdict line in addition to a zero exit — `|| exit 1` alone
-would be vacuous. Verified non-vacuous: the FG-01 `GUARDED=False` flip
-fails the gate (first provisioning run, 2026-09-10).
+(J-1/J-2/J-3/J-4, P-1, FP-2..FP-5, FC-1/FC-2, RUN-1/RUN-3/RUN-4/C-1,
+E5F-1..E5F-4, TEI-1/RET-1, FUS-1..FUS-3, DL-2..DL-5 — see
+`specs/fizz/README.md`). fizz v0.5.3 exits 0 even on invariant failure
+(only panics exit non-zero), so the gate captures each run's output and
+requires the `PASSED: Model checker completed successfully` verdict line
+in addition to a zero exit — `|| exit 1` alone would be vacuous. Verified
+non-vacuous: the FG-01 `GUARDED=False` flip fails the gate (first
+provisioning run, 2026-09-10; the flip's kill authority now lives in
+`jobs_runner.fizz`, where the W0-1 terminal-write race is the genuine
+second-write path — re-validated 2026-09-10).
 
 ### `verify-fizz-simulation` — L4
 Seeded parallel FizzBee simulation (`fizz -x --seed $(date +%s) --parallel

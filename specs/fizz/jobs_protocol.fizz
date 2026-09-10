@@ -12,9 +12,12 @@ action_options:
 #   role JobClient          ↔ callers of submit_job/get_status/cancel_job (src/tools/jobs.py)
 #   role JobStore           ↔ JobsStore transition setters (set_running/set_completed/...)
 #   atomic action Submit    ↔ jobs.create_job: INSERT (id, pending)
+#   atomic action StartRun  ↔ jobs.set_running: guarded UPDATE (WHERE status = 'PENDING')
 #   atomic action Trans     ↔ guarded UPDATEs (W0-1: WHERE id = ? AND status IN (...))
 #   always assertion J1     ↔ nagini twin J-1 (verify/twin/jobs_state_twin.py)
 #   always assertion J3     ↔ oracle J-3 (tests/verification/test_jobs_properties.py)
+#   always eventually FC1   ↔ liveness: an owned RUNNING job never persists forever
+#   always assertion FC2    ↔ cancel ack honesty (ack only via the guarded write)
 #
 # JobStore models the SQLite store: durable, no mid-statement crash —
 # structural via atomic funcs (yield-free, so no crash_on_yield config is
@@ -41,6 +44,12 @@ role JobStore:
         self.updated = {}      # logical update clock
         self._left_terminal = {}   # ghost: jid -> True once it left a terminal state
         self.clock = 0
+        self.next_jid = 0      # global jid source: the implementation's job_ids
+                               # are caller-supplied UUIDs — globally unique.
+                               # Per-client counters would collide across
+                               # symmetric clients (both mint "j0") and
+                               # violate FC2's ack bookkeeping; found on the
+                               # first real fizz run of the FC-2 assertion.
 
     # Mirrors set_running/set_completed/set_failed/set_cancelled in
     # src/tools/jobs.py — guarded since Week 0; GUARDED=False recovers the
@@ -65,25 +74,40 @@ symmetric role JobClient:
     action Init:
         self.inflight = None      # ephemeral: lost on crash
         self.submitted = 0
+        self.runs = 0             # ghost: number of set_running calls issued
+        self.ack_cancelled = []   # ghost: jids this client acknowledged as cancelled
 
     atomic action Submit:
-        require self.submitted < 2
-        jid = "j" + str(self.submitted)
+        require self.submitted < 1
+        jid = "j" + str(store.next_jid)
+        store.next_jid = store.next_jid + 1
         self.submitted = self.submitted + 1
         store.Submit(jid)
         self.inflight = jid
 
-    atomic action Cancel:
+    atomic action StartRun:
+        # models set_running: the guarded UPDATE only moves PENDING -> RUNNING.
+        # The PENDING require mirrors the SQL guard; dropping it lets a client
+        # re-RUN an already RUNNING job (FG-14) — the re-run loop class FC1
+        # exists to exclude.
+        require self.inflight != None
+        require store.status[self.inflight] == "PENDING"
+        store.Trans(self.inflight, "RUNNING")
+        self.runs = self.runs + 1
+
+    atomic fair action Cancel:
         require self.inflight != None
         store.Trans(self.inflight, "CANCELLED")   # models cancel_job's guarded UPDATE
+        if store.status[self.inflight] == "CANCELLED":
+            self.ack_cancelled.append(self.inflight)  # FC2 witness: honest ack
         self.inflight = None
 
-    atomic action Complete:
+    atomic fair action Complete:
         require self.inflight != None
         store.Trans(self.inflight, "COMPLETED")   # models set_completed's UPDATE
         self.inflight = None
 
-    atomic action Fail:
+    atomic fair action Fail:
         require self.inflight != None
         store.Trans(self.inflight, "FAILED")      # models set_failed's UPDATE
         self.inflight = None
@@ -91,11 +115,14 @@ symmetric role JobClient:
     # Terminal-state relief valve (fizzbee MODELING_GUIDE NoOp idiom for
     # bounded models): disabled while this client can still act, so
     # mid-protocol wedges still report as deadlocks; enabled only once the
-    # submission budget is exhausted. Non-fair on purpose — no fairness
-    # assumption to justify (review-checklist §3.7); `pass` body required,
-    # body-less actions do not register as schedulable transitions.
+    # submission budget is exhausted AND no job is still in flight — the
+    # inflight==None condition is load-bearing for FC1: with it dropped
+    # (FG-14), the relief valve idles while an owned RUNNING job exists and
+    # FC1 fires. Non-fair on purpose — no fairness assumption to justify
+    # (review-checklist §3.7); `pass` body required, body-less actions do
+    # not register as schedulable transitions.
     action Idle:
-        require self.submitted >= 2
+        require self.submitted >= 1 and self.inflight == None
         pass
 
 action Init:
@@ -128,3 +155,39 @@ always assertion J1_TerminalImmutable:
     # a terminal state. GUARDED=False must produce a violation trace (the
     # historical pre-Week-0 bug); GUARDED=True must hold.
     return len(store._left_terminal.keys()) == 0
+
+always eventually assertion FC1_NoStuckRunning:
+    # FC-1: every RUNNING job of an alive client eventually leaves RUNNING.
+    # Ownership witness: the client's inflight pointer — a crashed client
+    # loses it (ephemeral), so orphaned RUNNING jobs are excluded ("of an
+    # alive client"). Under the checker's every-infinite-path liveness
+    # semantics this is the graph form: no infinite schedule keeps an owned
+    # RUNNING job alive; the only self-loops are the terminal relief valves,
+    # which are guarded so they never idle while a client can still act.
+    for jid in store.status.keys():
+        if store.status[jid] == "RUNNING":
+            for c in clients:
+                if c.inflight == jid:
+                    return False
+    return True
+
+exists assertion FC1_Coverage:
+    # coverage witness: the checker did explore owned-RUNNING states — the
+    # FC-1 predicate is not vacuously true because RUNNING is unreachable.
+    for jid in store.status.keys():
+        if store.status[jid] == "RUNNING":
+            for c in clients:
+                if c.inflight == jid:
+                    return True
+    return False
+
+always assertion FC2_AckCancelEndsCancelled:
+    # FC-2: an acknowledged cancel ends CANCELLED or was already terminal.
+    # The client records an ack only when the guarded write landed; J1 then
+    # keeps the job CANCELLED forever. FG-15 (Cancel acking without the
+    # store write) must violate.
+    for c in clients:
+        for jid in c.ack_cancelled:
+            if store.status[jid] != "CANCELLED":
+                return False
+    return True

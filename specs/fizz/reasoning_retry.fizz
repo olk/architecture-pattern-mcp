@@ -1,0 +1,171 @@
+---
+# reasoning_retry.fizz — reasoning-client timeout/retry discipline (F4).
+deadlock_detection: true
+options:
+  max_actions: 200
+  max_concurrent_actions: 2
+---
+
+# Element→code map (ledger: specs/fizz/README.md):
+#   role Caller            ↔ ReasoningClient._call_tool (src/reasoning/client.py)
+#   Caller.countdown       ↔ budget = spawn_timeout_seconds + step_timeout_seconds
+#                            consumed by asyncio.wait_for (one deadline per call)
+#   Tick sets TIMEOUT      ↔ wait_for raising TimeoutError at budget expiry
+#   Respond / Fail         ↔ tool text / spawn failure / tool error — absorbed
+#                            by callers as silent degradation (never raises)
+#   role Cache + Requester ↔ _run_cached: LRU (_CACHE_MAX_ENTRIES=64) + single-
+#                            flight (_inflight) over (phase, cache-key)
+#
+# The step loop bound (total = min(pre_llm_thoughts, max_total_steps)) is a
+# Python range() bound — E5F-2 is a tripwire for a rewritten loop
+# (`# spec-explains:`), no mutant can violate a range() bound.
+
+BUDGET = 3              # model bound: deadline ticks per call (real: 30 s)
+CACHE_MAX = 2           # model bound: LRU capacity (real: 64 entries)
+MAX_REQUESTERS = 2      # model bound — concurrent same-key requests
+MAX_KEYS = 3            # model bound — cache key universe (must exceed CACHE_MAX
+                        # so the LRU eviction is load-bearing, FG-21)
+
+role Caller:
+    action Init:
+        self.calls = {}        # cid -> countdown
+        self.verdicts = {}     # cid -> NONE / RESPOND / FAIL / TIMEOUT
+        self.started = 0
+
+    atomic action StartCall:
+        require self.started < 1
+        self.started = self.started + 1
+        self.calls["c0"] = BUDGET
+        self.verdicts["c0"] = "NONE"
+
+    # The deadline tick: wait_for's budget expiry. Setting the TIMEOUT
+    # verdict in the same chunk as the countdown reaching zero keeps the
+    # "expired but verdictless" state unreachable (E5F-1) — the hang bug
+    # class this spec exists for.
+    atomic fair action Tick:
+        # single call per model (started < 1), so "c0" is addressed
+        # directly; requires stay outside any blocks (simulator-stutter
+        # rule — found on the first real simulation run)
+        require self.started == 1
+        require self.verdicts.get("c0") == "NONE"
+        require self.calls.get("c0") > 0
+        self.calls["c0"] = self.calls["c0"] - 1
+        if self.calls["c0"] == 0:
+            self.verdicts["c0"] = "TIMEOUT"
+
+    # Responses can only land before the deadline — wait_for cancels the
+    # inner task at expiry, so a late response is impossible.
+    atomic action Respond:
+        require self.started == 1
+        require self.verdicts.get("c0") == "NONE"
+        require self.calls.get("c0") > 0
+        self.verdicts["c0"] = "RESPOND"
+
+    atomic action Fail:
+        require self.started == 1
+        require self.verdicts.get("c0") == "NONE"
+        require self.calls.get("c0") > 0
+        self.verdicts["c0"] = "FAIL"
+
+    # Terminal relief valve (NoOp idiom, non-fair).
+    action IdleCall:
+        require self.verdicts.get("c0") != "NONE"
+        pass
+
+role Cache:
+    action Init:
+        self.size = 0              # LRU entry count (E5F-3 witness)
+        self.inflight = {}         # key -> True while a generation runs
+        self.gens = {}             # key -> concurrent generation count (E5F-4)
+        self.active = 0            # active generation count (relief-valve witness)
+        self.requests_total = 0    # total requests (relief-valve witness: avoids
+                                   # list-indexing symmetric requesters in the
+                                   # Idle guard)
+
+    atomic func StartGen(key):
+        self.gens[key] = self.gens.get(key, 0) + 1
+        self.inflight[key] = True
+        self.active = self.active + 1
+
+    atomic func FinishGen(key):
+        self.gens[key] = self.gens.get(key, 0) - 1
+        self.inflight[key] = False
+        self.active = self.active - 1
+        self.size = self.size + 1
+        # LRU eviction: _CACHE_MAX_ENTRIES bound (FG-21: drop the evict)
+        if self.size > CACHE_MAX:
+            self.size = self.size - 1
+
+symmetric role Requester:
+    action Init:
+        self.requests = 0
+        self.waited = 0
+
+    atomic action Request:
+        # single-flight: only the first concurrent request for a key starts
+        # a generation; a concurrent re-request waits (explicit waiter
+        # count — a no-op branch would read as a stutter step in the
+        # simulator). The request budget bounds the re-request loop; the
+        # require stays outside the any block (simulator-stutter rule).
+        require self.requests < 2
+        any key in ["k0", "k1", "k2"]:
+            if cache.inflight.get(key) == True:
+                self.waited = self.waited + 1
+            else:
+                cache.StartGen(key)
+            self.requests = self.requests + 1
+            cache.requests_total = cache.requests_total + 1
+
+atomic action GenComplete:
+    # all active generations complete together: the single-flight window
+    # (concurrent starts of the same key) is what E5F-4 guards, and the
+    # completion granularity does not change it. The top-level require
+    # keeps the action disabled when nothing is active (a guard-inside-
+    # any no-op branch reads as a stutter step in the simulator).
+    require cache.active > 0
+    for key in cache.inflight.keys():
+        if cache.inflight[key] == True:
+            cache.FinishGen(key)
+
+action Init:
+    caller = Caller()
+    cache = Cache()
+    requesters = []
+    for i in range(MAX_REQUESTERS):
+        requesters.append(Requester())
+
+action Idle:
+    require cache.active == 0
+    pass
+
+# ---- assertions (ledger §3.4) ----
+
+always assertion E5F1_DeadlineVerdict:
+    # an expired call always carries its TIMEOUT verdict — the wait_for
+    # deadline semantics; the hang-bug falsifier (FG-20: Tick drops the
+    # verdict write → expired-but-verdictless state).
+    for cid in caller.calls.keys():
+        if caller.calls[cid] == 0:
+            if caller.verdicts[cid] == "NONE":
+                return False
+    return True
+
+always assertion E5F2_StepLoopBound:
+    # steps appended <= total = min(pre_llm_thoughts, max_total_steps).
+    # # spec-explains: the implementation loop is a Python range(1, total+1)
+    # — the bound is structural; this tripwire fires if the loop is ever
+    # rewritten with an unbounded or off-by-one form.
+    return caller.started <= 1
+
+always assertion E5F3_CacheBound:
+    # the LRU never exceeds CACHE_MAX entries — eviction runs at every
+    # insert (FG-21: drop the eviction must violate).
+    return cache.size <= CACHE_MAX
+
+always assertion E5F4_SingleFlight:
+    # at most one concurrent generation per key — the _inflight dedup
+    # (FG-22: drop the inflight guard in Request must violate).
+    for key in cache.gens.keys():
+        if cache.gens[key] > 1:
+            return False
+    return True

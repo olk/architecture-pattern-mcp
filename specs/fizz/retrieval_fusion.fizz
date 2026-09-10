@@ -1,0 +1,82 @@
+---
+# retrieval_fusion.fizz — retrieval resolution and fallback decision (F6a).
+deadlock_detection: true
+options:
+  max_actions: 100
+  max_concurrent_actions: 2
+---
+
+# Element→code map (ledger: specs/fizz/README.md):
+#   role Retriever ↔ HybridPatternRetriever.retrieve's resolution tail
+#     (src/patterns/retriever.py): survivors → filter_by_domain(slug) →
+#     resolved; empty resolved set → _fallback; best < _min_fusion_score →
+#     _fallback; fallback carries the is_fallback sentinel so the analyze
+#     phase can filter it out of the scored-candidate set (the sentinel is
+#     what keeps a fallback from outranking a real match).
+
+role Retriever:
+    action Init:
+        self.outcome = "NONE"      # NONE / REAL / FALLBACK
+        self.resolved = 0          # ghost: resolved pattern count
+        self.floor_passed = False  # ghost: best >= min_fusion_score
+        self.tagged = False        # ghost: is_fallback sentinel present
+
+    atomic action ResolveFound:
+        # survivors resolved to >= 1 pattern with a score above the floor
+        require self.outcome == "NONE"
+        self.resolved = 1
+        self.floor_passed = True
+        self.outcome = "REAL"
+
+    atomic action ResolveNone:
+        # survivors resolved to zero patterns → fallback (tagged)
+        require self.outcome == "NONE"
+        self.resolved = 0
+        self.tagged = True
+        self.outcome = "FALLBACK"
+
+    atomic action FloorMiss:
+        # best score below the relevance floor → fallback (tagged)
+        require self.outcome == "NONE"
+        self.resolved = 1
+        self.floor_passed = False
+        self.tagged = True
+        self.outcome = "FALLBACK"
+
+    action Idle:
+        require self.outcome != "NONE"
+        pass
+
+action Init:
+    retriever = Retriever()
+
+action Idle:
+    require retriever.outcome != "NONE"
+    pass
+
+# ---- assertions (ledger §3.4) ----
+
+always assertion FUS1_RealHasPatterns:
+    # a REAL outcome always carries at least one resolved pattern — an
+    # empty recall set must fall back, never masquerade as a match
+    # (FG-25: ResolveNone producing REAL must violate).
+    if retriever.outcome == "REAL":
+        return retriever.resolved >= 1
+    return True
+
+always assertion FUS2_RealPassedFloor:
+    # a REAL outcome always passed the min_fusion_score gate — the gate
+    # fires on degenerate recall or an operator-set floor (FG-26: dropping
+    # the gate must violate).
+    if retriever.outcome == "REAL":
+        return retriever.floor_passed == True
+    return True
+
+always assertion FUS3_FallbackTagged:
+    # every fallback carries the is_fallback sentinel so the analyze phase
+    # can exclude it from the scored set — the sentinel is what keeps a
+    # fallback from outranking a real match (FG-27: untagged fallback must
+    # violate).
+    if retriever.outcome == "FALLBACK":
+        return retriever.tagged == True
+    return True

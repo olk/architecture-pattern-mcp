@@ -22,6 +22,10 @@ action_options:
 MAX_ATTEMPTS = 3        # model bound == protocol limit (design_loop max_tries)
 STAGES = ["ANALYZE", "GENERATE", "EVALUATE", "REFINE"]
 TERMINAL_OUTCOMES = ["COMPLETED", "FAILED", "CANCELLED"]
+MAX_TICKS = 3           # model bound on the retry scheduler's idle ticks; the
+                        # bound keeps the non-terminal region cycle-free so
+                        # FP5's liveness check is sound — an unbounded fair
+                        # tick would self-loop with outcome == None (FG-17).
 
 role Pipeline:
     action Init:
@@ -30,6 +34,8 @@ role Pipeline:
         self.attempts = 0
         self.cancelled = False
         self.outcome = None
+        self.ticks = 0
+        self.stage_at_cancel = 0   # FP2 witness: stage index when cancel was observed
         self._order_violation = False   # ghost: set if a stage runs out of order
 
     atomic func Advance():
@@ -54,6 +60,7 @@ role Pipeline:
 
     atomic func Cancelled():
         self.cancelled = True
+        self.stage_at_cancel = self.stage_idx
 
     atomic func Finish():
         require self.stage_idx == len(STAGES)
@@ -71,6 +78,11 @@ role Pipeline:
         require not self.started
         self.started = True
 
+    atomic func Tick():
+        require self.outcome == None
+        require self.ticks < MAX_TICKS
+        self.ticks = self.ticks + 1
+
     # Terminal-state relief valve (fizzbee MODELING_GUIDE NoOp idiom):
     # enabled only once this run has a terminal outcome, so the bounded
     # model's legitimate end states are not flagged as deadlocks while
@@ -83,28 +95,37 @@ role Llm:
     action Init:
         pass
 
-atomic action LlmCall:
+atomic fair action LlmCall:
     # the environment: a call responds, fails, or times out — oneof is the
-    # abstraction of the unreliable LLM environment (implicit fault injection)
+    # abstraction of the unreliable LLM environment (implicit fault injection).
+    # Fair: the design loop always schedules the next LLM call while the run
+    # is live (progress assumption, FC-liveness-assumption class) — load-
+    # bearing for FP5: the only other fair action (RetryTick) is bounded.
     require any([p.outcome == None for p in pipelines])
     oneof:
         pipeline.Advance()
         pipeline.FailAttempt()
 
-fair action RetryTick:
+atomic fair action RetryTick:
     # fairness: the design loop keeps scheduling retries — progress assumption,
     # ledgered as FC-liveness-assumption in specs/fizz/README.md
     # (`pass` body required: body-less actions do not register as
-    # schedulable transitions — found on the first real fizz run, v0.5.3)
-    require any([p.outcome == None for p in pipelines])
-    pass
+    # schedulable transitions — found on the first real fizz run, v0.5.3).
+    # The tick is bounded (MAX_TICKS) so the non-terminal region stays
+    # cycle-free: an unbounded fair tick self-loops with outcome == None
+    # and violates FP5 (FG-17).
+    pipeline.Tick()
 
 atomic action UserCancel:
     require any([p.outcome == None for p in pipelines])
     pipeline.Cancelled()
     pipeline.CancelRun()
 
-atomic action RunFinish:
+atomic fair action RunFinish:
+    # fair: the pipeline always eventually commits its terminal outcome
+    # once it is reachable (FP5 progress assumption, FC-liveness-assumption
+    # class; dropping the fairness lets a stutter-only behaviour keep
+    # outcome == None forever — see the FP5 garden row).
     require any([p.outcome == None for p in pipelines])
     oneof:
         pipeline.Finish()
@@ -123,9 +144,12 @@ always assertion P1_AttemptBound:
     return pipeline.attempts >= 0 and pipeline.attempts <= MAX_ATTEMPTS
 
 always assertion FP2_CancelStopsPipeline:
-    # FP-2: no stage advance after cancellation was observed
+    # FP-2: no stage advance after cancellation was observed — the ghost
+    # stage_at_cancel is the witness; in the reference UserCancel sets the
+    # flag and the terminal outcome atomically, so the conditional fires
+    # only under mutation (FG-07: a cancel that leaves the run alive).
     if pipeline.cancelled and pipeline.outcome == None:
-        return pipeline.stage_idx <= len(STAGES)
+        return pipeline.stage_idx <= pipeline.stage_at_cancel
     return True
 
 always assertion FP3_StageOrder:
@@ -135,3 +159,32 @@ always assertion FP3_StageOrder:
 always assertion FP4_TotalOutcome:
     # FP-4: every run ends in exactly one terminal outcome
     return pipeline.outcome in TERMINAL_OUTCOMES or pipeline.outcome == None
+
+always assertion FP6_NoPrematureFailure:
+    # FP-6: a run only ends FAILED after exhausting its attempts — the
+    # bound is the only path to FAILED (FG-09: dropping the FailRun guard
+    # must violate).
+    if pipeline.outcome == "FAILED":
+        return pipeline.attempts >= MAX_ATTEMPTS
+    return True
+
+always assertion FP7_NoPrematureCompletion:
+    # FP-7: a run only ends COMPLETED after all stages ran — the stage
+    # count is the only path to COMPLETED (FG-10: dropping the Finish
+    # guard must violate).
+    if pipeline.outcome == "COMPLETED":
+        return pipeline.stage_idx >= len(STAGES)
+    return True
+
+always eventually assertion FP5_EventualOutcome:
+    # FP-5: every run eventually reaches a terminal outcome. The progress
+    # witnesses are the fair LlmCall/RunFinish actions and the bounded
+    # RetryTick (MAX_TICKS): the non-terminal region has no self-loops, so
+    # no infinite schedule can keep outcome == None. FG-17 (unbounded tick)
+    # must violate.
+    return pipeline.outcome != None
+
+exists assertion FP5_Coverage:
+    # coverage witness: the checker did explore non-terminal states — FP-5
+    # is not vacuously true because the pipeline never leaves Init.
+    return pipeline.outcome == None

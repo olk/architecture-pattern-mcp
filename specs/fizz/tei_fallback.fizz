@@ -1,0 +1,102 @@
+---
+# tei_fallback.fizz — TEI reranker verdict discipline (F5).
+deadlock_detection: true
+options:
+  max_actions: 100
+  max_concurrent_actions: 2
+---
+
+# Element→code map (ledger: specs/fizz/README.md):
+#   role Reranker          ↔ SafeTEIReranker._call_api / _safe_tei_rerank_call
+#                            (src/patterns/safe_tei_rerank.py): HTTP status >=
+#                            400 → RuntimeError; non-list body → RuntimeError;
+#                            else the list result. Errors are distinguishable
+#                            (never AssertionError, never a silent wrong shape).
+#   role Retriever         ↔ HybridPatternRetriever.retrieve's rerank block
+#                            (src/patterns/retriever.py): reranking only runs
+#                            for pools > 1; a sidecar error PROPAGATES — there
+#                            is no partial-result fallback at this layer.
+
+role Reranker:
+    action Init:
+        self.verdict = "NONE"     # NONE / OK / HTTP_ERROR / SHAPE_ERROR
+        self.result = False       # ghost: a result was produced
+
+    atomic action OkCall:
+        require self.verdict == "NONE"
+        self.verdict = "OK"
+        self.result = True        # only the OK verdict carries the list body
+
+    atomic action HttpErr:
+        require self.verdict == "NONE"
+        self.verdict = "HTTP_ERROR"
+
+    atomic action ShapeErr:
+        require self.verdict == "NONE"
+        self.verdict = "SHAPE_ERROR"
+
+role Retriever:
+    action Init:
+        self.fused = "NONE"       # NONE / EMPTY / ONE / MANY
+        self.outcome = "NONE"     # NONE / REAL / FALLBACK / FAILED
+        self.rerank_needed = False
+
+    atomic action RecallEmpty:
+        # fused stage returned nothing → _fallback(user_domain)
+        require self.outcome == "NONE" and self.fused == "NONE"
+        self.fused = "EMPTY"
+        self.outcome = "FALLBACK"
+
+    atomic action RecallOne:
+        # a single candidate skips reranking entirely (len <= 1)
+        require self.outcome == "NONE" and self.fused == "NONE"
+        self.fused = "ONE"
+        self.outcome = "REAL"
+
+    atomic action RecallMany:
+        require self.outcome == "NONE" and self.fused == "NONE"
+        self.fused = "MANY"
+        self.rerank_needed = True
+
+    atomic action RerankOk:
+        require self.rerank_needed == True and self.outcome == "NONE"
+        require reranker.verdict == "OK"
+        self.outcome = "REAL"
+
+    atomic action RerankErr:
+        # the sidecar RuntimeError propagates — no outcome is produced,
+        # never a partial/un-reranked one (the bug class FG-24 plants).
+        require self.rerank_needed == True and self.outcome == "NONE"
+        require reranker.verdict == "HTTP_ERROR" or reranker.verdict == "SHAPE_ERROR"
+        self.outcome = "FAILED"
+
+    action Idle:
+        require self.outcome != "NONE"
+        pass
+
+action Init:
+    reranker = Reranker()
+    retriever = Retriever()
+
+action Idle:
+    require retriever.outcome != "NONE"
+    pass
+
+# ---- assertions (ledger §3.4) ----
+
+always assertion TEI1_ResultOnlyOnOk:
+    # a result body exists only for the OK verdict — errors are pure
+    # signals, never a wrong-shaped payload (FG-23: HTTP_ERROR also
+    # producing a result must violate).
+    if reranker.result == True:
+        return reranker.verdict == "OK"
+    return True
+
+always assertion RET1_NoPartialOnRerankError:
+    # a rerank error propagates: the retrieval produces NO outcome — the
+    # un-reranked candidate pool is never returned as a partial result
+    # (FG-24: RerankErr producing a REAL outcome must violate).
+    if retriever.outcome == "REAL":
+        if retriever.fused == "MANY":
+            return reranker.verdict == "OK"
+    return True

@@ -35,7 +35,7 @@ add: cheap layers (types, unit tests) run always; expensive layers
 | L1b | Hypothesis (payload strategies) | MCP tool-call boundary robustness: malformed/nested/oversized payloads — structured errors only, no tracebacks | collected by `make test-oracles` (advisory → blocking Phase 1) | harness active, generators expanding |
 | L2 | Hypothesis | input-space properties: job-lifecycle interleavings vs shadow automaton (J-1..J-4), LLM-boundary timeout/retry discipline (E5), normalization idempotence/dedup (N-1..N-4) | `make test-oracles` | active |
 | L3 | mutmut + planted-bug gardens | tests-the-tests: tautological oracles, vacuous contracts/assertions; the garden is the vacuity authority | `make test-mutations` (manual/nightly) | garden active; mutmut nightly |
-| L4 | FizzBee (`.fizz` models) | **all interleavings up to bounds**: races, crash windows, guard gaps, deadlock freedom, fault injection; protocol view of job lifecycle + pipeline control | `make verify-fizz` (CI-authoritative) | artifact-complete; tool-gated |
+| L4 | FizzBee (`.fizz` models) | **all interleavings up to bounds**: races, crash windows, guard gaps, deadlock freedom, fault injection; 7 models over the job protocol, the background-task lifecycle + cancel tool, the pipeline stage machine, design-loop triage, reasoning-client deadline/retry/cache, TEI rerank verdicts, retrieval resolution | `make verify-fizz` (CI-authoritative) | active (7 specs, 31 garden mutants) |
 | L5 | Nagini (Viper/Z3) | **active** — the pure decision cores (text_validation_core, design_normalization_core) carry explicit Requires/Ensures/Invariant contracts and verify with the Nagini CLI (`make verify-nagini`, dedicated `.venv-nagini` venv) and the MCP server (`nagini_verify_file`); Unicode facts and Pydantic object graphs are trusted adapter precomputations | `make verify-nagini` / `make verify-coverage` | active |
 | L6 | deterministic simulation (native now; simloom/frontrun on provisioning) | real asyncio schedules of the **real implementation**: bounded, seeded, replayable proof of J-1/J-2 under all race schedules | `tests/verification/test_jobs_dst.py` (always on) | active (native), proven |
 | L7 | deptry, uv.lock pinning, pip-audit, import-inventory diff | supply chain: hallucinated/unused/vulnerable deps; slopsquatting defence (new package names need human decision) | `make check-depcheck`, `make verify-import-inventory` | active |
@@ -94,15 +94,35 @@ implicit fault injection (crash at yield points, message loss) — the
 protocol-level view no other layer can produce. Artifacts:
 
 - `specs/fizz/jobs_protocol.fizz` — job store (durable, atomic guarded
-  transitions) × symmetric clients (crash-on-yield); the `GUARDED` constant is
-  the F0 A/B flip: `False` reproduces the historical J-1 violation trace,
-  `True` (current implementation) must hold.
+  transitions) × symmetric clients (crash-on-yield); the `GUARDED` constant
+  is the F0 A/B flip: `False` reproduces the historical J-1 violation
+  trace, `True` (current implementation) must hold. Also carries the two
+  liveness rows: FC-1 (every RUNNING job of an alive client eventually
+  leaves RUNNING) and FC-2 (an acknowledged cancel ends CANCELLED).
+- `specs/fizz/jobs_runner.fizz` — the background task lifecycle
+  (`_run_job`) and the cancel tool against the store: W0-1 checkpoints,
+  the terminal-write race, the done-callback task-map cleanup (RUN-1/3/4,
+  C-1); J-1's kill authority lives here (the terminal-write race is the
+  genuine second-write path).
 - `specs/fizz/pipeline_control.fizz` — pipeline stage machine
   (ANALYZE→GENERATE→EVALUATE→REFINE, attempts ≤ 3) with an unreliable LLM
-  environment (`oneof` respond/fail) and a fair retry tick.
-- `specs/fizz/README.md` — the property-ID ledger coupling every assertion to
-  its twin contract, Hypothesis oracle, and conformance test, plus the
-  12-mutant spec garden (FG-01..FG-12) and run-stats table.
+  environment (`oneof` respond/fail) and a bounded fair retry tick;
+  FP-2..FP-7 including the FP-5 liveness row (every run eventually ends).
+- `specs/fizz/design_loop.fizz` — `design_loop` triage decisions: guarded
+  best-score update, early stop, cancel checkpoint, malformed-continue
+  (DL-2..DL-5).
+- `specs/fizz/reasoning_retry.fizz` — the reasoning client's `wait_for`
+  deadline (E5F-1/2) and the trace cache's LRU + single-flight discipline
+  (E5F-3/4).
+- `specs/fizz/tei_fallback.fizz` — TEI reranker verdict discipline
+  (TEI-1) and the no-partial-result-on-rerank-error rule (RET-1).
+- `specs/fizz/retrieval_fusion.fizz` — the retrieval resolution tail:
+  real outcomes carry patterns and passed the floor (FUS-1/2); fallbacks
+  are tagged (FUS-3).
+- `specs/fizz/README.md` — the property-ID ledger coupling every assertion
+  to its twin contract, Hypothesis oracle, and conformance test, plus the
+  spec garden (FG-01..FG-31, each re-validated on the toolchain
+  2026-09-10) and run-stats table.
 
 Frozen counterexamples are replayed against the real store in
 `tests/verification/test_fizz_traces.py`, independent of tool availability.
@@ -231,7 +251,11 @@ One ID per property across all layers (drift is reviewable 1:1 via the
 | `J-3` | `created_at <= updated_at` always | L2, L4, L5 |
 | `J-4` | one running row per job_id | L2, L4, L5 |
 | `P-1` | pipeline attempt loop bounded (≤ 3) | L4, L5 |
-| `FP-2..FP-5`, `FC-1`, `FC-2` | pipeline/order/liveness (FizzBee-only) | L4 |
+| `FP-2..FP-7`, `FC-1`, `FC-2` | pipeline/order/liveness (FizzBee-only) | L4 |
+| `RUN-1`, `RUN-3`, `RUN-4`, `C-1` | background-task lifecycle + cancel-tool triage (FizzBee-only) | L4 |
+| `E5F-1..E5F-4` | reasoning-client deadline/retry/cache discipline (FizzBee view of E5) | L4 |
+| `TEI-1`, `RET-1`, `FUS-1..FUS-3` | reranker verdict + retrieval resolution/fallback | L4 |
+| `DL-2..DL-5` | design-loop triage decisions | L4 |
 | `N-1..N-4` | normalization idempotence + dedup | L2, L5 |
 | `E5` | LLM-boundary timeout/retry discipline | L2 |
 | `INV-1..INV-7` | LLM-output structural invariants | L9 |
