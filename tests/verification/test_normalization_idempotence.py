@@ -20,9 +20,9 @@
 # SOFTWARE.
 
 """
-L2 Hypothesis oracle pinning the design-normalization adapter boundary
-(nagini-verification-plan.md §3.4/§3.8: `model_copy` semantics are pinned by
-executable property at the adapter, while the pure core lives next door).
+L2 Hypothesis oracle pinning the design-normalization decision boundary
+(formal_verification.md §4.1: `model_copy` semantics are pinned by
+executable property at the adapter).
 
 Properties (Tier A, formal_verification.md §4.1):
   N-1  idempotence: denormalize(denormalize(d)) == denormalize(d)

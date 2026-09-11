@@ -16,7 +16,6 @@
 	check-lint check-static-typing check-deadcode check-depcheck check-all \
 	test-unit test-oracles test-mutations test-all \
 	verify-fizz verify-fizz-simulation \
-	verify-nagini \
 	verify-ledger verify-cross-consistency verify-all \
 	client docker-build docker-build-tei \
 	docker-build-all docker-publish docker-publish-tei \
@@ -106,57 +105,36 @@ test-all: ## Run the fast test gates (PR-time; test-mutations is nightly-only)
 # fizz v0.5.3 exits 0 even on invariant failure (only panics exit non-zero),
 # so `|| exit 1` alone is a vacuous gate — every run must also print the
 # PASSED line. Both conditions are checked per spec.
+#
+# Isolation: each spec runs through scripts/fizz-check.sh, which copies the
+# spec directory into a private temp dir (compiled .json ASTs and out/ graphs
+# are written there and discarded), so concurrent gate runs can never clobber
+# each other's compiled artifacts and an aborted run can never leave stale
+# state behind.
 FIZZ ?= fizz
+FIZZ_CHECK := scripts/fizz-check.sh
 SPEC_DIR := verify/fizz
-FIZZ_PASS := ^PASSED: Model checker completed successfully
 
 verify-fizz: ## L4: exhaustive FizzBee model checks over verify/fizz/
 	@if ! command -v $(FIZZ) >/dev/null 2>&1; then \
 		echo "fizz binary not found: brew install fizzbee, or set FIZZ=scripts/fizz-docker.sh"; exit 1; \
-	else \
-		set -e; for spec in $(SPEC_DIR)/*.fizz; do \
-			echo ">> $$(date +%H:%M:%S) exhaustive check: $$spec"; \
-			out=`$(FIZZ) "$$spec" 2>&1`; st=$$?; \
-			printf '%s\n' "$$out"; \
-			if [ $$st -ne 0 ] || ! printf '%s\n' "$$out" | grep -q "$(FIZZ_PASS)"; then \
-				echo "verify-fizz: FAILED: $$spec (exit $$st)"; exit 1; \
-			fi; \
-		done; \
-		echo "verify-fizz: all specs green (exhaustive, bounds per fizz.yaml)"; \
 	fi
+	@set -e; for spec in $(SPEC_DIR)/*.fizz; do \
+		echo ">> $$(date +%H:%M:%S) exhaustive check: $$spec"; \
+		FIZZ_BIN=$(FIZZ) $(FIZZ_CHECK) "$$spec" exhaustive; \
+	done; \
+	echo "verify-fizz: all specs green (exhaustive, bounds per fizz.yaml)"
 
 verify-fizz-simulation: ## L4: seeded parallel FizzBee simulation (nightly relief valve)
 	@if ! command -v $(FIZZ) >/dev/null 2>&1; then \
 		echo "fizz binary not found: brew install fizzbee, or set FIZZ=scripts/fizz-docker.sh"; exit 1; \
-	else \
-		set -e; seed=$$(date +%s); workers=$$(nproc); \
-		echo ">> seeded simulation seed=$$seed workers=$$workers"; \
-		for spec in $(SPEC_DIR)/*.fizz; do \
-			echo ">> $$(date +%H:%M:%S) simulation: $$spec"; \
-			out=`$(FIZZ) -x --seed $$seed --parallel $$workers "$$spec" 2>&1`; st=$$?; \
-			printf '%s\n' "$$out"; \
-			if [ $$st -ne 0 ] || printf '%s\n' "$$out" | grep -q '^FAILED'; then \
-				echo "verify-fizz-simulation: FAILED: $$spec (exit $$st)"; exit 1; \
-			fi; \
-		done; \
 	fi
-
-NAGINI_FILES := $(shell $(UV) run python scripts/verify_coverage.py --files 2>/dev/null)
-NAGINI_VERIFY_FILES := $(shell $(UV) run python scripts/verify_coverage.py --verify-files 2>/dev/null)
-
-# The nagini CLI pins mypy==1.5.0 and cannot share the dev env, so L5 runs
-# from a dedicated venv (.venv-nagini, provisioned on first use). Requires a
-# JVM for the Viper backend. The Nagini MCP server tools (nagini_verify_file)
-# remain the interactive/agent-facing way to run the same checks.
-NAGINI_VENV := .venv-nagini
-NAGINI := $(NAGINI_VENV)/bin/nagini
-
-$(NAGINI):
-	$(UV) venv --python 3.12 $(NAGINI_VENV)
-	$(UV) pip install --python $(NAGINI_VENV)/bin/python nagini==1.3.1
-
-verify-nagini: $(NAGINI) ## L5: Nagini deductive verification over the annotated cores
-	@failed=0; 	for f in $(NAGINI_VERIFY_FILES); do 		echo "==> verify-nagini: $$f"; 		$(NAGINI) $$f || failed=1; 	done; 	if [ $$failed -ne 0 ]; then 		echo "verify-nagini: FAILED"; exit 1; 	fi; 	echo "verify-nagini: all files verified"
+	@set -e; seed=$$(date +%s); workers=$$(nproc); \
+	echo ">> seeded simulation seed=$$seed workers=$$workers"; \
+	for spec in $(SPEC_DIR)/*.fizz; do \
+		echo ">> $$(date +%H:%M:%S) simulation: $$spec"; \
+		FIZZ_BIN=$(FIZZ) $(FIZZ_CHECK) "$$spec" simulation -x --seed $$seed --parallel $$workers; \
+	done
 
 verify-ledger: ## L8: property-ID ledger consistency (verify/fizz/README.md <-> artifacts)
 	@$(UV) run python scripts/verify_ledger.py
@@ -164,19 +142,17 @@ verify-ledger: ## L8: property-ID ledger consistency (verify/fizz/README.md <-> 
 # Advisory NL-Doc cross-consistency gate (mechanical subset; the LLM
 # comparison activates via ARCH_CONSISTENCY_MODEL, checker identity pinned
 # per run — E3). Findings are leads to triage, not failures.
-verify-cross-consistency: ## L8: NL-Doc/docstring consistency over NAGINI_FILES (advisory)
+verify-cross-consistency: ## L8: NL-Doc/docstring consistency over the decision modules (advisory)
 	@$(UV) run python scripts/cross_consistency.py
 
-# Nightly aggregator over the formal/audit verify-* targets. verify-nagini
-# provisions its own venv; verify-fizz/verify-fizz-simulation self-skip when
-# their toolchain is missing — safe on toolchain-less boxes. test-oracles is
-# a test-*, not a verify-*.
+# Nightly aggregator over the formal/audit verify-* targets. verify-fizz /
+# verify-fizz-simulation self-skip when their toolchain is missing — safe on
+# toolchain-less boxes. test-oracles is a test-*, not a verify-*.
 verify-all: ## Run every verify-* target (nightly entry point)
-	@echo "==> [1/5] verify-fizz";              $(MAKE) --no-print-directory verify-fizz
-	@echo "==> [2/5] verify-fizz-simulation";   $(MAKE) --no-print-directory verify-fizz-simulation
-	@echo "==> [3/5] verify-nagini";            $(MAKE) --no-print-directory verify-nagini
-	@echo "==> [4/5] verify-ledger";            $(MAKE) --no-print-directory verify-ledger
-	@echo "==> [5/5] verify-cross-consistency"; $(MAKE) --no-print-directory verify-cross-consistency
+	@echo "==> [1/4] verify-fizz";              $(MAKE) --no-print-directory verify-fizz
+	@echo "==> [2/4] verify-fizz-simulation";   $(MAKE) --no-print-directory verify-fizz-simulation
+	@echo "==> [3/4] verify-ledger";            $(MAKE) --no-print-directory verify-ledger
+	@echo "==> [4/4] verify-cross-consistency"; $(MAKE) --no-print-directory verify-cross-consistency
 
 ##@ Demo
 client: ## Run the pipes-and-filters MCP client demo (synchronous design_architecture)

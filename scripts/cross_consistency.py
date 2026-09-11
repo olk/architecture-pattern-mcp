@@ -3,23 +3,22 @@
 
 """
 NL-Doc cross-consistency gate — mechanical subset (testing-strategies.md
-§3.9, L8; nagini plan §3.3/§5.4).
+§3.9, L8).
 
 Evidence base: VLP (arXiv 2607.02333) — validating an intermediate artifact
 beats direct code review 84% vs 40%; the docstring-as-NL-Doc discipline is
 promoted from convention to a machine-checked step.
 
-Current (mechanical) checks over NAGINI_FILES:
+Current (mechanical) checks over SCOPE_FILES:
   - every public function/method carries a docstring (the NL-Doc artifact
     a reviewer validates instead of re-deriving intent from code);
   - contract-bearing functions state their intent in the docstring.
 
-LLM comparison (a second LLM summarises each verified function; the summary
-is diffed against docstring + contracts) is provisioned via
-ARCH_CONSISTENCY_MODEL; each run RECORDS the checker model identity with its
-output — the E3 pinning rule: a silently downgraded checker is a
-gate-avoidance finding, and the promotion trigger is scored against a named
-model.
+LLM comparison (a second LLM summarises each function; the summary is diffed
+against docstring + intent) is provisioned via ARCH_CONSISTENCY_MODEL; each
+run RECORDS the checker model identity with its output — the E3 pinning rule:
+a silently downgraded checker is a gate-avoidance finding, and the promotion
+trigger is scored against a named model.
 
 Advisory by default; findings are leads to triage, not failures.
 """
@@ -27,14 +26,18 @@ Advisory by default; findings are leads to triage, not failures.
 import argparse
 import ast
 import os
-import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
-from verify_coverage import NAGINI_FILES  # noqa: E402
+# The decision modules: the validation and normalization logic that carries
+# the documented decision properties (the L1/L2 behavioral oracles pin their
+# semantics).
+SCOPE_FILES: tuple[str, ...] = (
+    "src/text_validation.py",
+    "src/design_normalization.py",
+)
 
 DIVERGENCE_BLOCK_THRESHOLD = 0.10
 
@@ -50,10 +53,10 @@ def _record_run(model: str, missing: list[str]) -> None:
     print(f"recorded: {datetime.now(UTC).isoformat()}")
 
 
-def _protocol_method_names(tree: ast.AST) -> set[str]:
-    """Names of methods defined inside Protocol classes (duck-type views —
+def _protocol_method_names(tree: ast.AST) -> set[int]:
+    """Identities of methods defined inside Protocol classes (duck-type views —
     the class docstring is the NL-Doc artifact, not each property stub)."""
-    excluded: set[str] = set()
+    excluded: set[int] = set()
     for node in ast.walk(tree):
         if isinstance(node, ast.ClassDef):
             bases = {getattr(b, "id", getattr(b, "name", "")) for b in node.bases}
@@ -88,7 +91,7 @@ def main() -> int:
     total = 0
     missing_docs: list[str] = []
 
-    for rel in NAGINI_FILES:
+    for rel in SCOPE_FILES:
         path = REPO_ROOT / rel
         if not path.exists():
             continue

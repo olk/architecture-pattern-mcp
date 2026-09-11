@@ -3,7 +3,7 @@
 > Owned by the L4 section of [`docs/verification.md`](../docs/verification.md)
 > (this ledger is the drift countermeasure — a PR that touches any artifact
 > below must touch its row). Property IDs are shared across the `.fizz`
-> models, the Nagini twins (`verify/twin/`), the Hypothesis oracles
+> models, the Hypothesis oracles
 > (`tests/verification/test_jobs_properties.py`) and the conformance tests.
 > Suite bounds: `fizz.yaml` (max_actions 2000, concurrency 2).
 
@@ -21,25 +21,25 @@
 
 ## Ledger
 
-| ID | Property (one line) | Form | FizzBee assertion | Nagini twin contract | Hypothesis oracle | Conformance test |
+| ID | Property (one line) | Form | FizzBee assertion | Static contract | Hypothesis oracle | Conformance test |
 |---|---|---|---|---|---|---|
-| `J-1` | Terminal states immutable | `always` | `jobs_protocol.fizz::J1_TerminalImmutable` (caller-view twin; `# spec-explains:` structural there — unique jids leave one writer per job) **and** `jobs_runner.fizz::J1_TerminalImmutable` (kill authority: the W0-1 terminal-write race; `GUARDED=False` flip must violate — validated) | `verify/twin/jobs_state_twin.py` invariant | `test_jobs_properties.py` shadow agreement | `test_fizz_traces.py::test_cancel_races_completion` |
-| `J-2` | Cancel effective only from `pending`/`running` | `always` | `jobs_protocol.fizz::Trans` guard (A/B flip) | twin `J-2` | shadow automaton GUARDS | `test_fizz_traces.py::test_cancel_wins_over_completion` |
-| `J-3` | `created_at <= updated_at` always (ISO-8601 UTC: lexicographic = chronological) | `always` | `jobs_protocol.fizz::J3_TimestampsMonotone` (logical clocks) | twin `J-3` | shadow `J-3` assert per step | conformance |
-| `J-4` | At most one `RUNNING` per job | `always` | `jobs_protocol.fizz::J4_SingleRunner` (structural tripwire under atomic Trans) | twin `J-4` | uuid uniqueness assert | conformance |
-| `P-1` | Pipeline attempt loop bounded, `attempts <= 3` | `always` | `pipeline_control.fizz::P1_AttemptBound` | `verify/twin/pipeline_control_twin.py` | oracle `P-1` (planned phase F2) | planned |
-| `FP-2` | No stage advance after cancellation observed | `always` | `pipeline_control.fizz::FP2_CancelStopsPipeline` | twin extension candidate | planned | planned |
-| `FP-3` | Stage order ANALYZE→GENERATE→EVALUATE→REFINE never violated | `always` | `pipeline_control.fizz::FP3_StageOrder` | twin extension candidate | planned | planned |
-| `FP-4` | Every run ends in exactly one terminal outcome | `always` | `pipeline_control.fizz::FP4_TotalOutcome` | twin `Exsures` coverage | planned | planned |
-| `FP-5` | Every run eventually reaches a terminal outcome | `always eventually` | `pipeline_control.fizz::FP5_EventualOutcome` (progress witnesses: fair LlmCall/RunFinish, bounded RetryTick; FG-16/FG-17 must violate) | n/a (liveness beyond twin scope) | n/a | n/a |
+| `J-1` | Terminal states immutable | `always` | `jobs_protocol.fizz::J1_TerminalImmutable` (caller-view twin; `# spec-explains:` structural there — unique jids leave one writer per job) **and** `jobs_runner.fizz::J1_TerminalImmutable` (kill authority: the W0-1 terminal-write race; `GUARDED=False` flip must violate — validated) | n/a (no static contract) | `test_jobs_properties.py` shadow agreement | `test_fizz_traces.py::test_cancel_races_completion` |
+| `J-2` | Cancel effective only from `pending`/`running` | `always` | `jobs_protocol.fizz::Trans` guard (A/B flip) | n/a (no static contract) | shadow automaton GUARDS | `test_fizz_traces.py::test_cancel_wins_over_completion` |
+| `J-3` | `created_at <= updated_at` always (ISO-8601 UTC: lexicographic = chronological) | `always` | `jobs_protocol.fizz::J3_TimestampsMonotone` (logical clocks) | n/a (no static contract) | shadow `J-3` assert per step | conformance |
+| `J-4` | At most one `RUNNING` per job | `always` | `jobs_protocol.fizz::J4_SingleRunner` (structural tripwire under atomic Trans) | n/a (no static contract) | uuid uniqueness assert | conformance |
+| `P-1` | Pipeline attempt loop bounded, `attempts <= 3` | `always` | `pipeline_control.fizz::P1_AttemptBound` | n/a (no static contract) | oracle `P-1` (planned phase F2) | planned |
+| `FP-2` | No stage advance after cancellation observed | `always` | `pipeline_control.fizz::FP2_CancelStopsPipeline` | n/a (no static contract) | planned | planned |
+| `FP-3` | Stage order ANALYZE→GENERATE→EVALUATE→REFINE never violated | `always` | `pipeline_control.fizz::FP3_StageOrder` | n/a (no static contract) | planned | planned |
+| `FP-4` | Every run ends in exactly one terminal outcome | `always` | `pipeline_control.fizz::FP4_TotalOutcome` | n/a (no static contract) | planned | planned |
+| `FP-5` | Every run eventually reaches a terminal outcome | `always eventually` | `pipeline_control.fizz::FP5_EventualOutcome` (progress witnesses: fair LlmCall/RunFinish, bounded RetryTick; FG-16/FG-17 must violate) | n/a (liveness beyond static scope) | n/a | n/a |
 | `FP-6` | A run only ends FAILED after exhausting its attempts | `always` | `pipeline_control.fizz::FP6_NoPrematureFailure` (FG-09 must violate) | n/a | planned | planned |
 | `FP-7` | A run only ends COMPLETED after all stages ran | `always` | `pipeline_control.fizz::FP7_NoPrematureCompletion` (FG-10 must violate) | n/a | planned | planned |
-| `FC-1` | *FizzBee-only:* every RUNNING job of an alive client eventually leaves RUNNING | `always eventually` | `jobs_protocol.fizz::FC1_NoStuckRunning` (ownership witness = client's `inflight`; fair response actions are the progress witnesses; FG-13 must violate) + `exists FC1_Coverage` | n/a (liveness beyond twin scope) | bounded — not sampleable | n/a |
-| `FC-2` | *FizzBee-only:* an acknowledged cancel ends CANCELLED or was already terminal | `always` | `jobs_protocol.fizz::FC2_AckCancelEndsCancelled` (ack recorded only after the guarded write landed; FG-15 must violate) | future twin extension | planned | planned |
-| `RUN-1` | The runner's triage outcome matches the final store state (stored⇒COMPLETED, failed⇒FAILED, discard/race⇒CANCELLED) | `always` | `jobs_runner.fizz::RUN1_FateMatchesStore` (fate ghost; FG-02 must violate) | n/a (async/Db beyond Nagini subset) | `test_jobs_properties.py` cancel-vs-complete races | `test_fizz_traces.py` cancel races |
+| `FC-1` | *FizzBee-only:* every RUNNING job of an alive client eventually leaves RUNNING | `always eventually` | `jobs_protocol.fizz::FC1_NoStuckRunning` (ownership witness = client's `inflight`; fair response actions are the progress witnesses; FG-13 must violate) + `exists FC1_Coverage` | n/a (liveness beyond static scope) | bounded — not sampleable | n/a |
+| `FC-2` | *FizzBee-only:* an acknowledged cancel ends CANCELLED or was already terminal | `always` | `jobs_protocol.fizz::FC2_AckCancelEndsCancelled` (ack recorded only after the guarded write landed; FG-15 must violate) | n/a (no static contract) | planned | planned |
+| `RUN-1` | The runner's triage outcome matches the final store state (stored⇒COMPLETED, failed⇒FAILED, discard/race⇒CANCELLED) | `always` | `jobs_runner.fizz::RUN1_FateMatchesStore` (fate ghost; FG-02 must violate) | n/a (async/Db beyond static scope) | `test_jobs_properties.py` cancel-vs-complete races | `test_fizz_traces.py` cancel races |
 | `RUN-3` | A finished task's `job_tasks` entry is always popped (no jid both finished and active) | `always` | `jobs_runner.fizz::RUN3_TaskMapInvariant` (idempotent finish; FG-14 must violate) | n/a | planned | planned |
-| `RUN-4` | Every RUNNING job with a live task eventually leaves RUNNING | `always eventually` | `jobs_runner.fizz::RUN4_NoStuckRunning` (progress witnesses: fair EnvOk/EnvFail/RunFinish/Cancel + bounded fair StoreTick; FG-19 must violate) + `exists RUN4_Coverage` | n/a (liveness beyond twin scope) | bounded — not sampleable | n/a |
-| `C-1` | An acknowledged cancel (tool layer) ends CANCELLED and stays CANCELLED | `always` | `jobs_runner.fizz::C1_AckCancelEndsCancelled` (ack only after the guarded write; FG-15 must violate) | future twin extension | planned | `test_fizz_traces.py` cancel races |
+| `RUN-4` | Every RUNNING job with a live task eventually leaves RUNNING | `always eventually` | `jobs_runner.fizz::RUN4_NoStuckRunning` (progress witnesses: fair EnvOk/EnvFail/RunFinish/Cancel + bounded fair StoreTick; FG-19 must violate) + `exists RUN4_Coverage` | n/a (liveness beyond static scope) | bounded — not sampleable | n/a |
+| `C-1` | An acknowledged cancel (tool layer) ends CANCELLED and stays CANCELLED | `always` | `jobs_runner.fizz::C1_AckCancelEndsCancelled` (ack only after the guarded write; FG-15 must violate) | n/a (no static contract) | planned | `test_fizz_traces.py` cancel races |
 | `E5F-1` | An expired call always carries its TIMEOUT verdict (wait_for deadline semantics — the hang-bug falsifier) | `always` | `reasoning_retry.fizz::E5F1_DeadlineVerdict` (FG-20 must violate) | n/a | E5 reasoning-client oracle (LLM-boundary discipline) | planned |
 | `E5F-2` | Reasoning steps appended ≤ `min(pre_llm_thoughts, max_total_steps)` | `always` | `reasoning_retry.fizz::E5F2_StepLoopBound` (`# spec-explains:` Python `range()` bound — tripwire for a rewritten loop) | n/a | E5 oracle | planned |
 | `E5F-3` | The trace LRU never exceeds `_CACHE_MAX_ENTRIES` | `always` | `reasoning_retry.fizz::E5F3_CacheBound` (FG-21 must violate) | n/a | E5 oracle | planned |
@@ -53,7 +53,7 @@
 | `DL-3` | Once cancellation is observed no further attempt starts | `always` | `design_loop.fizz::DL3_CancelFreezesAttempts` (FG-29 must violate) | n/a | planned | planned |
 | `DL-4` | A malformed attempt retries, never ends the loop early | `always` | `design_loop.fizz::DL4_MalformedContinues` (FG-30 must violate) | n/a | planned | planned |
 | `DL-5` | Early stop only fires at/above the quality threshold | `always` | `design_loop.fizz::DL5_EarlyStopThreshold` (FG-31 must violate) | n/a | planned | planned |
-| `N-1..N-4` | normalization idempotence (N-1) and dedup/coverage/subset (N-2..N-4) | n/a | n/a — pure decision core, no interleavings; Nagini's charter (L5), not a `.fizz` model | twin contracts (planned) | `test_normalization_idempotence.py` | `tests/unit/test_normalization.py` |
+| `N-1..N-4` | normalization idempotence (N-1) and dedup/coverage/subset (N-2..N-4) | n/a | n/a — pure decision logic, no interleavings; pinned by the L2 Hypothesis oracle, not a `.fizz` model | n/a (no static contract) | `test_normalization_idempotence.py` | `tests/unit/test_normalization.py` |
 
 ## Spec garden (vacuity authority for model assertions, testing-strategies §3.4)
 

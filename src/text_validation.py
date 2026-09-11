@@ -33,13 +33,31 @@ Two enforcement layers:
   Layer 2 — Runtime guard: defence-in-depth for values read back from persistent
              storage (JobsStore SQLite) or passed through internal APIs.
 
-Architecture: the pure decision logic lives in src/text_validation_core.py
-(the Nagini-verified core, L5); this module is the Pydantic-facing adapter. It
-precomputes the per-character Unicode facts Nagini cannot model
-(``unicodedata.category``, ``str.isspace``, the allowed-whitespace test),
-delegates the decision to the verified core, and reconstructs the ValueError
-messages and the stripped result — byte-identical to the historical
-implementation (tests/unit/test_text_validation.py is the oracle).
+Architecture: the decision engine (``compute_strip_window`` /
+``evaluate_printable_text``) operates on per-character facts precomputed here
+from the Unicode oracles (``unicodedata.category``, ``str.isspace``, the
+allowed-whitespace test) and passed in as plain lists.  The ValueError messages
+and the stripped result are reconstructed byte-identical to the historical
+implementation (tests/unit/test_text_validation.py is the behavioral oracle).
+
+Decision properties (pinned by tests/unit/test_text_validation.py):
+
+- **totality**: no IndexError/KeyError/AttributeError on any input; the
+  decision is a pure function of its inputs;
+- **verdict well-formedness**: kind is one of OK/DISALLOWED/TOO_LONG/
+  NO_PRINTABLE; indices and the strip window stay within ``[0, n]``;
+- **disallowed-character scan** (first scan, mirrors runtime order):
+  DISALLOWED points at the *first* control/format character that is not in the
+  allowed-whitespace set, and no earlier character violates the rule;
+- **strip window**: for every non-DISALLOWED verdict, ``[window_lo,
+  window_hi)`` is exactly the maximal strip window — all characters before
+  ``window_lo`` are strip whitespace, ``window_lo`` is not (unless it equals
+  ``n``), all characters from ``window_hi`` on are strip whitespace, and
+  ``window_hi - 1`` is not (unless the window is empty);
+- **length check**: TOO_LONG iff ``window_hi - window_lo > max_length``;
+- **printable check**: NO_PRINTABLE iff the window contains no letter/digit
+  (category codes CAT_LETTER/CAT_DIGIT); OK iff the window has one and the
+  whole input passes the disallowed-character scan.
 """
 
 from __future__ import annotations
@@ -48,21 +66,6 @@ import unicodedata
 from typing import Annotated
 
 from pydantic import AfterValidator, Field, StringConstraints
-
-from src.text_validation_core import (
-    CAT_CONTROL,
-    CAT_DIGIT,
-    CAT_LETTER,
-    CAT_OTHER,
-    CAT_SEPARATOR,
-    DOMAIN_MAX_LENGTH,
-    FREETEXT_MAX_LENGTH,
-    KIND_DISALLOWED,
-    KIND_NO_PRINTABLE,
-    KIND_TOO_LONG,
-    PATTERN_NAME_MAX_LENGTH,
-    evaluate_printable_text,
-)
 
 __all__ = [
     "DOMAIN_MAX_LENGTH",
@@ -73,6 +76,128 @@ __all__ = [
     "PrintableText",
     "ensure_printable_text",
 ]
+
+# Unicode general-category classes (computed by _category_code via
+# unicodedata.category).
+CAT_OTHER = 0
+CAT_LETTER = 1
+CAT_DIGIT = 2
+CAT_CONTROL = 3
+CAT_SEPARATOR = 4
+
+# Verdict kinds.
+KIND_OK = 0
+KIND_DISALLOWED = 1
+KIND_TOO_LONG = 2
+KIND_NO_PRINTABLE = 3
+
+# Public length limits (kept here so all import sites resolve against this
+# module; the decision engine itself only takes max_length).
+DOMAIN_MAX_LENGTH = 200
+FREETEXT_MAX_LENGTH = 100_000
+PATTERN_NAME_MAX_LENGTH = 100
+
+
+class StripWindow:
+    """Result of the strip-window computation over a char list."""
+
+    def __init__(self) -> None:
+        self.lo = 0
+        self.hi = 0
+
+
+class TextVerdict:
+    """Decision record produced by evaluate_printable_text.
+
+    Fields:
+        kind:        KIND_OK / KIND_DISALLOWED / KIND_TOO_LONG / KIND_NO_PRINTABLE.
+        error_index: index of the first disallowed character (kind == DISALLOWED).
+        window_lo:   first character of the strip window (all kinds except DISALLOWED).
+        window_hi:   one past the last character of the strip window.
+    """
+
+    def __init__(self) -> None:
+        self.kind = KIND_OK
+        self.error_index = 0
+        self.window_lo = 0
+        self.window_hi = 0
+
+
+def compute_strip_window(n: int, strip_whitespace: list[bool]) -> StripWindow:
+    """Compute the maximal strip window [lo, hi) of a length-n char list.
+
+    ``strip_whitespace[i]`` is the trusted ``str.isspace`` oracle for
+    character i.  The window removes leading/trailing whitespace only —
+    interior whitespace stays (matching ``str.strip``).
+    """
+    lo = 0
+    while lo < n:
+        if not strip_whitespace[lo]:
+            break
+        lo = lo + 1
+    hi = n
+    while hi > lo:
+        if not strip_whitespace[hi - 1]:
+            break
+        hi = hi - 1
+    result = StripWindow()
+    result.lo = lo
+    result.hi = hi
+    return result
+
+
+def evaluate_printable_text(
+    value: str,
+    categories: list[int],
+    strip_whitespace: list[bool],
+    allowed_whitespace: list[bool],
+    *,
+    max_length: int,
+) -> TextVerdict:
+    """Decide the printable-text verdict for a precomputed char model.
+
+    Args:
+        value:             The original string; only its length is used here.
+        categories:        Per-character category codes (CAT_*), precomputed
+                           from ``unicodedata.category``.
+        strip_whitespace:  Per-character ``str.isspace`` oracle.
+        allowed_whitespace: Per-character "is an allowed whitespace char"
+                           oracle ("\\t" plus "\\n"/"\\r" when line breaks are
+                           allowed) — the historical `ch not in _allowed` test.
+        max_length:        Maximum length of the stripped text (>= 0).
+
+    Returns:
+        A TextVerdict recording the decision.  The properties documented in
+        the module docstring hold on every input (pinned by the unit tests).
+    """
+    verdict = TextVerdict()
+    n = len(value)
+    i = 0
+    while i < n:
+        if categories[i] == CAT_CONTROL and not allowed_whitespace[i]:
+            verdict.kind = KIND_DISALLOWED
+            verdict.error_index = i
+            return verdict
+        i = i + 1
+    w = compute_strip_window(n, strip_whitespace)
+    lo = w.lo
+    hi = w.hi
+    verdict.window_lo = lo
+    verdict.window_hi = hi
+    if hi - lo > max_length:
+        verdict.kind = KIND_TOO_LONG
+        return verdict
+    j = lo
+    has = False
+    while j < hi:
+        if categories[j] == CAT_LETTER or categories[j] == CAT_DIGIT:
+            has = True
+        j = j + 1
+    if not has:
+        verdict.kind = KIND_NO_PRINTABLE
+        return verdict
+    verdict.kind = KIND_OK
+    return verdict
 
 
 def _category_code(ch: str) -> int:

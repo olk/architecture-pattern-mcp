@@ -101,8 +101,8 @@ class TestJobsStoreLifecycle:
     async def test_set_completed(self, jobs_store: JobsStore):
         """set_completed transitions the job RUNNING -> COMPLETED with a result.
 
-        Updated under the Week-0 W0-1 deliberate exemption (nagini plan §3.9):
-        this test previously encoded the old unconditional-overwrite behaviour
+        Updated under the Week-0 W0-1 deliberate exemption (formal_verification.md
+        §4.5): this test previously encoded the old unconditional-overwrite behaviour
         (set_completed directly from PENDING); transitions are now guarded.
         """
         job_id = await jobs_store.create_job(requirements="req", domain="dom")

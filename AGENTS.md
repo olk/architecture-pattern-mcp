@@ -31,10 +31,10 @@
   all specs on every push regardless of what the agent did; every assertion
   must kill at least one spec-garden mutant and appear in the
   `verify/fizz/README.md` ledger.
-- Every `Requires`/`Ensures` contract must survive the phase-0 mutation set
-  (`tests/verification/gardens/`); a contract that planted bugs survive must
-  be rejected — non-trivial contracts only.
-- Use the Nagini MCP server tools (`nagini_verify_file`, `nagini_verify_method`,
-  `nagini_verify_snippet`) for deductive verification of Python code contracts.
-  Run `nagini_verify_file` over changed files to confirm no contract violations;
-  do not merge code that introduces new Nagini violations.
+- Every `.fizz` `always` / `always eventually` assertion must kill at least one
+  spec-garden mutant or carry a `# spec-explains:` justification — vacuous
+  assertions are rejected.
+- The executable layers (L1 unit tests, L2 Hypothesis oracles, L3 gardens,
+  L4 FizzBee, L6 DST) are the verification authority; a change to the decision
+  modules (`src/text_validation.py`, `src/design_normalization.py`) must keep
+  `tests/unit/` and `tests/verification/` green.

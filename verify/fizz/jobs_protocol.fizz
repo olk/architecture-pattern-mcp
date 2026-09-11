@@ -14,7 +14,7 @@ action_options:
 #   atomic action Submit    ↔ jobs.create_job: INSERT (id, pending)
 #   atomic action StartRun  ↔ jobs.set_running: guarded UPDATE (WHERE status = 'PENDING')
 #   atomic action Trans     ↔ guarded UPDATEs (W0-1: WHERE id = ? AND status IN (...))
-#   always assertion J1     ↔ nagini twin J-1 (verify/twin/jobs_state_twin.py)
+#   always assertion J1     ↔ frozen-trace replay (tests/verification/test_fizz_traces.py)
 #   always assertion J3     ↔ oracle J-3 (tests/verification/test_jobs_properties.py)
 #   always eventually FC1   ↔ liveness: an owned RUNNING job never persists forever
 #   always assertion FC2    ↔ cancel ack honesty (ack only via the guarded write)

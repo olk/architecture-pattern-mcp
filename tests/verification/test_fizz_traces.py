@@ -50,7 +50,7 @@ class TestFrozenFizzTraces:
         Trace: A: Trans(j0, COMPLETED) -> B: Trans(j0, CANCELLED) mid-flight
         -> j0 left COMPLETED. Source: fizz verify/fizz/jobs_protocol.fizz
         (exhaustive, GUARDED=False flip). Repair: Week-0 guarded UPDATEs
-        (nagini plan §3.6, fourth amendment).
+        (formal_verification.md §4.5, fourth amendment).
         """
         job_id = await jobs_store.create_job(requirements="req", domain="dom")
         await jobs_store.set_running(job_id)

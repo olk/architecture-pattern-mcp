@@ -22,26 +22,96 @@
 """
 Pure transformations on ArchitectureDesign for spec §4.11 denormalization.
 
-Pydantic adapter: the verified precedence/dedup decision core lives in
-src/design_normalization_core.py (plain key lists, Nagini target, L5); this
-module extracts the keys from the Pydantic design, delegates the decisions,
-and maps the returned keys back onto the original objects with a
-first-occurrence scan.  The scan reproduces the historical algorithm's object
-identity and order semantics exactly (top level first, then components;
-first occurrence wins), so the single model_copy(update=..., deep=True)
-behaves identically to the pre-verification implementation.
+The precedence/dedup decision logic operates on plain keys extracted from the
+Pydantic design (component_ids, (name, is_shared) tuples, event names); the
+returned keys are mapped back onto the original objects with a first-occurrence
+scan.  The scan reproduces the historical algorithm's object identity and
+order semantics exactly (top level first, then components; first occurrence
+wins), so the single model_copy(update=..., deep=True) behaves identically to
+the pre-verification implementation.
 
-See docs/implementation-guide.md §4.14 for the full rule table.
+Spec §4.11 rule set (unchanged — see docs/implementation-guide.md §4.14):
+  1. Existing top-level entries are preserved (LLM's explicit choice wins).
+  2. component.api_contract promoted if its component_id not yet present.
+  3. component.data_models entries with is_shared=True promoted if their
+     (name, is_shared) tuple is not already present at top level.
+  4. event_contracts deduped by event_name; order preserved.
+
+Properties (pinned by tests/unit/test_normalization.py and the L2 Hypothesis
+oracle tests/verification/test_normalization_idempotence.py):
+
+- **N-2 dedup**: the result contains no duplicate keys;
+- **N-2 coverage**: every eligible input key appears in the result (no loss);
+- **N-2 subset**: every result key comes from the inputs (no hallucination);
+- **bounds**: the result is no longer than the inputs;
+- **N-1 idempotence**: re-running the promotion over an already-promoted key
+  list yields the same list;
+- **N-3/N-4 order preservation**: first-occurrence order by construction.
 """
 
 from collections.abc import Callable, Hashable, Sequence
 
-from src.design_normalization_core import (
-    dedupe_event_names,
-    promote_api_contract_ids,
-    promote_shared_model_keys,
-)
 from src.schemas import ArchitectureDesign
+
+StrList = list[str]
+ModelKeys = list[tuple[str, bool]]
+
+
+def promote_api_contract_ids(top: list[str], comp: list[str | None]) -> StrList:
+    """First-occurrence dedupe of component_ids: top level first, then components.
+
+    ``comp`` entries may be None (components without an api_contract); they
+    contribute nothing.  Top-level ids win on collisions (rule 1/2).
+    """
+    out = []  # type: list[str]
+    i = 0
+    while i < len(top):
+        if top[i] not in out:
+            out.append(top[i])
+        i = i + 1
+    j = 0
+    while j < len(comp):
+        c = comp[j]
+        if c is not None and c not in out:
+            out.append(c)
+        j = j + 1
+    return out
+
+
+def promote_shared_model_keys(
+    top_keys: list[tuple[str, bool]],
+    comp_keys: list[tuple[str, bool]],
+) -> ModelKeys:
+    """First-occurrence dedupe of (name, is_shared) model keys.
+
+    Top-level keys all count; component keys count only when their
+    is_shared flag is True (rule 3).  Top-level keys win on collisions.
+    """
+    out = []  # type: list[tuple[str, bool]]
+    i = 0
+    while i < len(top_keys):
+        if top_keys[i] not in out:
+            out.append(top_keys[i])
+        i = i + 1
+    j = 0
+    while j < len(comp_keys):
+        c = comp_keys[j]
+        if c[1] and c not in out:
+            out.append(c)
+        j = j + 1
+    return out
+
+
+def dedupe_event_names(names: list[str]) -> StrList:
+    """First-occurrence dedupe of event names (rule 4, N-3)."""
+    out = []  # type: list[str]
+    i = 0
+    while i < len(names):
+        if names[i] not in out:
+            out.append(names[i])
+        i = i + 1
+    return out
+
 
 def _select_first[T, K: Hashable](
     primary: Sequence[T],

@@ -21,12 +21,11 @@
 
 """
 L2 Hypothesis oracles keyed by the shared property IDs (J-1..J-4; see
-verify/fizz/README.md ledger and nagini-verification-plan.md §3.6), plus the
+verify/fizz/README.md ledger and formal_verification.md §4.5), plus the
 E5 reasoning-client timeout/retry oracle (testing-strategies §3.3).
 
 Direction of the implication (testing-strategies §3.3): these oracles SAMPLE
-what the Nagini twin proves (forall inputs) and what the .fizz model checks
-exhaustively up to bounds.
+the property space that the .fizz models check exhaustively up to bounds.
 
 Determinism rule (testing-strategies §3.2): each Hypothesis example drives its
 own event loop (``asyncio.run``) and, for the store oracles, resets the

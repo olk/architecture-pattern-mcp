@@ -24,7 +24,7 @@ Executable oracles — tests/verification/.
 
 Home of the verification program's executable layers (testing-strategies.md):
 L1 secret canary, L2 Hypothesis property oracles, L3 gardens, L4/L6 trace
-replay, L5 conformance, L9 corpus harness. Collected by
+replay, L9 corpus harness. Collected by
 ``make test-oracles``.
 """
 

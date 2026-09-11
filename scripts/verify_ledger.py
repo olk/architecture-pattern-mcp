@@ -6,7 +6,7 @@ Property-ID ledger consistency check (testing-strategies.md §3.9, L8; fizzbee
 plan §3.4/§5.3).
 
 The verify/fizz/README.md ledger is the single mapping between the .fizz
-models, the Nagini twins, the Hypothesis oracles, and the conformance tests.
+models, the Hypothesis oracles, and the conformance tests.
 This script makes the mapping mechanically checkable:
 
 1. every property ID referenced in an artifact (specs, twins, oracles,
@@ -35,7 +35,8 @@ ARTIFACT_GLOBS = (
     "verify/fizz/*.fizz",
     "tests/verification/*.py",
     "tests/verification/gardens/*.py",
-    "src/*_core.py",
+    "src/text_validation.py",
+    "src/design_normalization.py",
 )
 DEFERRED_MARKERS = ("planned", "n/a", "future twin", "F1 addition", "phase F2")
 

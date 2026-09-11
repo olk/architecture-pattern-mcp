@@ -20,20 +20,17 @@
 # SOFTWARE.
 
 """
-L10 performance smoke canary over the verified cores (nagini plan §5.5;
-testing-strategies §3.10).
+L10 performance smoke canary over the decision modules (testing-strategies
+§3.10; formal_verification.md §4.5 perf-smoke amendment).
 
 Rationale (AxDafny lesson): proofs guarantee functional correctness, NOT
-performance — a refactor of a verified core cannot be allowed to silently
+performance — a refactor of the decision logic cannot be allowed to silently
 regress latency. Budgets are deliberately coarse (regression canary, not a
 benchmark): orders-of-magnitude headroom, generous multipliers over the
 observed baseline so CI noise never trips them.
 
 Skipped unless RUN_PERF=1 (the perf marker's opt-in contract). Nightly TCB
 canary job runs it (see .github/workflows/verification.yml).
-
-NOTE: Twin verification was removed (verify/twin/ deleted). The twin-related
-test_twin_operations test has been removed.
 """
 
 import os
@@ -65,39 +62,21 @@ def _time_budgeted(name: str, fn: Callable[[], object], budget_s: float) -> None
 
 @pytest.mark.perf
 @pytest.mark.skipif(not os.getenv("RUN_PERF", ""), reason="RUN_PERF=1 perf canary")
-class TestVerifiedCorePerfSmoke:
-    def test_text_validation_core(self) -> None:
+class TestDecisionModulePerfSmoke:
+    def test_text_validation(self) -> None:
         _time_budgeted(
-            "text_validation_core.ensure_printable_text",
+            "text_validation.ensure_printable_text",
             lambda: ensure_printable_text("  design a scalable system  ", field="value"),
             BUDGET_TEXT_VALIDATION,
         )
 
-    def test_design_normalization_core(self) -> None:
+    def test_design_normalization(self) -> None:
         design = _sample_design()
         _time_budgeted(
-            "design_normalization_core.denormalize_core",
+            "design_normalization.denormalize_contracts",
             lambda: denormalize_contracts(design),
             BUDGET_NORMALIZATION,
         )
-
-
-class _Contract:
-    component_id = "ingest"
-    base_path = "/api/v1/ingest"
-    endpoints: list[object] = []
-
-
-class _Component:
-    api_contract: "_Contract | None" = _Contract()
-    data_models: list[object] = []
-
-
-class _Design:
-    api_contracts = [_Contract()]
-    components = [_Component(), _Component(), _Component()]
-    shared_data_models: list[object] = []
-    event_contracts: list[object] = []
 
 
 def _sample_design() -> ArchitectureDesign:
@@ -135,10 +114,8 @@ def _sample_design() -> ArchitectureDesign:
             )
         ],
         relationships=[],
-        patterns=[],
         api_contracts=[ApiContract(component_id="ingest", base_path="/x", endpoints=[])],
         shared_data_models=[],
         event_contracts=[EventContract(event_name="created", payload_schema={}, published_by="svc")],
         quality_attributes={},
-        domain="test",
     )

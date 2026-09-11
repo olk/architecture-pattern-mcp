@@ -13,14 +13,14 @@
 The server's code is LLM-generated and nobody reads all of it. The program
 splits trust into decorrelated layers so their blind spots multiply instead of
 add: cheap layers (types, unit tests) run always; expensive layers
-(model checking, deductive proof) are opt-in and scoped to the critical
+(model checking) are opt-in and scoped to the critical
 ~5–10% of modules. Two boundaries are absolute:
 
 - **T1 vs T2:** mechanical layers verify that the *machinery* fails on no
   input (T1). No layer judges whether a generated *design* is good (T2) —
   that stays with evaluation rubrics and human review (L10).
 - **Vacuity control:** every oracle must be able to fail. Assertions and
-  contracts are accepted only if they kill garden mutants (L3) or carry a
+  `.fizz` models are accepted only if they kill garden mutants (L3) or carry a
   justification (`# spec-explains:`).
 
 ## The stack at a glance
@@ -33,7 +33,7 @@ add: cheap layers (types, unit tests) run always; expensive layers
 | L2 | Hypothesis | input-space properties: job-lifecycle interleavings vs shadow automaton (J-1..J-4), LLM-boundary timeout/retry discipline (E5), normalization idempotence/dedup (N-1..N-4) | `make test-oracles` | active |
 | L3 | mutmut + planted-bug gardens | tests-the-tests: tautological oracles, vacuous contracts/assertions; the garden is the vacuity authority | `make test-mutations` (manual/nightly) | garden active; mutmut nightly |
 | L4 | FizzBee (`.fizz` models) | **all interleavings up to bounds**: races, crash windows, guard gaps, deadlock freedom, fault injection; 7 models over the job protocol, the background-task lifecycle + cancel tool, the pipeline stage machine, design-loop triage, reasoning-client deadline/retry/cache, TEI rerank verdicts, retrieval resolution | `make verify-fizz` (CI-authoritative) | active (7 specs, 31 garden mutants) |
-| L5 | Nagini (Viper/Z3) | **active** — the pure decision cores (text_validation_core, design_normalization_core) carry explicit Requires/Ensures/Invariant contracts and verify with the Nagini CLI (`make verify-nagini`, dedicated `.venv-nagini` venv) and the MCP server (`nagini_verify_file`); Unicode facts and Pydantic object graphs are trusted adapter precomputations | `make verify-nagini` / `nagini_verify_file` (MCP) | active |
+| L5 | deductive verification (Viper/Z3) | **retired 2026-09** — the decision modules (`text_validation`, `design_normalization`) previously carried Requires/Ensures/Invariant contracts; their properties are now pinned by the L1/L2 behavioral oracles (`tests/unit/test_text_validation.py`, `tests/unit/test_normalization.py`, `tests/verification/test_normalization_idempotence.py`) | — | retired |
 | L6 | deterministic simulation (native now; simloom/frontrun on provisioning) | real asyncio schedules of the **real implementation**: bounded, seeded, replayable proof of J-1/J-2 under all race schedules | `tests/verification/test_jobs_dst.py` (always on) | active (native), proven |
 | L7 | deptry, uv.lock pinning, import-inventory listing | supply chain: hallucinated/unused deps; slopsquatting defence (new package names need human decision) | `make check-depcheck` | active |
 | L8 | ledger checker, NL-Doc cross-consistency | intent drift: code ≠ docstring ≠ contract ≠ model; property-ID mapping mechanically checked | `make verify-ledger`, `make verify-cross-consistency` (advisory) | active (mechanical subset) |
@@ -82,7 +82,7 @@ The oracle-on-oracles audit, answering the same-model circularity finding
    filter caveat is documented — the garden, not survivor counts, is the
    vacuity authority.
 
-Later oracle layers (Nagini contracts, `.fizz` assertions) must kill the same
+Later oracle layers (`.fizz` assertions) must kill the same
 mutant IDs or are rejected as vacuous (AGENTS.md rule).
 
 ### L4 — Model checking (`FizzBee`)
@@ -117,75 +117,48 @@ protocol-level view no other layer can produce. Artifacts:
   real outcomes carry patterns and passed the floor (FUS-1/2); fallbacks
   are tagged (FUS-3).
 - `verify/fizz/README.md` — the property-ID ledger coupling every assertion
-  to its twin contract, Hypothesis oracle, and conformance test, plus the
+  to its Hypothesis oracle and conformance test, plus the
   spec garden (FG-01..FG-31, each re-validated on the toolchain
   2026-09-10) and run-stats table.
 
 Frozen counterexamples are replayed against the real store in
 `tests/verification/test_fizz_traces.py`, independent of tool availability.
 
-### L5 — Deductive verification (`Nagini` / Viper-Z3) — active via MCP
-The only layer whose verdict is universal over inputs, scoped to the critical
-5–10% (`NAGINI_FILES`, computed by `scripts/verify_coverage.py`).
+### L5 — Deductive verification — retired (2026-09)
 
-Verification runs with the Nagini CLI (`make verify-nagini`, which provisions
-a dedicated `.venv-nagini` venv because the CLI pins `mypy==1.5.0`) and with
-the Nagini MCP server tools (`nagini_verify_file`) over the two pure decision
-cores:
+The L5 layer (deductive verification over Viper/Z3) has been removed from
+the stack.  The two decision modules that carried the Requires/Ensures/
+Invariant contracts — `src/text_validation.py` and
+`src/design_normalization.py` (formerly split into `*_core.py` + Pydantic
+adapter) — retain their decision properties, now pinned by the L1 behavioral
+oracles (`tests/unit/test_text_validation.py`,
+`tests/unit/test_normalization.py`) and the L2 Hypothesis oracle
+(`tests/verification/test_normalization_idempotence.py`, N-1..N-4).  The
+character-level Unicode facts and Pydantic object graphs that deductive
+verification could not model remain trusted precomputations, unchanged.
 
-- `src/text_validation_core.py` — the printable-text decision engine.
-  Nagini cannot translate the Unicode operations (`unicodedata.category`,
-  `str.isspace`, `ord`, `strip`), so the Pydantic adapter
-  (`src/text_validation.py`) precomputes per-character facts (category codes,
-  strip-whitespace flags, allowed-whitespace flags) and the core decides over
-  plain lists. Verified properties: totality (no crash on any input), verdict
-  well-formedness, the first-disallowed-character scan, the maximal strip
-  window, the length check, and the letter/digit presence check.
-- `src/design_normalization_core.py` — the denormalization decision core.
-  The Pydantic object graphs and `typing.Protocol` are outside Nagini's
-  subset, so the adapter (`src/design_normalization.py`) extracts plain keys
-  (component_ids, (name, is_shared) tuples, event names) and maps the core's
-  key lists back onto the original objects with a first-occurrence scan.
-  Verified properties: N-2 dedup (no duplicate keys), coverage (no loss) and
-  subset (no hallucinated keys) for all three promotion rules.
+Removal summary: the contract-vocabulary stub package, the dedicated
+verification make target and its venv, the coverage-report script, the
+corresponding CI job, and the agent rules in AGENTS.md were deleted in a
+single PR.  The
+honest-claims boundary they encoded stands in equivalent form: the decision
+logic is correct on the tested/pinned input space, assuming the Unicode
+oracles and key extraction are correct — those assumptions are pinned by the
+L1/L2 behavioral oracles named above.
 
-The contract vocabulary is provided by a local, typed, runtime-inert stub
-package (`nagini_contracts/`) — Nagini recognises contract calls by name and
-ignores that module; the real `nagini-contracts` distribution cannot be
-installed here (it pins `mypy==1.5.0`, conflicting with the dev group).
-Quantifier results that feed runtime decisions (the membership tests in the
-promotion loops) evaluate for real in the stub; contract-position quantifiers
-are inert, so the contracts cost nothing at runtime.
+#### Why the layer was removed
 
-The honest-claims boundary stands: the verified fragments are correct on all
-inputs, assuming the adapter precomputations (Unicode oracles, key
-extraction) are correct — those are pinned by the L1/L2 behavioral oracles
-(`tests/unit/test_text_validation.py`, `tests/unit/test_normalization.py`,
-`tests/verification/test_normalization_idempotence.py`).
+Deductively verifying only the two cores cost a dedicated toolchain (JVM +
+Viper backend, a pinned `mypy==1.5.0` venv), a runtime-inert contract-vocabulary
+stub package shipped with the wheel, and an agent workflow around the
+verifier's MCP server — for properties that the L1/L2/L4 layers already pin
+with lower total cost.  The surviving stack covers the same bug classes:
 
-#### Why not the whole tree
-
-`make verify-nagini` deliberately covers only the annotated cores. Nagini
-verifies the target file **and all transitive imports** (CAV'18), so a module
-can enter the set only if its entire import graph is inside the supported
-subset. Empirically (nagini MCP server, per module):
-
-| src/ module class | Verdict | Reason |
-|---|---|---|
-| `text_validation_core`, `design_normalization_core` | verifies | pure decision logic, annotated |
-| `errors.py` | untranslatable | module-level constants violate the static-field subset |
-| `schemas/enums.py` | untranslatable | `class X(str, Enum)` — subclassing a builtin type unsupported |
-| `prompts/style_guidance.py` | untranslatable | 300-line module-level dict constant overflows the prover |
-| `config_expansion.py` | untranslatable | `re` module, `Any`-typed recursion |
-| everything else (`tools/*`, `schemas/*`, `pipeline.py`, `agent.py`, `patterns/*`, `server.py`, ...) | untranslatable | imports pydantic / fastmcp / llama_index / litellm / httpx / aiosqlite / numpy / faiss / click / dotenv |
-
-Scope discipline adds a second reason: the documented L5 decision (critical
-5–10%, never the tree). Every verified fragment costs prover time and every
-contract must be non-vacuous (AGENTS.md); verifying error constants or enums
-would add minutes without adding decision-logic assurance. The critical
-decision logic in this codebase is exactly the two cores — the rest is
-LLM/Pydantic/FastMCP plumbing whose behavior is pinned by the L1/L2/L4/L6
-layers instead.
+| Former L5 claim | Now pinned by |
+|---|---|
+| text-verdict well-formedness / strip-window maximality | `tests/unit/test_text_validation.py` (behavioral oracle) |
+| normalization dedup / coverage / subset / idempotence (N-1..N-4) | `tests/unit/test_normalization.py` + `tests/verification/test_normalization_idempotence.py` (Hypothesis) |
+| job-lifecycle and pipeline interleavings | FizzBee L4 + DST L6 (unchanged) |
 
 ### L6 — Deterministic simulation (DST)
 Exercises the **real implementation's actual schedules** — no model, no twin,
@@ -214,9 +187,9 @@ model, and implementation.
   `` `N-1..N-4` `` supported).
 - `make verify-cross-consistency` — the NL-Doc gate (VLP evidence: validating
   an intermediate artifact beats direct code review 84% vs 40%). Mechanical
-  subset now (every public function in `NAGINI_FILES` carries a docstring);
-  the LLM comparison activates via `ARCH_CONSISTENCY_MODEL`, with the checker
-  model identity pinned per run (E3).
+  subset now (every public function in the decision modules carries a
+  docstring); the LLM comparison activates via `ARCH_CONSISTENCY_MODEL`, with
+  the checker model identity pinned per run (E3).
 
 Both run in the nightly canary workflow (`verification.yml` #bug-gardens).
 
@@ -235,10 +208,10 @@ internal consistency — never design quality.
 Humans judge T2 and the calls machines cannot make: vacuity triage, bound
 justification, fairness assumptions, No-Go decisions. Programmed elements:
 `docs/review-checklist.md` (required-review paths), the perf smoke canary
-(`tests/verification/test_perf_smoke.py`, RUN_PERF — proofs guarantee
-functional correctness, not performance), and the nightly TCB canary workflow
+(`tests/verification/test_perf_smoke.py`, RUN_PERF — the decision modules'
+latency budgets are the canary), and the nightly TCB canary workflow
 (`.github/workflows/verification.yml`: unit suite, oracle suites, gardens,
-ledger, NL-Doc, perf smoke blocking; mutmut/Nagini/FizzBee advisory).
+ledger, NL-Doc, perf smoke blocking; mutmut/FizzBee advisory).
 
 ## Shared property vocabulary
 
@@ -247,17 +220,17 @@ One ID per property across all layers (drift is reviewable 1:1 via the
 
 | ID | Property | Layers |
 |---|---|---|
-| `J-1` | terminal job states immutable | L2, L3, L4, L5, L6, frozen traces |
-| `J-2` | cancel effective only from pending/running | L2, L4, L5, L6 |
-| `J-3` | `created_at <= updated_at` always | L2, L4, L5 |
-| `J-4` | one running row per job_id | L2, L4, L5 |
-| `P-1` | pipeline attempt loop bounded (≤ 3) | L4, L5 |
+| `J-1` | terminal job states immutable | L2, L3, L4, L6, frozen traces |
+| `J-2` | cancel effective only from pending/running | L2, L4, L6 |
+| `J-3` | `created_at <= updated_at` always | L2, L4 |
+| `J-4` | one running row per job_id | L2, L4 |
+| `P-1` | pipeline attempt loop bounded (≤ 3) | L4 |
 | `FP-2..FP-7`, `FC-1`, `FC-2` | pipeline/order/liveness (FizzBee-only) | L4 |
 | `RUN-1`, `RUN-3`, `RUN-4`, `C-1` | background-task lifecycle + cancel-tool triage (FizzBee-only) | L4 |
 | `E5F-1..E5F-4` | reasoning-client deadline/retry/cache discipline (FizzBee view of E5) | L4 |
 | `TEI-1`, `RET-1`, `FUS-1..FUS-3` | reranker verdict + retrieval resolution/fallback | L4 |
 | `DL-2..DL-5` | design-loop triage decisions | L4 |
-| `N-1..N-4` | normalization idempotence + dedup | L2, L5 |
+| `N-1..N-4` | normalization idempotence + dedup | L2 |
 | `E5` | LLM-boundary timeout/retry discipline | L2 |
 | `INV-1..INV-7` | LLM-output structural invariants | L9 |
 | `M-*` / `FG-*` | garden mutants (Python / `.fizz`) | L3 |
@@ -268,10 +241,9 @@ One ID per property across all layers (drift is reviewable 1:1 via the
 |---|---|---|
 | `make check-lint` / `make check-static-typing` / `make check-deadcode` / `make check-depcheck` | L0 | every commit (pre-commit + CI); `make check-all` runs all four |
 | `make test-unit` | L1 | every commit + nightly canary (`verification.yml` #unit-suite) |
-| `make test-oracles` | L1b, L2, plus L4 traces / L5 conformance / L6 DST / L1 canary | pre-push + CI + nightly canary (`verification.yml` #bug-gardens) |
+| `make test-oracles` | L1b, L2, plus L4 traces / L6 DST / L1 canary | pre-push + CI + nightly canary (`verification.yml` #bug-gardens) |
 | `make test-mutations` | L3 | manual / nightly |
 | `make verify-fizz` / `make verify-fizz-simulation` | L4 | CI authoritative |
-| `make verify-nagini` / `nagini_verify_file` (MCP server) | L5 | agent-run per change; CI authoritative |
 | `make verify-ledger` / `make verify-cross-consistency` | L8 | commit (advisory) + nightly canary (`verification.yml` #bug-gardens) |
 | `ARCH_BENCH_LLM=1 pytest tests/eval/ -m llm` | L9 | prompt/model changes |
 | `RUN_PERF=1 pytest tests/verification/test_perf_smoke.py` | L10 | nightly canary |
@@ -284,7 +256,7 @@ One ID per property across all layers (drift is reviewable 1:1 via the
 | L2 | properties hold on generated samples (shrunk to minimal counterexamples on failure) |
 | L3 | the oracles themselves catch every planted bug class |
 | L4 | no interleaving **up to the stated bounds** violates the assertions |
-| L5 | the annotated fragment is correct on **all inputs** (stubs assumed correct) |
+| L5 | *(retired)* — decision properties pinned by the L1/L2 oracles |
 | L6 | the real implementation holds J-1/J-2 under **all explored schedules** |
 | L7 | no known-vulnerable or unreviewed dependency entered |
 | L8 | spec, docstring, and artifact mapping agree |

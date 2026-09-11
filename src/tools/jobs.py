@@ -64,7 +64,7 @@ class JobsStore:
     the guard is atomic inside SQLite, which makes J-1 (terminal-state
     immutability) and J-2 (cancel effective only from pending/running) true of
     the implementation. This is the deliberate bug-fix exemption from the
-    no-runtime-change rule (nagini-verification-plan.md §3.9).
+    no-runtime-change rule (formal_verification.md §4.5).
     """
 
     _instance: "JobsStore | None" = None

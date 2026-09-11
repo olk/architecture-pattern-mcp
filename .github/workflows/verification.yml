@@ -1,8 +1,8 @@
 name: Nightly Verification Canaries
 
-# L10 TCB canaries (testing-strategies §3.10, nagini plan §6.3 / fizzbee plan
-# §6.4): the verifiers and tester toolchains are part of the trusted computing
-# base; a garden mutant that survives a dependency bump BLOCKS the bump until
+# L10 TCB canaries (testing-strategies §3.10, fizzbee plan §6.4): the
+# verifiers and tester toolchains are part of the trusted computing base; a
+# garden mutant that survives a dependency bump BLOCKS the bump until
 # triaged. Advisory jobs are marked continue-on-error — findings are leads
 # that must be triaged, not silent green.
 #
@@ -95,23 +95,6 @@ jobs:
       - run: uv sync
       - name: mutmut incremental sweep
         run: make test-mutations
-
-  verify-nagini:
-    name: L5 — Nagini over NAGINI_FILES (opt-in toolchain)
-    runs-on: ubuntu-latest
-    continue-on-error: true
-    steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: "21"
-      - uses: astral-sh/setup-uv@v10.0.0
-        with:
-          enable-cache: true
-      - run: uv sync
-      - name: Nagini verification
-        run: make verify-nagini
 
   verify-fizz:
     name: L4 — FizzBee exhaustive checks (opt-in toolchain)

@@ -10,8 +10,7 @@
 > Companion documents (this one integrates them; it replaces none):
 > [`formal_verification.md`](formal_verification.md) — the deep rationale
 > (T1/T2 trust split, tool landscape, layered-stack synthesis, §5 testing
-> evidence); [`nagini-verification-plan.md`](nagini-verification-plan.md) —
-> the deductive program (contracts, twins, gardens); 
+> evidence);
 > [`fizzbee-verification-plan.md`](fizzbee-verification-plan.md) — the
 > model-checking program (specs, ledgers, seeded simulation).
 >
@@ -33,14 +32,14 @@
 > **Second September 2026 amendment** (E1–E8 review pass, 2026-09-09; the
 > Week-0 delivery is specified in
 > [`week-0-task-breakdown.md`](week-0-task-breakdown.md)): DST acceptance
-> requires ≥ 1 of the discriminating pair `J-1`/`J-2` (E1, §3.7); FizzBee
-> program declared independent of the Nagini Go/No-Go (E2, §6);
+> requires ≥ 1 of the discriminating pair `J-1`/`J-2` (E1, §3.7); the FizzBee
+> program is a standalone decision unit (E2, §6);
 > cross-consistency checker model identity pinned per run (E3, §3.9);
 > secret canary extended to persisted job fields (E4, §3.2);
 > reasoning-client timeout/retry Hypothesis oracle (E5, §3.3 + §5 duty
 > matrix); injectable-lock refactor added to Week 0 (E6, §6); quarterly
 > evidence audit of the load-bearing citations (E7, §9); pipeline-control
-> twin sequenced behind FizzBee F2 (E8, §6 cross-ref).
+> model sequenced behind FizzBee F2 (E8, §6 cross-ref).
 
 ## 1. Problem Statement: Testing Code Nobody Fully Reads
 
@@ -71,7 +70,7 @@ Testing carries a double burden here:
 | # | Principle | Enforcement in this repo |
 |---|---|---|
 | P1 | **Decorrelated oracles.** Layers are chosen so their blind spots do not overlap; residuals multiply instead of add (`formal_verification.md` §6.1) | The §2 stack: type system / sampling / mutation / interleaving / proof are orthogonal bug-class owners |
-| P2 | **Vacuity control everywhere.** Every oracle must be able to fail; an oracle that cannot fail is deleted | Mutant-kill rules: Nagini contracts and `.fizz` assertions must each kill ≥ 1 garden mutant; Hypothesis oracles face the same mutmut audit |
+| P2 | **Vacuity control everywhere.** Every oracle must be able to fail; an oracle that cannot fail is deleted | Mutant-kill rules: `.fizz` assertions must each kill ≥ 1 garden mutant; Hypothesis oracles face the same mutmut audit |
 | P3 | **One definition of green.** Hooks, agent loops, and CI execute literally the same `make` targets | All layers delegate to Make targets (§5); no duplicated commands |
 | P4 | **The agent is untrusted.** AGENTS.md rules are advisory for an LLM; enforcement is mechanical | CI re-runs the full gate set on every push regardless of what the agent did locally |
 | P5 | **Honest claims.** Every layer states what it certifies *and its boundary* — sampled ≠ exhaustive ≠ ∀-inputs; bounded model ≠ unbounded theorem | Per-layer claim wording in §2 and the trust stories of both plans (§9 each) |
@@ -89,9 +88,9 @@ once and would again). "Gate" = where enforcement is mandatory.
 | L1 | Unit testing | pytest (`tests/unit/`) | chosen-input functional behaviour, regressions | s | pre-push + CI | 85–90% coverage target for AI code (vs 70–80% human) |
 | L1b | MCP boundary fuzzing | Hypothesis (schema-derived + malformed payload strategies) | **boundary-shape robustness**: malformed nested payloads, coercion edges, oversized inputs, wrong-arity calls — no unhandled exception escapes, structured errors only, no traceback leaks | s–min | CI (advisory Phase 0 → blocking Phase 1) | in-repo (§3.2a); counters "schema validation = boundary robustness" trust-by-proxy |
 | L2 | Property-based testing | Hypothesis (+ `hypothesis[crosshair]`) | input-space edge cases: shape, length, Unicode, boundaries | s–min | CI | Anthropic agentic PBT: real numpy/scipy/pandas bugs, 86% of top-priority reports valid |
-| L3 | Mutation testing | mutmut + planted-bug gardens (Nagini garden, `.fizz` garden) | **tests-the-tests**: tautological tests, vacuous contracts/assertions | min–h | manual/nightly | crucible: LLM test suites 65% → 99% mutation score via tester/critic loop; 68% circularity |
+| L3 | Mutation testing | mutmut + planted-bug gardens (Python garden, `.fizz` garden) | **tests-the-tests**: tautological tests, vacuous assertions | min–h | manual/nightly | crucible: LLM test suites 65% → 99% mutation score via tester/critic loop; 68% circularity |
 | L4 | Model checking | FizzBee — exhaustive + seeded simulation (`.fizz` specs) | **all interleavings up to bounds**: races, crash windows, deadlocks, guard gaps; liveness under fairness | s–min | pre-push (path-filtered) + CI | SlateDB GC-boundary bug; Shopify weekend pilot |
-| L5 | Deductive verification | Nagini (contracts in `*_core.py`, twins) | ∀ inputs: memory safety, totality, termination, state invariants | min (JVM) | CI (`RUN_VERIFY=1`) | VeriGuard (Google); VerifiedSCION lineage |
+| L5 | Deductive verification | — (*retired 2026-09*) | ∀-inputs decision-logic properties, now pinned by the L1/L2 oracles (`tests/unit/`, `tests/verification/test_normalization_idempotence.py`) | — | — | — |
 | L6 | Deterministic simulation | simloom / frontrun (Phase-0 head-to-head) | real asyncio schedules of the *real implementation*, replayable seeds | h (bounded search) | Phase-0 experiment | FoundationDB/TigerBeetle school; simloom `systematic=True` = bounded proof on unmodified asyncio |
 | L7 | Dependency & supply chain | deptry, `uv.lock` pinning, (candidate: pip-audit) | hallucinated/unused/vulnerable deps, slopsquatting | s | pre-push + CI | USENIX '25: 19.7% hallucinated packages |
 | L8 | Spec & doc-level testing | NL-Doc cross-consistency gate, property-ID ledger checks, SpecPylot-style spec inference | intent drift: code ≠ docstring ≠ contract ≠ model | min | advisory → blocking per plan | VLP: intermediate-artifact validation 84% vs 40% direct review; Clover six-way consistency |
@@ -113,10 +112,10 @@ design is *good* — see §3.9a.)
 
 Existing: ruff + mypy `--strict` (AGENTS.md gates; zuban LSP in the editor).
 This is the one layer with zero runtime cost and (for its fragment) sound
-verdicts — it is also a *prerequisite* for two higher layers (Nagini runs
-mypy internally; mutmut uses it to filter mutants).
+verdicts — it is also a *prerequisite* for the mutmut layer (mutmut uses it
+to filter mutants).
 
-**Addition (from the Nagini plan §5.4, restated here because it is a testing
+**Addition (async linters — restated here because it is a testing
 layer, not a verification layer):** async-aware linters —
 [flake8-async](https://flake8-async.readthedocs.io/) (blocking calls in async
 functions, sync primitives in async context, missing awaits) and
@@ -145,8 +144,8 @@ in both verification programs (the no-runtime-change rule is defined *as*
   flagged.
 - **Determinism:** tests pin seeds, freeze time, and use in-memory stores;
   asyncio tests use explicit event-loop fixtures so failures replay.
-- **The unit suite is the oracle for refactors.** Splits (`*_core.py`),
-  guarded transitions, twin extractions — all land with the unit suite green
+- **The unit suite is the oracle for refactors.** Module splits, merges,
+  guarded transitions — all land with the unit suite green
   *before* any verification artifact claims anything about the new shape.
 - **Secret canary (first September 2026 amendment).** A unit/integration test
   sets a distinctive fake API key, drives a design call through a mock LLM
@@ -201,15 +200,15 @@ found real numpy/scipy/pandas bugs, with 56% of reports valid and 86% of
 top-priority ones; property inference is viable exactly when
 counterexample-refined.
 
-**In this repo (from the Nagini plan §5.1, locked decision):** every proven
+**In this repo (locked decision):** every proven
 or modeled property is re-stated as an executable Hypothesis test under
 `tests/verification/`, keyed by the shared property IDs (`J-1`–`J-4`, `P-1`,
 `FC-*`/`FP-*` with filled oracle columns in
-`verify/fizz/README.md`). Rationale: the contract/model could be vacuous; the
+`verify/fizz/README.md`). Rationale: the model could be vacuous; the
 test checks *observed behaviour*; together they pin both directions (P1).
 Direction of the implication matters and is stated per property: the
-Hypothesis oracle *samples* what the proof *guarantees* and what the model
-*exhaustively checks up to bounds*.
+Hypothesis oracle *samples* what the model *exhaustively checks up to
+bounds*.
 
 Backends: `hypothesis[crosshair]` adds a symbolic backend to the same
 properties (CrossHair as the "weak but useful peer" — never treated as a
@@ -220,9 +219,8 @@ tests of the FizzBee program (§3.4 there), making one target the home of
 
 **Reasoning-client oracle (E5, second September 2026 amendment).** The LLM
 transport boundary (`src/reasoning/client.py`: LiteLLM + httpx timeouts,
-retries, error mapping) was previously owned by no layer — unverified,
-unmodeled (not a `.fizz` target), and outside `NAGINI_FILES` until a
-close-semantics twin (Nagini plan phase 11, optional). A Phase-0 Hypothesis
+retries, error mapping) was previously owned by no layer — unverified and
+unmodeled (not a `.fizz` target). A Phase-0 Hypothesis
 oracle closes the gap cheaply: simulated transport delays/timeouts/failures
 must produce a structured `ToolError`/`LLMError` mapping, never a hang, and
 retry counts stay within the configured bound (`timeout ⇒ structured error,
@@ -236,19 +234,19 @@ failure injection instead of chosen cases. Runs under
 The layer that directly attacks the 68% circularity finding. Two mechanisms:
 
 1. **mutmut over Tier A/B/C modules + `tests/verification/`**
-   (`make mutation-tests`, Nagini plan §5.2): audits the *Python* oracles.
+   (`make mutation-tests`, testing-strategies §5.2): audits the *Python* oracles.
    Synergy: mutmut's mypy-based mutant filtering raises mutant quality in a
    `--strict` codebase. Caveat (mutmut's own docs): the type filter can hide
    valid mutants — filter survivors are a *hint*, never a verdict.
 2. **Planted-bug gardens as the vacuity authority** (both plans): hand-planted
-   mutants with expected-kill annotations — the Nagini garden
+   mutants with expected-kill annotations — the Python garden
    (≥ 20 mutants, four classes: off-by-one, None-deref, unbounded loop,
-   shape/KeyError) audits contracts; the FizzBee garden (≥ 15 mutants: guard
-   drop, transition swap, assertion weaken, bound overflow) audits model
-   assertions. Rule: every `Requires`/`Ensures`/`Assert`/`Invariant` and
-   every `.fizz` assertion must kill ≥ 1 garden mutant or carry a
-   `# spec-explains:` justification; per-phase prune passes delete the dead
-   weight (the DARe 88%-removable finding, applied twice).
+   shape/KeyError) audits the decision logic; the FizzBee garden (≥ 15
+   mutants: guard drop, transition swap, assertion weaken, bound overflow)
+   audits model assertions. Rule: every `.fizz` assertion must kill ≥ 1
+   garden mutant or carry a `# spec-explains:` justification; per-phase prune
+   passes delete the dead weight (the DARe 88%-removable finding, applied
+   twice).
 
 Evidence for the layer: crucible (tester/critic LLM loop over mutmut) raised
 AI-suite mutation scores 65% → 99%; Nightjar's pipeline found 74 bugs in 34
@@ -278,25 +276,22 @@ summarized here because the *testing strategy* matters at stack level:
   would license only "not found in N runs". Both are kept because they sit at
   different points of the budget/concurrency curve (FizzBee plan §5.6).
 
-### 3.6 L5 — Deductive verification (Nagini): ∀-inputs
+### 3.6 L5 — Deductive verification: retired (2026-09)
 
-Owned by [`nagini-verification-plan.md`](nagini-verification-plan.md). At
-stack level: the only layer whose verdict is *universal over inputs* for the
-annotated fragment (totality, no undeclared exceptions, termination,
-permission-disciplined state) — and the most expensive per run (JVM,
-verify-repair loops). Its position in the stack is therefore narrow and
-deliberate: the critical 5–10% of modules (`NAGINI_FILES`), never the whole
-tree, with contracts reviewed against the garden (L3) and mirrored as L2
-oracles and L8 ledger rows. Google's VeriGuard is the pattern precedent:
-FV as one stage of a three-stage refinement loop (intent → pytest → proof),
-never as the whole program.
+The L5 layer (deductive verification of the decision modules with
+Requires/Ensures/Invariant contracts) was removed in September 2026.  The
+∀-input decision properties it certified are now pinned by the L1 behavioral
+oracles and the L2 Hypothesis oracle (`tests/unit/`,
+`tests/verification/test_normalization_idempotence.py`, N-1..N-4) — see
+`docs/verification.md` L5 for the removal summary and the property-by-property
+hand-off table.
 
 ### 3.7 L6 — Deterministic simulation testing (DST): the real implementation's schedules
 
 The third exploration cell (`formal_verification.md` §2.7): seeded
 schedulers, virtual clocks, and in-memory fault injection over the *actual*
 asyncio code — no model, no twin, no drift. Status in this repo: a **Phase-0
-head-to-head sub-experiment** in the Nagini plan §3.6 (simloom
+head-to-head sub-experiment** (simloom
 `systematic=True` vs frontrun DPOR on the real `jobs.py`, explicit acceptance
 numbers: ≥ 2 of `J-1`–`J-4` **including ≥ 1 of the discriminating pair
 `J-1`/`J-2`** within bounded exploration — E1, second September 2026
@@ -326,21 +321,22 @@ scan-based.
 The newest layer, and the one aimed at the failure mode *above* the code:
 intent drift between prompt, docstring, contract, model, and implementation.
 
-- **NL-Doc cross-consistency gate** (`make verify-cross-consistency`, Nagini
-  plan §3.3/§5.4): a *second* LLM summarizes each verified function; summary
-  is diffed against docstring + `Ensures`. Evidence: VLP (pass@1 28.7–73.2%
-  → 65.4–93.5% via validated intermediate artifacts) and Fakhoury et al.
-  (validating an intermediate artifact beats direct code review 84% vs 40%).
-  Advisory in Phases 0–1, promotable at > 10% divergence. **Checker
-  identity pinned (E3, second September 2026 amendment):** each run records
-  the checker model's identity and version in the property-ID ledger; the
-  promotion trigger is scored against a *named* model, and a silently
+- **NL-Doc cross-consistency gate** (`make verify-cross-consistency`,
+  formal_verification.md §3.1 VLP entry): a *second* LLM summarizes each
+  decision-module function; summary
+  is diffed against docstring + property documentation. Evidence: VLP
+  (pass@1 28.7–73.2% → 65.4–93.5% via validated intermediate artifacts) and
+  Fakhoury et al. (validating an intermediate artifact beats direct code
+  review 84% vs 40%). Advisory in Phases 0–1, promotable at > 10% divergence.
+  **Checker identity pinned (E3, second September 2026 amendment):** each run
+  records the checker model's identity and version in the property-ID ledger;
+  the promotion trigger is scored against a *named* model, and a silently
   downgraded checker is a gate-avoidance finding — the mechanical counter
   to a weak second model inflating a clean score.
 - **Property-ID ledger checks** (`make verify-ledger`, FizzBee plan §5.3):
-  mechanical diff of the assertion/twin/oracle/conformance mapping — the
+  mechanical diff of the assertion/oracle/conformance mapping — the
   drift gate for the model layer.
-- **Spec-inference as a bootstrap** (SpecPylot-style, Nagini plan §5.3):
+- **Spec-inference as a bootstrap** (SpecPylot-style):
   LLM-proposed properties validated by CrossHair counterexamples, compared
   against hand-written sets — with the documented rejection path when bounded
   search cannot refute false positives.
@@ -393,16 +389,16 @@ calls the mechanical layers cannot make: vacuity triage, bound justification,
 fairness assumptions, readability budgets, No-Go decisions. Programmed
 elements: required review for critical paths (`jobs.py` transitions,
 `pipeline.py` control flow, any `verify/` artifact that
-changes a property claim), post-merge canaries for verified paths
-(coarse benchmark smoke, Nagini plan §5.5 — proofs guarantee functional
-correctness, not performance), and the nightly TCB canaries (L3 gardens
-against pinned verifier versions).
+changes a property claim), post-merge canaries for the decision-module paths
+(coarse benchmark smoke, formal_verification.md §4.5 — proofs guarantee
+functional correctness, not performance), and the nightly TCB canaries (L3
+gardens against pinned verifier versions).
 
 ## 4. Cross-Cutting Principles (applied, not aspirational)
 
 1. **Decorrelation check per new layer.** Before adopting a tool, name the
    bug class it owns that no existing layer owns (the "discriminating
-   dimension" of the Nagini Go/No-Go). A layer without a unique class is
+   dimension" of a Go/No-Go decision). A layer without a unique class is
    cost without margin.
 2. **Vacuity is the default failure.** Oracles accrete toward tautology;
    every layer here has a mechanical counter (gardens, prune passes, ledger
@@ -421,7 +417,7 @@ against pinned verifier versions).
 | Stage | Checks | Cost | Scope |
 |---|---|---|---|
 | pre-commit (local) | ruff check/format, mypy `--strict` hook | seconds | changed files |
-| pre-push (local) | vulture, deptry, `pytest tests/unit/`, `verify-nagini` + `verify-fizz` (path-filtered), `RUN_VERIFY=1` | ~1–5 min | whole project |
+| pre-push (local) | vulture, deptry, `pytest tests/unit/`, `verify-fizz` (path-filtered) | ~1–5 min | whole project |
 | CI (every push/PR) | everything above, unconditional + Hypothesis oracles/trace-replay, boundary fuzzing (L1b), ledger check, async linters (from Phase 1), cross-consistency (advisory) | minutes | server-side, authoritative |
 | nightly | both gardens (TCB canary), FizzBee seeded simulation, mutmut (optional), pip-audit (when adopted), performance smoke | ~30 min | scheduled |
 | manual | `mutation-tests`, garden authoring, spec-inference experiments, L9 output-contract corpus (on prompt/model changes) | on demand | per task |
@@ -430,9 +426,9 @@ against pinned verifier versions).
 
 | What changed | Layers due |
 |---|---|
-| `src/*_core.py`, `verify/twin/` | full Nagini loop + L2 oracle update + ledger row |
+| `src/text_validation.py`, `src/design_normalization.py` (decision modules) | L1 unit + L2 Hypothesis oracle update + ledger row |
 | `verify/fizz/*.fizz` | full FizzBee loop + garden re-run + ledger row |
-| `src/tools/jobs.py`, `src/pipeline.py` control flow | matching `.fizz` spec + twin in the same PR (AGENTS.md rule); DST experiment objects when adopted |
+| `src/tools/jobs.py`, `src/pipeline.py` control flow | matching `.fizz` spec in the same PR (AGENTS.md rule); DST experiment objects when adopted |
 | tool signature or schema (`src/tools/*.py`, `src/schemas/*`) | L1b payload-generator update + boundary-fuzzing run (first amendment) |
 | prompt or model config (`src/prompts/`, `src/reasoning/`) | L9 output-contract corpus re-run — advisory drift gate (first amendment); **`src/reasoning/client.py` also triggers the L2 timeout/retry oracle (E5, second amendment)** |
 | any other `src/` file | standard gates (L0/L1/L7) — nothing extra |
@@ -444,17 +440,12 @@ against pinned verifier versions).
 | Program phase | Testing layers activated |
 |---|---|
 | Today | L0 (ruff, mypy), L1 (unit), L7 (deptry, pinning) |
-| **Week 0** (first amendment — before Phase 0) | **guarded-transition bug fix in `src/tools/jobs.py` + unit tests** (the fix-before-proof sequencing correction: `J-1`/`J-2` become true of the implementation before any twin, `.fizz` model, or DST experiment claims them — Nagini plan §3.6/§3.9). **Second amendment (E6/E4):** the same Week-0 window adds the constructor-injectable `JobsStore` lock (E6) and the E4-extended secret canary (W0-3) — the full task list with acceptance criteria is [`week-0-task-breakdown.md`](week-0-task-breakdown.md) |
+| **Week 0** (first amendment — before Phase 0) | **guarded-transition bug fix in `src/tools/jobs.py` + unit tests** (the fix-before-proof sequencing correction: `J-1`/`J-2` become true of the implementation before any `.fizz` model or DST experiment claims them — formal_verification.md §4.5). **Second amendment (E6/E4):** the same Week-0 window adds the constructor-injectable `JobsStore` lock (E6) and the E4-extended secret canary (W0-3) — the full task list with acceptance criteria is [`week-0-task-breakdown.md`](week-0-task-breakdown.md) |
 | Phase 0 (both plans, weeks 1–2) | L2 (Hypothesis oracles), L3 (gardens + Go/No-Go), L4 pilot (FizzBee F0, in-spec A/B flip), L1b boundary fuzzing advisory, L9 corpus baseline, async linters advisory, L6 experiment, L8 advisory (ledger, cross-consistency) |
-| Phases 1–4 (Nagini) / F1–F2 (FizzBee) | L5 grows (`NAGINI_FILES`), L4 gate (`verify-fizz` blocking), L1b blocking (from Nagini Phase 1), L8 ledger blocking, async linters blocking |
+| Phases F1–F2 (FizzBee) | L4 gate (`verify-fizz` blocking), L1b blocking (from Phase 1), L8 ledger blocking, async linters blocking |
 | Continuous | nightly set complete (gardens, simulation, canaries, smoke), L10 cadence, L9 corpus on prompt/model changes |
 
-Nagini phases 5+ additionally carry the **named-property continuation rule**
-(first amendment; Nagini plan §6.2): a phase beyond 4 proceeds only with a
-named property whose violation is plausible *and* costly in this deployment
-reality — otherwise it is descoped by default with a recorded decision.
-
-The falsifiable gate remains the Nagini plan's Phase-0 Go/No-Go (bug garden,
+The falsifiable gate remains the Phase-0 Go/No-Go (bug garden,
 discriminating dimension, numeric thresholds) plus the FizzBee F0 reproduction
 experiment — both programs are *measured* before they are trusted, and this
 stack document inherits their numbers rather than inventing new ones. **The
@@ -506,7 +497,7 @@ nightly canaries (§7.4) exist.
 | L2 | 8.6–8.7 | Hypothesis, CrossHair |
 | L3 | 8.8–8.9 | mutmut, crucible |
 | L4 | 8.10 | FizzBee |
-| L5 | 8.11 | Nagini |
+| L5 | — | (retired — see §3.6) |
 | L6 | 8.12–8.13 | simloom, frontrun |
 | L7 | 8.14–8.16 | deptry, pip-audit, uv |
 | L8 | 8.17 | airtight-ai (Clover lineage) |
@@ -558,8 +549,8 @@ SignalWire (`--strict`).
 
 **AI-trust contribution:** the cheapest effective filter against
 hallucinated APIs (~70–77% detection, arXiv 2604.07755 above), and the
-prerequisite substrate for two higher layers: mutmut's mutant filtering
-(§8.8) and Nagini's contract syntax (§8.11).
+prerequisite substrate for the higher layer mutmut's mutant filtering
+(§8.8).
 
 ### 8.3 flake8-async — async-safety linting (L0)
 
@@ -569,7 +560,7 @@ Docs: <https://flake8-async.readthedocs.io/> · Repo: <https://github.com/python
 |---|---|
 | The most complete ASYNC rule set (blocking sync calls, cancellation/checkpoint semantics, timeout misuse) for trio/anyio/asyncio; some autofixes; user-configurable blocking-call patterns | Per-file analysis only — cannot follow cross-module call chains (that gap is §8.4's job); opinionated/noisy; flake8≥6 config quirks for 4-letter codes |
 
-**Usage in this repo:** planned `make verify-async-lint` (Nagini plan §5.4);
+**Usage in this repo:** planned `make verify-async-lint`;
 advisory Phase 0 → blocking Phase 1 (§3.1).
 
 **In the wild:** its rule set is partially ported into ruff's ASYNC rules
@@ -632,7 +623,7 @@ Docs: <https://hypothesis.readthedocs.io/en/latest/> (settings/profiles: <https:
 
 **Usage in this repo:** hand-written strategies already exist
 (`tests/schemas/test_schemas.py`); L2 oracle home `tests/verification/`
-keyed by shared property IDs (§3.3, Nagini plan §5.1); gate
+keyed by shared property IDs (§3.3); gate
 `make verify-hypothesis-oracles`.
 
 **In the wild:** SymPy (novel bugs "after several million examples",
@@ -658,7 +649,7 @@ Repo: <https://github.com/pschanely/CrossHair> · Hypothesis backend: <https://g
 
 **Usage in this repo:** `hypothesis[crosshair]`; same properties, second
 backend (§3.3); refutes LLM-proposed specs in the SpecPylot-style bootstrap
-(Nagini plan §5.3).
+(§3.9).
 
 **In the wild:** no named adopters surfaced; presence is via the Hypothesis
 backend API itself.
@@ -677,7 +668,7 @@ Docs: <https://mutmut.readthedocs.io/en/latest/> · Repo: <https://github.com/bo
 | Fork-based mutation schemata (parallel, fast); incremental re-runs cover only changed functions; optional mypy-based mutant filtering; interactive `browse` UI + HTML report; mature (~700+ downstream projects) | Runtime blowup (a 10 s suite → 43 min at 513 mutants, <https://nedbatchelder.com/blog/201903/mutmut>); equivalent mutants persist as false positives; the mypy filter can hide valid mutants — survivors are hints, not verdicts (§3.4); fork-only, no native Windows |
 
 **Usage in this repo:** `make mutation-tests` over Tier A/B/C modules +
-`tests/verification/` (Nagini plan §5.2); the standard affordability
+`tests/verification/` (§3.4); the standard affordability
 pattern is incremental PR-scoped runs + nightly full sweeps — matches the
 §5 wiring.
 
@@ -731,28 +722,12 @@ are characteristic LLM failure modes invisible to per-file review and to
 sampling; "no interleaving up to bounds violates the assertions" is
 evidence no other layer here can produce (§P5 wording).
 
-### 8.11 Nagini — deductive verification (L5)
+### 8.11 Deductive verification — retired (2026-09)
 
-Repo: <https://github.com/marcoeilers/nagini> · Paper: Eilers & Müller, CAV 2018 (<https://pm.inf.ethz.ch/publications/EilersMueller18.pdf>)
-
-| Pros | Cons |
-|---|---|
-| Sound ∀-input verification (memory safety, assertions, races) for the annotated PEP-484 subset; contracts as machine-checked documentation; termination/deadlock/IO-information-flow options; Viper/Z3 push-button automation; modular — verified code stays verified as the tree grows | JVM/Viper backend cost; specifications are "usually (a lot) longer than the code itself"; restricted subset (no lambdas, match-case, metaclasses); unverified third-party stubs are assumed correct — a soundness escape hatch |
-
-**Usage in this repo:** contracts on `*_core.py` fragments + twins;
-`RUN_VERIFY=1` CI job; scope capped at the critical 5–10% (`NAGINI_FILES`);
-owned by the Nagini plan.
-
-**In the wild:** VerifiedSCION router; verified ASN.1 codecs; NumPy
-interface contracts (ETH thesis); **VeriGuard** (Google) uses Nagini to
-verify LLM-agent behavioural policies; JetBrains' "Can LLMs Enable
-Verification in Mainstream Programming?" evaluates LLMs writing
-Nagi-verified code — both cited at <https://pypi.org/project/nagi/>.
-
-**AI-trust contribution:** the only layer whose verdict is *total over
-inputs* — no sampling question remains. And a contract is an oracle the
-LLM cannot silently weaken: weakening changes the proof artifact and fails
-CI (tests can be quietly co-weakened; proofs cannot).
+The deductive-verification (Viper/Z3) profile formerly occupying this slot
+was removed with the L5 layer in September 2026 — see `docs/verification.md`
+L5 for the removal summary and the property-by-property hand-off to the
+L1/L2 oracles.
 
 ### 8.12 simloom — deterministic simulation (L6)
 
@@ -762,8 +737,8 @@ PyPI: <https://pypi.org/project/simloom/> · Repo: <https://github.com/mandipadk
 |---|---|
 | Runs *unmodified* asyncio code (real httpx/aiohttp in-sim) under a seeded scheduler + virtual clock; `systematic=True` = exhaustive delay-bounded exploration (a bounded proof); Elle-style serializability/linearizability checkers; pytest plugin; byte-exact seed replay | **Alpha, single author, pre-1.0 API**; harness-authoring cost (invariants + fault hooks must be written); no third-party adopters found |
 
-**Usage in this repo:** Phase-0 DST head-to-head candidate (§3.7, Nagini
-plan §3.6); adoption only through that experiment's acceptance numbers.
+**Usage in this repo:** Phase-0 DST head-to-head candidate (§3.7);
+adoption only through that experiment's acceptance numbers.
 
 **In the wild:** none surfaced — precedents are the DST school below (§8.13).
 
@@ -924,7 +899,6 @@ untrusted-agent control pair; unconditional CI (P4) is the other half.
 - Hypothesis: <https://hypothesis.readthedocs.io/en/latest/>; Anthropic PBT agent: <https://arxiv.org/abs/2510.09907>
 - mutmut (incl. mypy-filter caveat): <https://mutmut.readthedocs.io/en/latest/>
 - FizzBee (exhaustive + simulation): <https://fizzbee.io/>, [`fizzbee-verification-plan.md`](fizzbee-verification-plan.md) §5–§6
-- Nagini (deductive, VeriGuard pattern): <https://github.com/marcoeilers/nagini>, [`nagini-verification-plan.md`](nagini-verification-plan.md); VeriGuard: <https://arxiv.org/abs/2510.05156>
 - DST: simloom <https://pypi.org/project/simloom/>, frontrun <https://pypi.org/project/frontrun/>; FoundationDB <https://apple.github.io/foundationdb/testing.html>; SlateDB DST field report: <https://rng.md/posts/deterministic-simulation-testing-is-really-hard/>
 - flake8-async: <https://flake8-async.readthedocs.io/>; blockpath: <https://pypi.org/project/blockpath/>
 - VLP / NL-Doc: <https://arxiv.org/abs/2607.02333>; SpecPylot: <https://arxiv.org/abs/2604.16560>; Clover: <https://arxiv.org/abs/2310.17807>; airtight-ai: <https://pypi.org/project/airtight-ai/>
@@ -932,5 +906,4 @@ untrusted-agent control pair; unconditional CI (P4) is the other half.
 
 **Companion documents:**
 - Rationale and tool landscape: [`formal_verification.md`](formal_verification.md)
-- Deductive program: [`nagini-verification-plan.md`](nagini-verification-plan.md)
 - Model-checking program: [`fizzbee-verification-plan.md`](fizzbee-verification-plan.md)

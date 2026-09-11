@@ -16,7 +16,7 @@ tab completion (`make check-<TAB>`) surfaces them as a unit:
 |---|---|---|
 | `check-*` | static analysis quality gates (side-effect free) | `check-lint`, `check-static-typing`, `check-deadcode`, `check-depcheck` |
 | `test-*` | runs pytest (unit + executable oracles) or mutmut | `test-unit`, `test-oracles`, `test-mutations` |
-| `verify-*` | formal-model / external-tool audits | `verify-fizz`, `verify-fizz-simulation`, `verify-nagini`, `verify-ledger`, `verify-cross-consistency`, `verify-all` |
+| `verify-*` | formal-model / external-tool audits | `verify-fizz`, `verify-fizz-simulation`, `verify-ledger`, `verify-cross-consistency`, `verify-all` |
 | `docker-*` | container build / publish / lifecycle | see below |
 | `install*`, `client*`, `help`, `clean` | singletons / small pairs, no family | — |
 
@@ -107,9 +107,9 @@ every refactor (layer L1 in docs/verification.md).
 ### `test-oracles`
 `uv run pytest tests/verification/ -v` — the executable-oracle suite in
 `tests/verification/`: L1 secret canary, L2 Hypothesis property oracles,
-L3 bug-garden kill checks, L4 frozen-trace replay, L5 conformance, L6
+L3 bug-garden kill checks, L4 frozen-trace replay, L6
 deterministic simulation. Designed to pass regardless of whether the heavy
-verification toolchains (fizz, nagini) are installed.
+verification toolchain (fizz) is installed.
 
 ### `test-mutations`
 L3 mutation testing via mutmut over the Tier A/B/C modules, plus the
@@ -138,34 +138,31 @@ provisioning run, 2026-09-10; the flip's kill authority now lives in
 `jobs_runner.fizz`, where the W0-1 terminal-write race is the genuine
 second-write path — re-validated 2026-09-10).
 
+**Isolation:** each spec runs through `scripts/fizz-check.sh`, which copies
+`verify/fizz/` (specs + `fizz.yaml`) into a private temp dir
+(`verify/fizz/.fizz-run-XXXXXX`, removed on exit) and runs the checker
+there. The compiled `.json` ASTs and `out/` graphs are therefore per-run
+ephemera — concurrent gate runs cannot clobber each other's compiled
+artifacts, and an aborted run cannot leave stale state behind. A broken
+spec fails the gate with an explicit `verify-fizz: FAILED: <spec> (exit N)`
+line (verified: the `jobs_runner.fizz` `GUARDED=False` flip trips it).
+
 ### `verify-fizz-simulation` — L4
 Seeded parallel FizzBee simulation (`fizz -x --seed $(date +%s) --parallel
 $(nproc)`) over all specs — the nightly statistical relief valve for the
-exhaustive checks. Simulation mode prints no PASSED verdict on success,
-so the gate fails on any `FAILED` line or non-zero exit; a lucky seed can
-miss a violation (statistical by design — the exhaustive target is the
-authority).
+exhaustive checks, with the same per-spec temp-dir isolation via
+`scripts/fizz-check.sh`. Simulation mode prints no PASSED verdict on
+success, so the gate fails on any `FAILED` line or non-zero exit; a lucky
+seed can miss a violation (statistical by design — the exhaustive target is
+the authority).
 
-### `verify-nagini` — L5
-Deductive verification over the annotated cores (`scripts/verify_coverage.py
---verify-files`: `src/text_validation_core.py` and
-`src/design_normalization_core.py`).
+### Deductive-verification target — L5 (removed)
 
-The `nagini` CLI pins `mypy==1.5.0` and cannot share the dev environment, so
-the target provisions a dedicated venv (`.venv-nagini`, `nagini==1.3.1`) on
-first use and runs the CLI over each annotated core; the target fails on the
-first verification error. Requires a JVM for the Viper backend. The Nagini
-MCP server tools (`nagini_verify_file`) remain the interactive/agent-facing
-way to run the same checks (AGENTS.md). The contract vocabulary is provided
-by the local runtime-inert stub package `nagini_contracts/` (Nagini
-recognises contract calls by name).
-
-### `verify-coverage` — L5 (script, not a make target)
-`scripts/verify_coverage.py` — computes the `NAGINI_FILES` verification set
-and reports which modules are covered by it (target: 5–10% of lines). The
-Makefile consumes it directly (`$(NAGINI_FILES)`) — there is no
-`make verify-coverage` target; run `uv run python scripts/verify_coverage.py`
-for the report.
+The L5 deductive-verification target over the annotated decision cores was
+removed in September 2026 together with the contract-vocabulary stub package
+and the coverage-report script.  The decision-module properties formerly
+verified there are pinned by the L1/L2 oracles instead (docs/verification.md
+L5).
 
 ### `verify-import-inventory` — L7 (script, not a make target)
 `scripts/import_inventory.py --check tests/verification/snapshots/import_inventory.txt`
@@ -181,12 +178,13 @@ and every row must reference an existing artifact or be explicitly deferred.
 
 ### `verify-cross-consistency` — L8
 `scripts/cross_consistency.py` — NL-Doc/docstring cross-consistency over
-`NAGINI_FILES` (mechanical subset always on; the LLM comparison activates
-via `ARCH_CONSISTENCY_MODEL`, checker identity pinned per run). Advisory;
-findings are leads to triage, not failures.
+the decision modules (`SCOPE_FILES`: `src/text_validation.py`,
+`src/design_normalization.py`; mechanical subset always on; the LLM
+comparison activates via `ARCH_CONSISTENCY_MODEL`, checker identity pinned
+per run). Advisory; findings are leads to triage, not failures.
 
 ### `verify-all`
-Aggregator over the eight `verify-*` targets. Nightly entry point — safe on
+Aggregator over the four `verify-*` targets. Nightly entry point — safe on
 toolchain-less boxes because the gated members self-skip (see Conventions).
 
 ---
@@ -266,7 +264,6 @@ regenerated wholesale by `test-mutations` and gitignored.)
 | `test-unit` | `verification.yml` #unit-suite | nightly + manual dispatch |
 | oracle suite (as `make test-oracles`), `verify-ledger`, `verify-cross-consistency` | `verification.yml` #bug-gardens | nightly + manual dispatch |
 | `test-mutations` | `verification.yml` #mutmut-sweep | nightly (advisory, 180-min cap) |
-| `verify-nagini` | `verification.yml` #verify-nagini | nightly (advisory) |
 | `verify-fizz` | `verification.yml` #verify-fizz | nightly (advisory) |
 | `check-all`, `test-all`, `verify-all`, demo/docker targets | — | local / release use |
 

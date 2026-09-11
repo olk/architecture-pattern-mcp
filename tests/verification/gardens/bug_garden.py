@@ -20,7 +20,7 @@
 # SOFTWARE.
 
 """
-L3 planted-bug garden (testing-strategies §3.4; nagini plan §5.2, §6.3).
+L3 planted-bug garden (testing-strategies §3.4).
 
 The vacuity authority: >= 20 hand-planted mutants across the four documented
 classes (off-by-one, None-deref, unbounded loop, shape/KeyError) applied to
@@ -31,7 +31,7 @@ bounding, score blending).
 Each mutant carries a ``kill`` oracle — an executable property that must PASS
 on the mutant's reference implementation and FAIL (raise) on the mutant. The
 harness (test_bug_garden.py) asserts both directions; every later oracle layer
-(Nagini contracts, .fizz assertions, Hypothesis properties) that claims one of
+(.fizz assertions, Hypothesis properties) that claims one of
 these properties must kill the same mutant IDs or be rejected as vacuous.
 
 Unbounded-loop mutants are modeled deterministically: loop skeletons cap at

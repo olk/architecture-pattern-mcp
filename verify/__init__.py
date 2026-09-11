@@ -4,7 +4,7 @@
 """
 Verification artifacts (docs/verification.md L3/L4).
 
-This tree is NOT shipped (hatch packages only src/ and nagini_contracts/),
+This tree is NOT shipped (hatch packages only src/),
 NOT mypy-checked (files = ["src"]), and NOT scanned by vulture
 (scope: src + examples). It holds:
 
@@ -18,8 +18,4 @@ NOT mypy-checked (files = ["src"]), and NOT scanned by vulture
     bounds, and the property-ID ledger README.md) — consumed by the
     verify-fizz / verify-fizz-simulation / verify-ledger Make targets,
     never imported at runtime.
-
-The former Nagini twins/stubs/contracts shim that also lived here were
-removed with the L5 rework — the contract vocabulary now ships as the
-top-level ``nagini_contracts/`` package.
 """

@@ -20,8 +20,8 @@
 # SOFTWARE.
 
 """
-L6 deterministic-simulation experiment (testing-strategies §3.7; nagini plan
-§3.6 DST head-to-head sub-experiment).
+L6 deterministic-simulation experiment (testing-strategies §3.7; the DST
+head-to-head sub-experiment of formal_verification.md §2.7).
 
 Target: prove J-1/J-2 on the REAL JobsStore implementation under bounded
 schedule exploration (E1 acceptance: >= 1 of the discriminating pair
