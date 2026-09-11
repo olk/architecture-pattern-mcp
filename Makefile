@@ -15,7 +15,7 @@
 .PHONY: help install install-mcps \
 	check-lint check-static-typing check-deadcode check-depcheck check-all \
 	test-unit test-oracles test-mutations test-all \
-	verify-fizz verify-fizz-simulation \
+	verify-fizz verify-fizz-simulation verify-fizz-garden regen-fizz-traces \
 	verify-ledger verify-cross-consistency verify-all \
 	client docker-build docker-build-tei \
 	docker-build-all docker-publish docker-publish-tei \
@@ -136,6 +136,37 @@ verify-fizz-simulation: ## L4: seeded parallel FizzBee simulation (nightly relie
 		FIZZ_BIN=$(FIZZ) $(FIZZ_CHECK) "$$spec" simulation -x --seed $$seed --parallel $$workers; \
 	done
 
+# Mechanical revalidation of the .fizz spec garden (verify/fizz/garden.toml
+# <-> the README garden table): every FG-* mutation is applied to a hermetic
+# temp copy and must produce its documented outcome — an expect-fail mutant
+# that survives is a vacuous assertion, a budget-stopped run is inconclusive
+# (both fail the gate). Mutations never touch the working tree. The
+# toolchain-free subset (consistency, AGENTS.md assertion coverage, anchor
+# health, classifier) rides every `make test-oracles` pass via
+# tests/verification/test_fizz_garden.py.
+verify-fizz-garden: ## L3/L4: re-run the FG-* spec garden against the fizz toolchain
+	@if ! command -v $(FIZZ) >/dev/null 2>&1; then \
+		echo "fizz binary not found: brew install fizzbee, or set FIZZ=scripts/fizz-docker.sh"; exit 1; \
+	fi
+	@$(UV) run python scripts/fizz_garden.py --specs $(SPEC_DIR) --fizz-bin $(FIZZ)
+
+# Specs covered by the L4 conformance corpus (tests/verification/fizz_corpus/).
+# A spec change must regenerate its corpus in the same PR; the conformance
+# tests fail on a stale corpus (edge-coverage assertion) rather than silently
+# replaying an outdated graph.
+CONFORMANCE_SPECS := jobs_protocol tei_fallback retrieval_fusion
+
+regen-fizz-traces: ## L4: regenerate the conformance corpora (requires the fizz toolchain)
+	@if ! command -v $(FIZZ) >/dev/null 2>&1; then \
+		echo "fizz binary not found: brew install fizzbee, or set FIZZ=scripts/fizz-docker.sh"; exit 1; \
+	fi
+	@set -e; for spec in $(CONFORMANCE_SPECS); do \
+		echo ">> extracting state graph: $$spec"; \
+		$(UV) run python scripts/fizz_traces.py $(SPEC_DIR)/$$spec.fizz \
+			--out tests/verification/fizz_corpus/$$spec.json --fizz-bin $(FIZZ); \
+	done; \
+	echo "regen-fizz-traces: corpora up to date"
+
 verify-ledger: ## L8: property-ID ledger consistency (verify/fizz/README.md <-> artifacts)
 	@$(UV) run python scripts/verify_ledger.py
 
@@ -146,13 +177,15 @@ verify-cross-consistency: ## L8: NL-Doc/docstring consistency over the decision 
 	@$(UV) run python scripts/cross_consistency.py
 
 # Nightly aggregator over the formal/audit verify-* targets. verify-fizz /
-# verify-fizz-simulation self-skip when their toolchain is missing — safe on
-# toolchain-less boxes. test-oracles is a test-*, not a verify-*.
+# verify-fizz-simulation / verify-fizz-garden self-skip when their toolchain
+# is missing — safe on toolchain-less boxes. test-oracles is a test-*, not a
+# verify-*.
 verify-all: ## Run every verify-* target (nightly entry point)
-	@echo "==> [1/4] verify-fizz";              $(MAKE) --no-print-directory verify-fizz
-	@echo "==> [2/4] verify-fizz-simulation";   $(MAKE) --no-print-directory verify-fizz-simulation
-	@echo "==> [3/4] verify-ledger";            $(MAKE) --no-print-directory verify-ledger
-	@echo "==> [4/4] verify-cross-consistency"; $(MAKE) --no-print-directory verify-cross-consistency
+	@echo "==> [1/5] verify-fizz";              $(MAKE) --no-print-directory verify-fizz
+	@echo "==> [2/5] verify-fizz-simulation";   $(MAKE) --no-print-directory verify-fizz-simulation
+	@echo "==> [3/5] verify-fizz-garden";       $(MAKE) --no-print-directory verify-fizz-garden
+	@echo "==> [4/5] verify-ledger";            $(MAKE) --no-print-directory verify-ledger
+	@echo "==> [5/5] verify-cross-consistency"; $(MAKE) --no-print-directory verify-cross-consistency
 
 ##@ Demo
 client: ## Run the pipes-and-filters MCP client demo (synchronous design_architecture)

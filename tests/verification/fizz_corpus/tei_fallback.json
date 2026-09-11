@@ -1,0 +1,470 @@
+{
+ "edges": [
+  {
+   "action": "Reranker#0.HttpErr",
+   "from": 0,
+   "to": 1
+  },
+  {
+   "action": "Reranker#0.OkCall",
+   "from": 0,
+   "to": 2
+  },
+  {
+   "action": "Reranker#0.ShapeErr",
+   "from": 0,
+   "to": 3
+  },
+  {
+   "action": "Retriever#0.RecallEmpty",
+   "from": 0,
+   "to": 4
+  },
+  {
+   "action": "Retriever#0.RecallMany",
+   "from": 0,
+   "to": 5
+  },
+  {
+   "action": "Retriever#0.RecallOne",
+   "from": 0,
+   "to": 6
+  },
+  {
+   "action": "Retriever#0.RecallEmpty",
+   "from": 1,
+   "to": 7
+  },
+  {
+   "action": "Retriever#0.RecallMany",
+   "from": 1,
+   "to": 8
+  },
+  {
+   "action": "Retriever#0.RecallOne",
+   "from": 1,
+   "to": 9
+  },
+  {
+   "action": "Retriever#0.RecallEmpty",
+   "from": 2,
+   "to": 10
+  },
+  {
+   "action": "Retriever#0.RecallMany",
+   "from": 2,
+   "to": 11
+  },
+  {
+   "action": "Retriever#0.RecallOne",
+   "from": 2,
+   "to": 12
+  },
+  {
+   "action": "Retriever#0.RecallEmpty",
+   "from": 3,
+   "to": 13
+  },
+  {
+   "action": "Retriever#0.RecallMany",
+   "from": 3,
+   "to": 14
+  },
+  {
+   "action": "Retriever#0.RecallOne",
+   "from": 3,
+   "to": 15
+  },
+  {
+   "action": "Idle",
+   "from": 4,
+   "to": 4
+  },
+  {
+   "action": "Reranker#0.HttpErr",
+   "from": 4,
+   "to": 7
+  },
+  {
+   "action": "Reranker#0.OkCall",
+   "from": 4,
+   "to": 10
+  },
+  {
+   "action": "Reranker#0.ShapeErr",
+   "from": 4,
+   "to": 13
+  },
+  {
+   "action": "Retriever#0.Idle",
+   "from": 4,
+   "to": 4
+  },
+  {
+   "action": "Reranker#0.HttpErr",
+   "from": 5,
+   "to": 8
+  },
+  {
+   "action": "Reranker#0.OkCall",
+   "from": 5,
+   "to": 11
+  },
+  {
+   "action": "Reranker#0.ShapeErr",
+   "from": 5,
+   "to": 14
+  },
+  {
+   "action": "Idle",
+   "from": 6,
+   "to": 6
+  },
+  {
+   "action": "Reranker#0.HttpErr",
+   "from": 6,
+   "to": 9
+  },
+  {
+   "action": "Reranker#0.OkCall",
+   "from": 6,
+   "to": 12
+  },
+  {
+   "action": "Reranker#0.ShapeErr",
+   "from": 6,
+   "to": 15
+  },
+  {
+   "action": "Retriever#0.Idle",
+   "from": 6,
+   "to": 6
+  },
+  {
+   "action": "Idle",
+   "from": 7,
+   "to": 7
+  },
+  {
+   "action": "Retriever#0.Idle",
+   "from": 7,
+   "to": 7
+  },
+  {
+   "action": "Retriever#0.RerankErr",
+   "from": 8,
+   "to": 16
+  },
+  {
+   "action": "Idle",
+   "from": 9,
+   "to": 9
+  },
+  {
+   "action": "Retriever#0.Idle",
+   "from": 9,
+   "to": 9
+  },
+  {
+   "action": "Idle",
+   "from": 10,
+   "to": 10
+  },
+  {
+   "action": "Retriever#0.Idle",
+   "from": 10,
+   "to": 10
+  },
+  {
+   "action": "Retriever#0.RerankOk",
+   "from": 11,
+   "to": 17
+  },
+  {
+   "action": "Idle",
+   "from": 12,
+   "to": 12
+  },
+  {
+   "action": "Retriever#0.Idle",
+   "from": 12,
+   "to": 12
+  },
+  {
+   "action": "Idle",
+   "from": 13,
+   "to": 13
+  },
+  {
+   "action": "Retriever#0.Idle",
+   "from": 13,
+   "to": 13
+  },
+  {
+   "action": "Retriever#0.RerankErr",
+   "from": 14,
+   "to": 18
+  },
+  {
+   "action": "Idle",
+   "from": 15,
+   "to": 15
+  },
+  {
+   "action": "Retriever#0.Idle",
+   "from": 15,
+   "to": 15
+  },
+  {
+   "action": "Idle",
+   "from": 16,
+   "to": 16
+  },
+  {
+   "action": "Retriever#0.Idle",
+   "from": 16,
+   "to": 16
+  },
+  {
+   "action": "Idle",
+   "from": 17,
+   "to": 17
+  },
+  {
+   "action": "Retriever#0.Idle",
+   "from": 17,
+   "to": 17
+  },
+  {
+   "action": "Idle",
+   "from": 18,
+   "to": 18
+  },
+  {
+   "action": "Retriever#0.Idle",
+   "from": 18,
+   "to": 18
+  }
+ ],
+ "fizz_flags": [
+  "--no-symmetry-reduction"
+ ],
+ "nodes": [
+  {
+   "Reranker#0": {
+    "result": false,
+    "verdict": "NONE"
+   },
+   "Retriever#0": {
+    "fused": "NONE",
+    "outcome": "NONE",
+    "rerank_needed": false
+   }
+  },
+  {
+   "Reranker#0": {
+    "result": false,
+    "verdict": "HTTP_ERROR"
+   },
+   "Retriever#0": {
+    "fused": "NONE",
+    "outcome": "NONE",
+    "rerank_needed": false
+   }
+  },
+  {
+   "Reranker#0": {
+    "result": true,
+    "verdict": "OK"
+   },
+   "Retriever#0": {
+    "fused": "NONE",
+    "outcome": "NONE",
+    "rerank_needed": false
+   }
+  },
+  {
+   "Reranker#0": {
+    "result": false,
+    "verdict": "SHAPE_ERROR"
+   },
+   "Retriever#0": {
+    "fused": "NONE",
+    "outcome": "NONE",
+    "rerank_needed": false
+   }
+  },
+  {
+   "Reranker#0": {
+    "result": false,
+    "verdict": "NONE"
+   },
+   "Retriever#0": {
+    "fused": "EMPTY",
+    "outcome": "FALLBACK",
+    "rerank_needed": false
+   }
+  },
+  {
+   "Reranker#0": {
+    "result": false,
+    "verdict": "NONE"
+   },
+   "Retriever#0": {
+    "fused": "MANY",
+    "outcome": "NONE",
+    "rerank_needed": true
+   }
+  },
+  {
+   "Reranker#0": {
+    "result": false,
+    "verdict": "NONE"
+   },
+   "Retriever#0": {
+    "fused": "ONE",
+    "outcome": "REAL",
+    "rerank_needed": false
+   }
+  },
+  {
+   "Reranker#0": {
+    "result": false,
+    "verdict": "HTTP_ERROR"
+   },
+   "Retriever#0": {
+    "fused": "EMPTY",
+    "outcome": "FALLBACK",
+    "rerank_needed": false
+   }
+  },
+  {
+   "Reranker#0": {
+    "result": false,
+    "verdict": "HTTP_ERROR"
+   },
+   "Retriever#0": {
+    "fused": "MANY",
+    "outcome": "NONE",
+    "rerank_needed": true
+   }
+  },
+  {
+   "Reranker#0": {
+    "result": false,
+    "verdict": "HTTP_ERROR"
+   },
+   "Retriever#0": {
+    "fused": "ONE",
+    "outcome": "REAL",
+    "rerank_needed": false
+   }
+  },
+  {
+   "Reranker#0": {
+    "result": true,
+    "verdict": "OK"
+   },
+   "Retriever#0": {
+    "fused": "EMPTY",
+    "outcome": "FALLBACK",
+    "rerank_needed": false
+   }
+  },
+  {
+   "Reranker#0": {
+    "result": true,
+    "verdict": "OK"
+   },
+   "Retriever#0": {
+    "fused": "MANY",
+    "outcome": "NONE",
+    "rerank_needed": true
+   }
+  },
+  {
+   "Reranker#0": {
+    "result": true,
+    "verdict": "OK"
+   },
+   "Retriever#0": {
+    "fused": "ONE",
+    "outcome": "REAL",
+    "rerank_needed": false
+   }
+  },
+  {
+   "Reranker#0": {
+    "result": false,
+    "verdict": "SHAPE_ERROR"
+   },
+   "Retriever#0": {
+    "fused": "EMPTY",
+    "outcome": "FALLBACK",
+    "rerank_needed": false
+   }
+  },
+  {
+   "Reranker#0": {
+    "result": false,
+    "verdict": "SHAPE_ERROR"
+   },
+   "Retriever#0": {
+    "fused": "MANY",
+    "outcome": "NONE",
+    "rerank_needed": true
+   }
+  },
+  {
+   "Reranker#0": {
+    "result": false,
+    "verdict": "SHAPE_ERROR"
+   },
+   "Retriever#0": {
+    "fused": "ONE",
+    "outcome": "REAL",
+    "rerank_needed": false
+   }
+  },
+  {
+   "Reranker#0": {
+    "result": false,
+    "verdict": "HTTP_ERROR"
+   },
+   "Retriever#0": {
+    "fused": "MANY",
+    "outcome": "FAILED",
+    "rerank_needed": true
+   }
+  },
+  {
+   "Reranker#0": {
+    "result": true,
+    "verdict": "OK"
+   },
+   "Retriever#0": {
+    "fused": "MANY",
+    "outcome": "REAL",
+    "rerank_needed": true
+   }
+  },
+  {
+   "Reranker#0": {
+    "result": false,
+    "verdict": "SHAPE_ERROR"
+   },
+   "Retriever#0": {
+    "fused": "MANY",
+    "outcome": "FAILED",
+    "rerank_needed": true
+   }
+  }
+ ],
+ "schema": 1,
+ "spec": "tei_fallback",
+ "stats": {
+  "coverable_edges": 27,
+  "edges": 49,
+  "nodes": 19
+ }
+}

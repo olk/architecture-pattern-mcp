@@ -103,12 +103,18 @@ symmetric role JobClient:
         self.inflight = None
 
     atomic fair action Complete:
+        # the RUNNING require mirrors set_completed's real guard
+        # (WHERE ... AND status = 'running'); found by the L4 conformance
+        # harness (test_fizz_conformance.py): the pre-require model allowed
+        # Complete/Fail from PENDING, the implementation rejects them.
         require self.inflight != None
+        require store.status[self.inflight] == "RUNNING"
         store.Trans(self.inflight, "COMPLETED")   # models set_completed's UPDATE
         self.inflight = None
 
     atomic fair action Fail:
         require self.inflight != None
+        require store.status[self.inflight] == "RUNNING"
         store.Trans(self.inflight, "FAILED")      # models set_failed's UPDATE
         self.inflight = None
 
@@ -140,6 +146,8 @@ action Init:
 always assertion J4_SingleRunner:
     # at most one RUNNING per job — with atomic Trans this is structural;
     # kept as a tripwire for future non-atomic store actions
+    # spec-explains: structural under atomic Trans — one writer per job;
+    # fires the moment a future change makes store actions non-atomic
     return True
 
 always assertion J3_TimestampsMonotone:
@@ -154,6 +162,9 @@ always assertion J1_TerminalImmutable:
     # ghost state: Trans marks jid in _left_terminal the moment a job leaves
     # a terminal state. GUARDED=False must produce a violation trace (the
     # historical pre-Week-0 bug); GUARDED=True must hold.
+    # spec-explains: caller-view twin — globally unique jids leave one
+    # writer per job, so the flip cannot fire here; the kill authority is
+    # jobs_runner.fizz FG-01 (GUARDED=False).
     return len(store._left_terminal.keys()) == 0
 
 always eventually assertion FC1_NoStuckRunning:
@@ -184,8 +195,14 @@ exists assertion FC1_Coverage:
 always assertion FC2_AckCancelEndsCancelled:
     # FC-2: an acknowledged cancel ends CANCELLED or was already terminal.
     # The client records an ack only when the guarded write landed; J1 then
-    # keeps the job CANCELLED forever. FG-15 (Cancel acking without the
-    # store write) must violate.
+    # keeps the job CANCELLED forever.
+    # spec-explains: the FG-15 flip (acking a rejected write) is
+    # structurally unreachable here — globally unique jids mean a client's
+    # inflight never points at a terminal job, so Cancel's guarded Trans
+    # always lands before the ack. The assertion stays as the tripwire for
+    # any future second-write path; the ack-honesty bug class is killed on
+    # the REAL code by the L4 conformance vacuity test
+    # (test_fizz_conformance.py, _CancelNeverLandsStore, FG-15 class).
     for c in clients:
         for jid in c.ack_cancelled:
             if store.status[jid] != "CANCELLED":

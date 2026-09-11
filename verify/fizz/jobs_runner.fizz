@@ -289,8 +289,14 @@ exists assertion RUN4_Coverage:
 
 always assertion C1_AckCancelEndsCancelled:
     # an acknowledged cancel ends CANCELLED and stays CANCELLED (J1); the
-    # ack is recorded only after the guarded write landed. FG-15 (ack
-    # without the write) must violate.
+    # ack is recorded only after the guarded write landed.
+    # spec-explains: the FG-15 flip (acking the raced rejection) is
+    # structurally unreachable under atomic actions — the require and the
+    # guarded Trans cannot interleave, so a recorded ack always landed.
+    # The assertion stays as the tripwire that fires the moment Cancel
+    # (or the store model) goes non-atomic; the ack-without-landed-write
+    # bug class is killed on the REAL code by the L4 conformance vacuity
+    # test (test_fizz_conformance.py, _CancelNeverLandsStore, FG-15 class).
     for c in cancellers:
         for jid in c.ack:
             if store.status[jid] != "CANCELLED":

@@ -1,0 +1,93 @@
+{
+ "edges": [
+  {
+   "action": "Retriever#0.FloorMiss",
+   "from": 0,
+   "to": 1
+  },
+  {
+   "action": "Retriever#0.ResolveFound",
+   "from": 0,
+   "to": 2
+  },
+  {
+   "action": "Retriever#0.ResolveNone",
+   "from": 0,
+   "to": 3
+  },
+  {
+   "action": "Idle",
+   "from": 1,
+   "to": 1
+  },
+  {
+   "action": "Retriever#0.Idle",
+   "from": 1,
+   "to": 1
+  },
+  {
+   "action": "Idle",
+   "from": 2,
+   "to": 2
+  },
+  {
+   "action": "Retriever#0.Idle",
+   "from": 2,
+   "to": 2
+  },
+  {
+   "action": "Idle",
+   "from": 3,
+   "to": 3
+  },
+  {
+   "action": "Retriever#0.Idle",
+   "from": 3,
+   "to": 3
+  }
+ ],
+ "fizz_flags": [
+  "--no-symmetry-reduction"
+ ],
+ "nodes": [
+  {
+   "Retriever#0": {
+    "floor_passed": false,
+    "outcome": "NONE",
+    "resolved": 0,
+    "tagged": false
+   }
+  },
+  {
+   "Retriever#0": {
+    "floor_passed": false,
+    "outcome": "FALLBACK",
+    "resolved": 1,
+    "tagged": true
+   }
+  },
+  {
+   "Retriever#0": {
+    "floor_passed": true,
+    "outcome": "REAL",
+    "resolved": 1,
+    "tagged": false
+   }
+  },
+  {
+   "Retriever#0": {
+    "floor_passed": false,
+    "outcome": "FALLBACK",
+    "resolved": 0,
+    "tagged": true
+   }
+  }
+ ],
+ "schema": 1,
+ "spec": "retrieval_fusion",
+ "stats": {
+  "coverable_edges": 3,
+  "edges": 9,
+  "nodes": 4
+ }
+}

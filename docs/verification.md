@@ -23,8 +23,8 @@ add: cheap layers (types, unit tests) run always; expensive layers
 | L1 | pytest | chosen-input behaviour, regressions; secret canary (no key leakage into prompts/logs/persisted state) | `make test-unit`, `make test-oracles` | active |
 | L1b | Hypothesis (payload strategies) | MCP tool-call boundary robustness: malformed/nested/oversized payloads — structured errors only, no tracebacks | collected by `make test-oracles` (advisory → blocking Phase 1) | harness active, generators expanding |
 | L2 | Hypothesis | input-space properties: job-lifecycle interleavings vs shadow automaton (J-1..J-4), LLM-boundary timeout/retry discipline (E5), normalization idempotence/dedup (N-1..N-4) | `make test-oracles` | active |
-| L3 | mutmut + planted-bug gardens | tests-the-tests: tautological oracles, vacuous contracts/assertions; the garden is the vacuity authority | `make test-mutations` (manual/nightly) | garden active; mutmut nightly |
-| L4 | FizzBee (`.fizz` models) | **all interleavings up to bounds**: races, crash windows, guard gaps, deadlock freedom, fault injection; 7 models over the job protocol, the background-task lifecycle + cancel tool, the pipeline stage machine, design-loop triage, reasoning-client deadline/retry/cache, TEI rerank verdicts, retrieval resolution | `make verify-fizz` (CI-authoritative) | active (7 specs, 31 garden mutants) |
+| L3 | mutmut + planted-bug gardens | tests-the-tests: tautological oracles, vacuous contracts/assertions; the garden is the vacuity authority (Python-side and, since 2026-09-11, `.fizz`-side via `make verify-fizz-garden`) | `make test-mutations` (manual/nightly); `make verify-fizz-garden` (nightly) | garden active; mutmut nightly |
+| L4 | FizzBee (`.fizz` models) | **all interleavings up to bounds**: races, crash windows, guard gaps, deadlock freedom, fault injection; 7 models over the job protocol, the background-task lifecycle + cancel tool, the pipeline stage machine, design-loop triage, reasoning-client deadline/retry/cache, TEI rerank verdicts, retrieval resolution | `make verify-fizz` + `make verify-fizz-garden` (CI-authoritative) | active (7 specs, 32 garden mutants, mechanically revalidated) |
 | L5 | deductive verification (Viper/Z3) | **retired 2026-09** — the decision modules (`text_validation`, `design_normalization`) previously carried Requires/Ensures/Invariant contracts; their properties are now pinned by the L1/L2 behavioral oracles (`tests/unit/test_text_validation.py`, `tests/unit/test_normalization.py`, `tests/verification/test_normalization_idempotence.py`) | — | retired |
 | L6 | deterministic simulation (native now; simloom/frontrun on provisioning) | real asyncio schedules of the **real implementation**: bounded, seeded, replayable proof of J-1/J-2 under all race schedules | `tests/verification/test_jobs_dst.py` (always on) | active (native), proven |
 | L7 | deptry, uv.lock pinning, import-inventory listing | supply chain: hallucinated/unused deps; slopsquatting defence (new package names need human decision) | `make check-depcheck` | active |
@@ -110,11 +110,38 @@ protocol-level view no other layer can produce. Artifacts:
   are tagged (FUS-3).
 - `verify/fizz/README.md` — the property-ID ledger coupling every assertion
   to its Hypothesis oracle and conformance test, plus the
-  spec garden (FG-01..FG-31, each re-validated on the toolchain
+  spec garden (FG-01..FG-33, each re-validated on the toolchain
   2026-09-10) and run-stats table.
+- `verify/fizz/garden.toml` + `scripts/fizz_garden.py` (added 2026-09-11) —
+  the machine-executable encoding of the garden: 1:1 ID agreement with the
+  README table, the AGENTS.md assertion-coverage rule (every `always`
+  assertion kills a mutant or carries `# spec-explains:`), mutation anchor
+  health (a stale anchor is a gate failure, never a vacuous green), and the
+  full mutant re-run in hermetic temp copies with five-outcome semantics
+  (killed / survived / inconclusive-budget / broken / wrong — survived and
+  inconclusive fail the gate). `make verify-fizz-garden` runs it; the
+  toolchain-free subset rides `make test-oracles`
+  (`tests/verification/test_fizz_garden.py`).
 
 Frozen counterexamples are replayed against the real store in
 `tests/verification/test_fizz_traces.py`, independent of tool availability.
+
+**Conformance replay (added 2026-09-11).** `scripts/fizz_traces.py` exports
+the exhaustive state graph of a spec to a checked-in corpus
+(`tests/verification/fizz_corpus/`); `tests/verification/test_fizz_conformance.py`
+re-derives rooted edge-covering walks and replays them against the real
+implementation — guard-outcome agreement and per-step state agreement for
+`jobs_protocol` over the real `JobsStore` (J-1..J-4, FC-2), outcome
+equivalence for the retrieval specs over the real rerank/resolution code
+(TEI-1, RET-1, FUS-1..3). This is the Python-native stand-in for FizzBee
+MBT adapters (upstream: Go/Java/Rust/TypeScript only) and closes the
+model→code gap beyond the two frozen traces: every explored transition of
+the covered specs maps to a real-code execution. Vacuity: planted store /
+reranker mutants must fire the harness. A spec change regenerates its
+corpus in the same PR (`make regen-fizz-traces`); a stale corpus fails the
+coverage assertion. It was productive on first contact: it caught
+`jobs_protocol` accepting PENDING→COMPLETED/FAILED, which the real guards
+reject — the spec was tightened in the same change (487 → 307 states).
 
 ### L5 — Deductive verification — retired (2026-09)
 
@@ -235,7 +262,7 @@ One ID per property across all layers (drift is reviewable 1:1 via the
 | `make test-unit` | L1 | every commit + nightly canary (`verification.yml` #unit-suite) |
 | `make test-oracles` | L1b, L2, plus L4 traces / L6 DST / L1 canary | pre-push + CI + nightly canary (`verification.yml` #bug-gardens) |
 | `make test-mutations` | L3 | manual / nightly |
-| `make verify-fizz` / `make verify-fizz-simulation` | L4 | CI authoritative |
+| `make verify-fizz` / `make verify-fizz-simulation` / `make verify-fizz-garden` | L4 | CI authoritative; garden revalidates every FG-* mutant (nightly) |
 | `make verify-ledger` / `make verify-cross-consistency` | L8 | commit (advisory) + nightly canary (`verification.yml` #bug-gardens) |
 | `ARCH_BENCH_LLM=1 pytest tests/eval/ -m llm` | L9 | prompt/model changes |
 | `RUN_PERF=1 pytest tests/verification/test_perf_smoke.py` | L10 | nightly canary |

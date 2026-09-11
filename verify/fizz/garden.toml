@@ -1,0 +1,405 @@
+# verify/fizz/garden.toml — mechanical encoding of the .fizz spec garden.
+#
+# This table is the executable twin of the "Spec garden" table in
+# verify/fizz/README.md (the README is the human ledger, this file is the
+# machine ledger — scripts/fizz_garden.py enforces 1:1 ID agreement and
+# assertion-name agreement between the two). `make verify-fizz-garden`
+# applies every mutation to a HERMETIC TEMP COPY (never the working tree)
+# and requires the documented outcome.
+#
+# Schema (one [[mutant]] per FG row):
+#   id          FG-ID, must match a README garden-table row 1:1
+#   spec        spec stem (verify/fizz/<spec>.fizz)
+#   status      expect-fail      mutation must produce a checker failure
+#               expect-pass      mutation must NOT change the verdict (FG-11:
+#                                vacuity-direction check — the ghost witness is
+#                                the only falsifier of FP-3)
+#               retired          no longer executable (FG-12), runner skips
+#               killed-elsewhere bug class is killed outside the .fizz layer
+#                                (FG-15 → conformance vacuity plant), runner skips
+#   assertion   the assertion the README says must fire (expect-fail rows);
+#               empty for retired/killed-elsewhere/expect-pass rows
+#   aliases     additional assertion names accepted as the kill (calibrated
+#               against the actual toolchain run — a flip may legally trip a
+#               second assertion before the documented one)
+#   ops         mutation ops applied in order to the spec text:
+#                 { kind = "replace", find = "...", replace = "..." }
+#                 { kind = "delete_line", find = "..." }
+#               every `find` must occur EXACTLY ONCE (anchor-drift guard: a
+#               silent no-op is a gate failure, never a vacuous green)
+#   max_actions per-mutant fizz budget override; 0 = suite default (fizz.yaml).
+#               Needed where the tick dimension dominates the graph (FG-17: 60,
+#               FG-19: 40 — see README garden rows)
+#   timeout_s   wall-clock budget for the fizz run
+#   note        one-line provenance/encoding note
+
+[[mutant]]
+id = "FG-01"
+spec = "jobs_runner"
+status = "expect-fail"
+assertion = "J1_TerminalImmutable"
+ops = [
+  { kind = "replace", find = "GUARDED = True", replace = "GUARDED = False" },
+]
+timeout_s = 300
+note = "drop the guarded terminal check; the W0-1 terminal-write race fires J1 (kill authority for J-1)"
+
+[[mutant]]
+id = "FG-02"
+spec = "jobs_runner"
+status = "expect-fail"
+assertion = "RUN1_FateMatchesStore"
+ops = [
+  { kind = "replace", find = '''        if GUARDED and old in TERMINAL:''', replace = '''        if GUARDED and new_status != "COMPLETED":''' },
+]
+timeout_s = 300
+note = "guard swap — only writes TO COMPLETED land; set_running is rejected and PENDING != CANCELLED fate"
+
+[[mutant]]
+id = "FG-03"
+spec = "jobs_protocol"
+status = "expect-fail"
+assertion = "J3_TimestampsMonotone"
+ops = [
+  { kind = "delete_line", find = "self.created[jid] = self.clock" },
+]
+timeout_s = 300
+note = "Submit forgets created[jid]; J3's missing-key read panics (documented kill mode)"
+
+[[mutant]]
+id = "FG-04"
+spec = "jobs_protocol"
+status = "expect-fail"
+assertion = "J3_TimestampsMonotone"
+ops = [
+  { kind = "replace", find = '''        self.created[jid] = self.clock''', replace = '''        self.created[jid] = self.clock + 1''' },
+]
+timeout_s = 300
+note = "future-dated creation clock: created > updated on the Submit state itself"
+
+[[mutant]]
+id = "FG-05"
+spec = "jobs_protocol"
+status = "expect-fail"
+assertion = "FC2_AckCancelEndsCancelled"
+ops = [
+  { kind = "replace", find = '''    atomic func Trans(jid, new_status):''', replace = '''    func Trans(jid, new_status):''' },
+]
+timeout_s = 600
+note = "Trans non-atomic (yield inside); ack bookkeeping loses the atomicity that protects it"
+
+[[mutant]]
+id = "FG-06"
+spec = "pipeline_control"
+status = "expect-fail"
+assertion = "FP5_EventualOutcome"
+ops = [
+  { kind = "replace", find = '''        self.attempts = self.attempts + 1''', replace = '''        pass''' },
+]
+timeout_s = 300
+note = "FailAttempt does not increment (pass keeps it schedulable); the fair environment self-loops with outcome None"
+
+[[mutant]]
+id = "FG-07"
+spec = "pipeline_control"
+status = "expect-fail"
+assertion = "FP2_CancelStopsPipeline"
+ops = [
+  { kind = "delete_line", find = "pipeline.CancelRun()" },
+]
+timeout_s = 300
+note = "cancel observed but never terminalizes; stages advance past stage_at_cancel while outcome is None"
+
+[[mutant]]
+id = "FG-08"
+spec = "pipeline_control"
+status = "expect-fail"
+assertion = "FP3_StageOrder"
+ops = [
+  { kind = "delete_line", find = "require self.stage_idx < len(STAGES)" },
+]
+timeout_s = 300
+note = "Advance past the stage boundary becomes reachable; the ghost witness fires FP3"
+
+[[mutant]]
+id = "FG-09"
+spec = "pipeline_control"
+status = "expect-fail"
+assertion = "FP6_NoPrematureFailure"
+ops = [
+  { kind = "delete_line", find = "require self.attempts >= MAX_ATTEMPTS" },
+]
+timeout_s = 300
+note = "FailRun guard dropped; premature FAILED at attempts=0"
+
+[[mutant]]
+id = "FG-10"
+spec = "pipeline_control"
+status = "expect-fail"
+assertion = "FP7_NoPrematureCompletion"
+ops = [
+  { kind = "delete_line", find = "require self.stage_idx == len(STAGES)" },
+]
+timeout_s = 300
+note = "Finish guard dropped; premature COMPLETED before all stages ran"
+
+[[mutant]]
+id = "FG-11"
+spec = "pipeline_control"
+status = "expect-pass"
+assertion = ""
+ops = [
+  { kind = "delete_line", find = "self._order_violation = True" },
+]
+timeout_s = 300
+note = "drop the ghost bookkeeping — nothing fires; demonstrates the witness is the only falsifier of FP-3 (FG-08 is its kill)"
+
+[[mutant]]
+id = "FG-12"
+spec = "jobs_protocol"
+status = "retired"
+assertion = ""
+ops = []
+timeout_s = 0
+note = "retired: 'Submit sets RUNNING directly' killed nothing after the budget/jid changes; class covered by FG-02"
+
+[[mutant]]
+id = "FG-13"
+spec = "jobs_protocol"
+status = "expect-fail"
+assertion = "FC1_NoStuckRunning"
+ops = [
+  { kind = "replace", find = '''    atomic fair action Cancel:''', replace = '''    atomic action Cancel:''' },
+  { kind = "replace", find = '''    atomic fair action Complete:''', replace = '''    atomic action Complete:''' },
+  { kind = "replace", find = '''    atomic fair action Fail:''', replace = '''    atomic action Fail:''' },
+]
+timeout_s = 300
+note = "drop the FC-liveness fairness assumption on Cancel/Complete/Fail; a stutter-only schedule keeps an owned RUNNING job"
+
+[[mutant]]
+id = "FG-14"
+spec = "jobs_runner"
+status = "expect-fail"
+assertion = "RUN3_TaskMapInvariant"
+ops = [
+  { kind = "delete_line", find = "self.active[jid] = False" },
+]
+timeout_s = 300
+note = "done-callback never clears the task map; a finished jid stays active"
+
+[[mutant]]
+id = "FG-15"
+spec = "jobs_protocol"
+status = "killed-elsewhere"
+assertion = ""
+ops = []
+timeout_s = 0
+note = "ack-without-landed-write is structurally unreachable in the model (unique jids); killed on the REAL code by test_fizz_conformance.py::_CancelNeverLandsStore"
+
+[[mutant]]
+id = "FG-16"
+spec = "pipeline_control"
+status = "expect-fail"
+assertion = "FP5_EventualOutcome"
+ops = [
+  { kind = "replace", find = "atomic fair action RunFinish:", replace = "atomic action RunFinish:" },
+]
+timeout_s = 300
+note = "RunFinish unfair; stutter-only schedules keep outcome == None"
+
+[[mutant]]
+id = "FG-17"
+spec = "pipeline_control"
+status = "expect-fail"
+assertion = "FP5_EventualOutcome"
+ops = [
+  { kind = "delete_line", find = "require self.ticks < MAX_TICKS" },
+]
+max_actions = 60
+timeout_s = 300
+note = "unbounded fair RetryTick self-loops with outcome None; validated at max_actions 60 (README)"
+
+[[mutant]]
+id = "FG-19"
+spec = "jobs_runner"
+status = "expect-fail"
+assertion = "RUN4_NoStuckRunning"
+ops = [
+  { kind = "delete_line", find = '''    require store.stuck.get("j0") < MAX_STUCK''' },
+]
+max_actions = 40
+timeout_s = 300
+note = "unbounded fair StoreTick self-loops with a live RUNNING job; validated at max_actions 40 (README)"
+
+[[mutant]]
+id = "FG-20"
+spec = "reasoning_retry"
+status = "expect-fail"
+assertion = "E5F1_DeadlineVerdict"
+ops = [
+  { kind = "replace", find = '''            self.verdicts["c0"] = "TIMEOUT"''', replace = '''            pass''' },
+]
+timeout_s = 600
+note = "countdown reaches zero without the verdict write; expired-but-verdictless state (the hang-bug class)"
+
+[[mutant]]
+id = "FG-21"
+spec = "reasoning_retry"
+status = "expect-fail"
+assertion = "E5F3_CacheBound"
+ops = [
+  { kind = "replace", find = '''            self.size = self.size - 1''', replace = '''            pass''' },
+]
+timeout_s = 600
+note = "LRU eviction dropped; the cache grows past CACHE_MAX"
+
+[[mutant]]
+id = "FG-22"
+spec = "reasoning_retry"
+status = "expect-fail"
+assertion = "E5F4_SingleFlight"
+ops = [
+  { kind = "replace", find = '''            if cache.inflight.get(key) == True:''', replace = '''            if False:''' },
+]
+timeout_s = 600
+note = "single-flight guard dropped; concurrent same-key requests both start a generation"
+
+[[mutant]]
+id = "FG-23"
+spec = "tei_fallback"
+status = "expect-fail"
+assertion = "TEI1_ResultOnlyOnOk"
+ops = [
+  { kind = "replace", find = '''        self.verdict = "HTTP_ERROR"''', replace = '''        self.verdict = "HTTP_ERROR"
+        self.result = True''' },
+]
+timeout_s = 300
+note = "HTTP_ERROR also produces a result body; errors are no longer pure signals"
+
+[[mutant]]
+id = "FG-24"
+spec = "tei_fallback"
+status = "expect-fail"
+assertion = "RET1_NoPartialOnRerankError"
+ops = [
+  { kind = "replace", find = '''        self.outcome = "FAILED"''', replace = '''        self.outcome = "REAL"''' },
+]
+timeout_s = 300
+note = "RerankErr yields a REAL outcome; the un-reranked pool masquerades as a result"
+
+[[mutant]]
+id = "FG-25"
+spec = "retrieval_fusion"
+status = "expect-fail"
+assertion = "FUS1_RealHasPatterns"
+ops = [
+  { kind = "replace", find = '''        self.resolved = 0
+        self.tagged = True
+        self.outcome = "FALLBACK"''', replace = '''        self.resolved = 0
+        self.tagged = True
+        self.outcome = "REAL"''' },
+]
+timeout_s = 300
+note = "ResolveNone produces REAL with zero resolved patterns (block-anchored: resolved = 0 is unique to ResolveNone)"
+
+[[mutant]]
+id = "FG-26"
+spec = "retrieval_fusion"
+status = "expect-fail"
+assertion = "FUS2_RealPassedFloor"
+ops = [
+  { kind = "replace", find = '''        self.floor_passed = True''', replace = '''        self.floor_passed = False''' },
+]
+timeout_s = 300
+note = "floor gate dropped: the REAL path no longer records a passed floor"
+
+[[mutant]]
+id = "FG-27"
+spec = "retrieval_fusion"
+status = "expect-fail"
+assertion = "FUS3_FallbackTagged"
+ops = [
+  { kind = "replace", find = '''        self.resolved = 0
+        self.tagged = True''', replace = '''        self.resolved = 0
+        self.tagged = False''' },
+]
+timeout_s = 300
+note = "fallback without the is_fallback sentinel (block-anchored: resolved = 0 is unique to ResolveNone)"
+
+[[mutant]]
+id = "FG-28"
+spec = "design_loop"
+status = "expect-fail"
+assertion = "DL2_BestScoreMonotone"
+ops = [
+  { kind = "replace", find = '''        if 5 > self.best_score:''', replace = '''        if True:''' },
+  { kind = "replace", find = '''        if 2 > self.best_score:''', replace = '''        if True:''' },
+]
+timeout_s = 300
+note = "unconditional best updates; ScoreBad after ScoreGood drives best_score down"
+
+[[mutant]]
+id = "FG-29"
+spec = "design_loop"
+status = "expect-fail"
+assertion = "DL3_CancelFreezesAttempts"
+ops = [
+  { kind = "replace", find = '''        require self.outcome == "NONE"
+        require not self.cancelled
+        require self.attempts < MAX_TRIES''', replace = '''        require self.outcome == "NONE"
+        require self.attempts < MAX_TRIES''' },
+]
+timeout_s = 300
+note = "loop-top cancel checkpoint dropped; attempts grow past attempts_at_cancel (block-anchored: unique to StartAttempt)"
+
+[[mutant]]
+id = "FG-30"
+spec = "design_loop"
+status = "expect-fail"
+assertion = "DL4_MalformedContinues"
+ops = [
+  { kind = "replace", find = '''        self.malformed = self.malformed + 1
+        self.inflight = False''', replace = '''        self.malformed = self.malformed + 1
+        self.outcome = "DONE"
+        self.inflight = False''' },
+]
+timeout_s = 300
+note = "Malformed terminates the loop early; DONE without early-stop below MAX_TRIES"
+
+[[mutant]]
+id = "FG-31"
+spec = "design_loop"
+status = "expect-fail"
+assertion = "DL5_EarlyStopThreshold"
+ops = [
+  { kind = "replace", find = '''        self.best_score = 10       # >= MIN_QUALITY: the break fires''', replace = '''        self.best_score = 5        # FG-31: early stop below the threshold''' },
+]
+timeout_s = 300
+note = "early stop fires below MIN_QUALITY (10)"
+
+# --- added 2026-09-11 by the L4 audit (scripts/fizz_garden.py coverage check):
+# P1_AttemptBound and FP4_TotalOutcome had no garden killer — the AGENTS.md
+# rule (every always assertion kills >= 1 mutant or carries spec-explains)
+# was unmet for these two; FG-32/FG-33 close the gap.
+
+[[mutant]]
+id = "FG-32"
+spec = "pipeline_control"
+status = "expect-fail"
+assertion = "P1_AttemptBound"
+ops = [
+  { kind = "delete_line", find = "require self.attempts < MAX_ATTEMPTS" },
+]
+timeout_s = 300
+note = "FailAttempt bound dropped; attempts exceeds MAX_ATTEMPTS (audit finding: P-1 had no kill mutant)"
+
+[[mutant]]
+id = "FG-33"
+spec = "pipeline_control"
+status = "expect-fail"
+assertion = "FP4_TotalOutcome"
+ops = [
+  { kind = "replace", find = '''        self.outcome = "COMPLETED"''', replace = '''        self.outcome = "STUCK"''' },
+]
+timeout_s = 300
+note = "Finish writes a non-terminal outcome; FP4's terminal-value domain fires (audit finding: FP-4 had no kill mutant)"

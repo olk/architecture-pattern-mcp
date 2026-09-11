@@ -122,3 +122,28 @@ jobs:
           echo /tmp/fizzbee >> "$GITHUB_PATH"
       - name: Exhaustive model checks
         run: make verify-fizz
+
+  verify-fizz-garden:
+    name: L4 — FizzBee spec-garden revalidation (opt-in toolchain)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v10.0.0
+        with:
+          enable-cache: true
+      - run: uv sync
+      - name: Install fizzbee
+        # Same pinned install as the verify-fizz job: the garden verdicts
+        # (which assertion a flip fires, liveness semantics) are keyed to
+        # v0.5.3 behaviour; a floating install could flip a KILLED row to
+        # SURVIVED for toolchain reasons instead of spec reasons.
+        run: |
+          curl -fsSL -o /tmp/fizzbee.tar.gz \
+            https://github.com/fizzbee-io/fizzbee/releases/download/v0.5.3/fizzbee-v0.5.3-linux_x86.tar.gz
+          mkdir -p /tmp/fizzbee
+          tar -xzf /tmp/fizzbee.tar.gz -C /tmp/fizzbee --strip-components=1
+          chmod +x /tmp/fizzbee/fizz
+          echo /tmp/fizzbee >> "$GITHUB_PATH"
+      - name: Spec-garden revalidation (every FG-* mutant must behave as documented)
+        run: uv run python scripts/fizz_garden.py --specs verify/fizz --fizz-bin fizz
