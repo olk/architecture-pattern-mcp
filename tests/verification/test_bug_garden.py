@@ -37,10 +37,17 @@ from typing import Any
 
 import pytest
 
-from tests.verification.gardens.bug_garden import MUTANTS, NonTermination, mutants_by_class
+from tests.verification.gardens.bug_garden import MUTANTS, Mutant, NonTermination, mutants_by_class
 
-MIN_MUTANTS = 20
-REQUIRED_CLASSES = {"off-by-one", "none-deref", "unbounded-loop", "shape-keyerror"}
+MIN_MUTANTS = 30
+REQUIRED_CLASSES = {
+    "off-by-one",
+    "none-deref",
+    "unbounded-loop",
+    "shape-keyerror",
+    "arithmetic-flip",
+    "boundary-tolerance",
+}
 
 
 def _run_safely(kill: Callable[[Callable[..., object]], None], fn: Callable[..., object]) -> Any:
@@ -61,7 +68,7 @@ def _run_safely(kill: Callable[[Callable[..., object]], None], fn: Callable[...,
 
 
 @pytest.mark.parametrize("mutant", MUTANTS, ids=lambda m: m.id)
-def test_mutant_is_killed(mutant) -> None:
+def test_mutant_is_killed(mutant: Mutant) -> None:
     reference_failure = _run_safely(mutant.kill, mutant.reference)
     assert reference_failure is None, (
         f"{mutant.id}: kill oracle fails on the REFERENCE — the oracle itself "

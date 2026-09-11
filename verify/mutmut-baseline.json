@@ -1,0 +1,591 @@
+{
+  "functions": {
+    "src/config_expansion.py::expand_env": {
+      "classified": 18,
+      "kill_ratio": 1.0,
+      "killed": 18,
+      "other": 0,
+      "survived": 0,
+      "survivor_keys": [],
+      "total": 18
+    },
+    "src/config_expansion.py::expand_env_in_obj": {
+      "classified": 12,
+      "kill_ratio": 1.0,
+      "killed": 12,
+      "other": 0,
+      "survived": 0,
+      "survivor_keys": [],
+      "total": 12
+    },
+    "src/design_normalization.py::_select_first": {
+      "classified": 9,
+      "kill_ratio": 1.0,
+      "killed": 9,
+      "other": 0,
+      "survived": 0,
+      "survivor_keys": [],
+      "total": 9
+    },
+    "src/design_normalization.py::dedupe_event_names": {
+      "classified": 9,
+      "kill_ratio": 1.0,
+      "killed": 9,
+      "other": 0,
+      "survived": 0,
+      "survivor_keys": [],
+      "total": 9
+    },
+    "src/design_normalization.py::denormalize_contracts": {
+      "classified": 63,
+      "kill_ratio": 0.9524,
+      "killed": 60,
+      "other": 0,
+      "survived": 3,
+      "survivor_keys": [
+        "src.design_normalization.x_denormalize_contracts__mutmut_54",
+        "src.design_normalization.x_denormalize_contracts__mutmut_56",
+        "src.design_normalization.x_denormalize_contracts__mutmut_63"
+      ],
+      "total": 63
+    },
+    "src/design_normalization.py::promote_api_contract_ids": {
+      "classified": 20,
+      "kill_ratio": 0.95,
+      "killed": 19,
+      "other": 0,
+      "survived": 1,
+      "survivor_keys": [
+        "src.design_normalization.x_promote_api_contract_ids__mutmut_14"
+      ],
+      "total": 20
+    },
+    "src/design_normalization.py::promote_shared_model_keys": {
+      "classified": 20,
+      "kill_ratio": 0.95,
+      "killed": 19,
+      "other": 0,
+      "survived": 1,
+      "survivor_keys": [
+        "src.design_normalization.x_promote_shared_model_keys__mutmut_20"
+      ],
+      "total": 20
+    },
+    "src/text_validation.py::__init__": {
+      "classified": 11,
+      "kill_ratio": 0.0,
+      "killed": 0,
+      "other": 0,
+      "survived": 11,
+      "survivor_keys": [
+        "src.text_validation.x\u01c1StripWindow\u01c1__init____mutmut_1",
+        "src.text_validation.x\u01c1StripWindow\u01c1__init____mutmut_2",
+        "src.text_validation.x\u01c1StripWindow\u01c1__init____mutmut_3",
+        "src.text_validation.x\u01c1StripWindow\u01c1__init____mutmut_4",
+        "src.text_validation.x\u01c1TextVerdict\u01c1__init____mutmut_1",
+        "src.text_validation.x\u01c1TextVerdict\u01c1__init____mutmut_2",
+        "src.text_validation.x\u01c1TextVerdict\u01c1__init____mutmut_3",
+        "src.text_validation.x\u01c1TextVerdict\u01c1__init____mutmut_4",
+        "src.text_validation.x\u01c1TextVerdict\u01c1__init____mutmut_5",
+        "src.text_validation.x\u01c1TextVerdict\u01c1__init____mutmut_6",
+        "src.text_validation.x\u01c1TextVerdict\u01c1__init____mutmut_7"
+      ],
+      "total": 11
+    },
+    "src/text_validation.py::_category_code": {
+      "classified": 14,
+      "kill_ratio": 0.7143,
+      "killed": 10,
+      "other": 0,
+      "survived": 4,
+      "survivor_keys": [
+        "src.text_validation.x__category_code__mutmut_13",
+        "src.text_validation.x__category_code__mutmut_14",
+        "src.text_validation.x__category_code__mutmut_7",
+        "src.text_validation.x__category_code__mutmut_8"
+      ],
+      "total": 14
+    },
+    "src/text_validation.py::_domain_validator": {
+      "classified": 9,
+      "kill_ratio": 0.5556,
+      "killed": 5,
+      "other": 0,
+      "survived": 4,
+      "survivor_keys": [
+        "src.text_validation.x__domain_validator__mutmut_2",
+        "src.text_validation.x__domain_validator__mutmut_3",
+        "src.text_validation.x__domain_validator__mutmut_7",
+        "src.text_validation.x__domain_validator__mutmut_8"
+      ],
+      "total": 9
+    },
+    "src/text_validation.py::_freetext_validator": {
+      "classified": 9,
+      "kill_ratio": 0.5556,
+      "killed": 5,
+      "other": 0,
+      "survived": 4,
+      "survivor_keys": [
+        "src.text_validation.x__freetext_validator__mutmut_2",
+        "src.text_validation.x__freetext_validator__mutmut_6",
+        "src.text_validation.x__freetext_validator__mutmut_7",
+        "src.text_validation.x__freetext_validator__mutmut_8"
+      ],
+      "total": 9
+    },
+    "src/text_validation.py::_pattern_name_validator": {
+      "classified": 11,
+      "kill_ratio": 0.3636,
+      "killed": 4,
+      "other": 0,
+      "survived": 7,
+      "survivor_keys": [
+        "src.text_validation.x__pattern_name_validator__mutmut_10",
+        "src.text_validation.x__pattern_name_validator__mutmut_11",
+        "src.text_validation.x__pattern_name_validator__mutmut_2",
+        "src.text_validation.x__pattern_name_validator__mutmut_3",
+        "src.text_validation.x__pattern_name_validator__mutmut_7",
+        "src.text_validation.x__pattern_name_validator__mutmut_8",
+        "src.text_validation.x__pattern_name_validator__mutmut_9"
+      ],
+      "total": 11
+    },
+    "src/text_validation.py::compute_strip_window": {
+      "classified": 20,
+      "kill_ratio": 1.0,
+      "killed": 20,
+      "other": 0,
+      "survived": 0,
+      "survivor_keys": [],
+      "total": 20
+    },
+    "src/text_validation.py::ensure_printable_text": {
+      "classified": 40,
+      "kill_ratio": 0.825,
+      "killed": 33,
+      "other": 0,
+      "survived": 7,
+      "survivor_keys": [
+        "src.text_validation.x_ensure_printable_text__mutmut_1",
+        "src.text_validation.x_ensure_printable_text__mutmut_26",
+        "src.text_validation.x_ensure_printable_text__mutmut_31",
+        "src.text_validation.x_ensure_printable_text__mutmut_32",
+        "src.text_validation.x_ensure_printable_text__mutmut_36",
+        "src.text_validation.x_ensure_printable_text__mutmut_37",
+        "src.text_validation.x_ensure_printable_text__mutmut_39"
+      ],
+      "total": 40
+    },
+    "src/text_validation.py::evaluate_printable_text": {
+      "classified": 40,
+      "kill_ratio": 0.9,
+      "killed": 36,
+      "other": 0,
+      "survived": 4,
+      "survivor_keys": [
+        "src.text_validation.x_evaluate_printable_text__mutmut_23",
+        "src.text_validation.x_evaluate_printable_text__mutmut_27",
+        "src.text_validation.x_evaluate_printable_text__mutmut_37",
+        "src.text_validation.x_evaluate_printable_text__mutmut_40"
+      ],
+      "total": 40
+    },
+    "src/tools/jobs.py::_conn": {
+      "classified": 5,
+      "kill_ratio": 0.2,
+      "killed": 1,
+      "other": 0,
+      "survived": 4,
+      "survivor_keys": [
+        "src.tools.jobs.x\u01c1JobsStore\u01c1_conn__mutmut_2",
+        "src.tools.jobs.x\u01c1JobsStore\u01c1_conn__mutmut_3",
+        "src.tools.jobs.x\u01c1JobsStore\u01c1_conn__mutmut_4",
+        "src.tools.jobs.x\u01c1JobsStore\u01c1_conn__mutmut_5"
+      ],
+      "total": 5
+    },
+    "src/tools/jobs.py::_get_db_path": {
+      "classified": 9,
+      "kill_ratio": 0.5556,
+      "killed": 5,
+      "other": 0,
+      "survived": 4,
+      "survivor_keys": [
+        "src.tools.jobs.x__get_db_path__mutmut_2",
+        "src.tools.jobs.x__get_db_path__mutmut_4",
+        "src.tools.jobs.x__get_db_path__mutmut_8",
+        "src.tools.jobs.x__get_db_path__mutmut_9"
+      ],
+      "total": 9
+    },
+    "src/tools/jobs.py::_guarded_update": {
+      "classified": 18,
+      "kill_ratio": 1.0,
+      "killed": 18,
+      "other": 0,
+      "survived": 0,
+      "survivor_keys": [],
+      "total": 18
+    },
+    "src/tools/jobs.py::_init": {
+      "classified": 51,
+      "kill_ratio": 0.6275,
+      "killed": 32,
+      "other": 0,
+      "survived": 19,
+      "survivor_keys": [
+        "src.tools.jobs.x\u01c1JobsStore\u01c1_init__mutmut_13",
+        "src.tools.jobs.x\u01c1JobsStore\u01c1_init__mutmut_14",
+        "src.tools.jobs.x\u01c1JobsStore\u01c1_init__mutmut_16",
+        "src.tools.jobs.x\u01c1JobsStore\u01c1_init__mutmut_19",
+        "src.tools.jobs.x\u01c1JobsStore\u01c1_init__mutmut_22",
+        "src.tools.jobs.x\u01c1JobsStore\u01c1_init__mutmut_25",
+        "src.tools.jobs.x\u01c1JobsStore\u01c1_init__mutmut_28",
+        "src.tools.jobs.x\u01c1JobsStore\u01c1_init__mutmut_31",
+        "src.tools.jobs.x\u01c1JobsStore\u01c1_init__mutmut_34",
+        "src.tools.jobs.x\u01c1JobsStore\u01c1_init__mutmut_37",
+        "src.tools.jobs.x\u01c1JobsStore\u01c1_init__mutmut_40",
+        "src.tools.jobs.x\u01c1JobsStore\u01c1_init__mutmut_43",
+        "src.tools.jobs.x\u01c1JobsStore\u01c1_init__mutmut_44",
+        "src.tools.jobs.x\u01c1JobsStore\u01c1_init__mutmut_46",
+        "src.tools.jobs.x\u01c1JobsStore\u01c1_init__mutmut_47",
+        "src.tools.jobs.x\u01c1JobsStore\u01c1_init__mutmut_48",
+        "src.tools.jobs.x\u01c1JobsStore\u01c1_init__mutmut_49",
+        "src.tools.jobs.x\u01c1JobsStore\u01c1_init__mutmut_50",
+        "src.tools.jobs.x\u01c1JobsStore\u01c1_init__mutmut_51"
+      ],
+      "total": 51
+    },
+    "src/tools/jobs.py::_now": {
+      "classified": 1,
+      "kill_ratio": 0.0,
+      "killed": 0,
+      "other": 0,
+      "survived": 1,
+      "survivor_keys": [
+        "src.tools.jobs.x\u01c1JobsStore\u01c1_now__mutmut_1"
+      ],
+      "total": 1
+    },
+    "src/tools/jobs.py::close": {
+      "classified": 3,
+      "kill_ratio": 0.3333,
+      "killed": 1,
+      "other": 0,
+      "survived": 2,
+      "survivor_keys": [
+        "src.tools.jobs.x\u01c1JobsStore\u01c1close__mutmut_1",
+        "src.tools.jobs.x\u01c1JobsStore\u01c1close__mutmut_2"
+      ],
+      "total": 3
+    },
+    "src/tools/jobs.py::create_job": {
+      "classified": 21,
+      "kill_ratio": 0.4762,
+      "killed": 10,
+      "other": 0,
+      "survived": 11,
+      "survivor_keys": [
+        "src.tools.jobs.x\u01c1JobsStore\u01c1create_job__mutmut_10",
+        "src.tools.jobs.x\u01c1JobsStore\u01c1create_job__mutmut_12",
+        "src.tools.jobs.x\u01c1JobsStore\u01c1create_job__mutmut_13",
+        "src.tools.jobs.x\u01c1JobsStore\u01c1create_job__mutmut_14",
+        "src.tools.jobs.x\u01c1JobsStore\u01c1create_job__mutmut_16",
+        "src.tools.jobs.x\u01c1JobsStore\u01c1create_job__mutmut_17",
+        "src.tools.jobs.x\u01c1JobsStore\u01c1create_job__mutmut_18",
+        "src.tools.jobs.x\u01c1JobsStore\u01c1create_job__mutmut_19",
+        "src.tools.jobs.x\u01c1JobsStore\u01c1create_job__mutmut_20",
+        "src.tools.jobs.x\u01c1JobsStore\u01c1create_job__mutmut_21",
+        "src.tools.jobs.x\u01c1JobsStore\u01c1create_job__mutmut_9"
+      ],
+      "total": 21
+    },
+    "src/tools/jobs.py::get_instance": {
+      "classified": 9,
+      "kill_ratio": 0.6667,
+      "killed": 6,
+      "other": 0,
+      "survived": 3,
+      "survivor_keys": [
+        "src.tools.jobs.x\u01c1JobsStore\u01c1get_instance__mutmut_3",
+        "src.tools.jobs.x\u01c1JobsStore\u01c1get_instance__mutmut_7",
+        "src.tools.jobs.x\u01c1JobsStore\u01c1get_instance__mutmut_9"
+      ],
+      "total": 9
+    },
+    "src/tools/jobs.py::get_job": {
+      "classified": 11,
+      "kill_ratio": 0.8182,
+      "killed": 9,
+      "other": 0,
+      "survived": 2,
+      "survivor_keys": [
+        "src.tools.jobs.x\u01c1JobsStore\u01c1get_job__mutmut_7",
+        "src.tools.jobs.x\u01c1JobsStore\u01c1get_job__mutmut_8"
+      ],
+      "total": 11
+    },
+    "src/tools/jobs.py::is_cancelled": {
+      "classified": 14,
+      "kill_ratio": 0.7857,
+      "killed": 11,
+      "other": 0,
+      "survived": 3,
+      "survivor_keys": [
+        "src.tools.jobs.x\u01c1JobsStore\u01c1is_cancelled__mutmut_13",
+        "src.tools.jobs.x\u01c1JobsStore\u01c1is_cancelled__mutmut_7",
+        "src.tools.jobs.x\u01c1JobsStore\u01c1is_cancelled__mutmut_8"
+      ],
+      "total": 14
+    },
+    "src/tools/jobs.py::reset_for_test": {
+      "classified": 7,
+      "kill_ratio": 0.8571,
+      "killed": 6,
+      "other": 0,
+      "survived": 1,
+      "survivor_keys": [
+        "src.tools.jobs.x\u01c1JobsStore\u01c1reset_for_test__mutmut_4"
+      ],
+      "total": 7
+    },
+    "src/tools/jobs.py::set_cancelled": {
+      "classified": 9,
+      "kill_ratio": 0.7778,
+      "killed": 7,
+      "other": 0,
+      "survived": 2,
+      "survivor_keys": [
+        "src.tools.jobs.x\u01c1JobsStore\u01c1set_cancelled__mutmut_8",
+        "src.tools.jobs.x\u01c1JobsStore\u01c1set_cancelled__mutmut_9"
+      ],
+      "total": 9
+    },
+    "src/tools/jobs.py::set_completed": {
+      "classified": 9,
+      "kill_ratio": 0.6667,
+      "killed": 6,
+      "other": 0,
+      "survived": 3,
+      "survivor_keys": [
+        "src.tools.jobs.x\u01c1JobsStore\u01c1set_completed__mutmut_1",
+        "src.tools.jobs.x\u01c1JobsStore\u01c1set_completed__mutmut_8",
+        "src.tools.jobs.x\u01c1JobsStore\u01c1set_completed__mutmut_9"
+      ],
+      "total": 9
+    },
+    "src/tools/jobs.py::set_failed": {
+      "classified": 9,
+      "kill_ratio": 0.6667,
+      "killed": 6,
+      "other": 0,
+      "survived": 3,
+      "survivor_keys": [
+        "src.tools.jobs.x\u01c1JobsStore\u01c1set_failed__mutmut_1",
+        "src.tools.jobs.x\u01c1JobsStore\u01c1set_failed__mutmut_8",
+        "src.tools.jobs.x\u01c1JobsStore\u01c1set_failed__mutmut_9"
+      ],
+      "total": 9
+    },
+    "src/tools/jobs.py::set_running": {
+      "classified": 9,
+      "kill_ratio": 0.6667,
+      "killed": 6,
+      "other": 0,
+      "survived": 3,
+      "survivor_keys": [
+        "src.tools.jobs.x\u01c1JobsStore\u01c1set_running__mutmut_1",
+        "src.tools.jobs.x\u01c1JobsStore\u01c1set_running__mutmut_8",
+        "src.tools.jobs.x\u01c1JobsStore\u01c1set_running__mutmut_9"
+      ],
+      "total": 9
+    },
+    "src/validation.py::format_validation_errors": {
+      "classified": 21,
+      "kill_ratio": 0.7143,
+      "killed": 15,
+      "other": 0,
+      "survived": 6,
+      "survivor_keys": [
+        "src.validation.x_format_validation_errors__mutmut_18",
+        "src.validation.x_format_validation_errors__mutmut_2",
+        "src.validation.x_format_validation_errors__mutmut_21",
+        "src.validation.x_format_validation_errors__mutmut_3",
+        "src.validation.x_format_validation_errors__mutmut_4",
+        "src.validation.x_format_validation_errors__mutmut_7"
+      ],
+      "total": 21
+    },
+    "src/validation.py::validate_with_retries": {
+      "classified": 59,
+      "kill_ratio": 0.2542,
+      "killed": 15,
+      "other": 0,
+      "survived": 44,
+      "survivor_keys": [
+        "src.validation.x_validate_with_retries__mutmut_1",
+        "src.validation.x_validate_with_retries__mutmut_10",
+        "src.validation.x_validate_with_retries__mutmut_11",
+        "src.validation.x_validate_with_retries__mutmut_12",
+        "src.validation.x_validate_with_retries__mutmut_16",
+        "src.validation.x_validate_with_retries__mutmut_17",
+        "src.validation.x_validate_with_retries__mutmut_18",
+        "src.validation.x_validate_with_retries__mutmut_19",
+        "src.validation.x_validate_with_retries__mutmut_2",
+        "src.validation.x_validate_with_retries__mutmut_20",
+        "src.validation.x_validate_with_retries__mutmut_21",
+        "src.validation.x_validate_with_retries__mutmut_23",
+        "src.validation.x_validate_with_retries__mutmut_24",
+        "src.validation.x_validate_with_retries__mutmut_25",
+        "src.validation.x_validate_with_retries__mutmut_26",
+        "src.validation.x_validate_with_retries__mutmut_27",
+        "src.validation.x_validate_with_retries__mutmut_28",
+        "src.validation.x_validate_with_retries__mutmut_29",
+        "src.validation.x_validate_with_retries__mutmut_3",
+        "src.validation.x_validate_with_retries__mutmut_30",
+        "src.validation.x_validate_with_retries__mutmut_31",
+        "src.validation.x_validate_with_retries__mutmut_32",
+        "src.validation.x_validate_with_retries__mutmut_33",
+        "src.validation.x_validate_with_retries__mutmut_34",
+        "src.validation.x_validate_with_retries__mutmut_35",
+        "src.validation.x_validate_with_retries__mutmut_36",
+        "src.validation.x_validate_with_retries__mutmut_37",
+        "src.validation.x_validate_with_retries__mutmut_4",
+        "src.validation.x_validate_with_retries__mutmut_43",
+        "src.validation.x_validate_with_retries__mutmut_44",
+        "src.validation.x_validate_with_retries__mutmut_45",
+        "src.validation.x_validate_with_retries__mutmut_46",
+        "src.validation.x_validate_with_retries__mutmut_47",
+        "src.validation.x_validate_with_retries__mutmut_49",
+        "src.validation.x_validate_with_retries__mutmut_50",
+        "src.validation.x_validate_with_retries__mutmut_51",
+        "src.validation.x_validate_with_retries__mutmut_52",
+        "src.validation.x_validate_with_retries__mutmut_53",
+        "src.validation.x_validate_with_retries__mutmut_54",
+        "src.validation.x_validate_with_retries__mutmut_55",
+        "src.validation.x_validate_with_retries__mutmut_57",
+        "src.validation.x_validate_with_retries__mutmut_58",
+        "src.validation.x_validate_with_retries__mutmut_59",
+        "src.validation.x_validate_with_retries__mutmut_9"
+      ],
+      "total": 59
+    }
+  },
+  "garden_attestation": {
+    "arithmetic-flip": {
+      "anchors": [
+        "src/text_validation.py::evaluate_printable_text",
+        "src/config_expansion.py::expand_env"
+      ],
+      "detail": "",
+      "killed": 54,
+      "mutants": 58,
+      "ok": true
+    },
+    "boundary-tolerance": {
+      "anchors": [
+        "src/validation.py::format_validation_errors",
+        "src/config_expansion.py::expand_env_in_obj"
+      ],
+      "detail": "",
+      "killed": 27,
+      "mutants": 33,
+      "ok": true
+    },
+    "none-deref": {
+      "anchors": [
+        "src/text_validation.py::_category_code",
+        "src/design_normalization.py::_select_first"
+      ],
+      "detail": "",
+      "killed": 19,
+      "mutants": 23,
+      "ok": true
+    },
+    "off-by-one": {
+      "anchors": [
+        "src/text_validation.py::compute_strip_window",
+        "src/design_normalization.py::promote_api_contract_ids"
+      ],
+      "detail": "",
+      "killed": 39,
+      "mutants": 40,
+      "ok": true
+    },
+    "shape-keyerror": {
+      "anchors": [
+        "src/tools/jobs.py::set_cancelled",
+        "src/validation.py::validate_with_retries"
+      ],
+      "detail": "",
+      "killed": 22,
+      "mutants": 68,
+      "ok": true
+    },
+    "unbounded-loop": {
+      "anchors": [
+        "src/tools/jobs.py::_guarded_update"
+      ],
+      "detail": "",
+      "killed": 18,
+      "mutants": 18,
+      "ok": true
+    }
+  },
+  "modules": {
+    "src/config_expansion.py": {
+      "classified": 30,
+      "kill_ratio": 1.0,
+      "killed": 30,
+      "survived": 0,
+      "total": 30
+    },
+    "src/design_normalization.py": {
+      "classified": 121,
+      "kill_ratio": 0.9587,
+      "killed": 116,
+      "survived": 5,
+      "total": 121
+    },
+    "src/text_validation.py": {
+      "classified": 154,
+      "kill_ratio": 0.7338,
+      "killed": 113,
+      "survived": 41,
+      "total": 154
+    },
+    "src/tools/jobs.py": {
+      "classified": 185,
+      "kill_ratio": 0.6703,
+      "killed": 124,
+      "survived": 61,
+      "total": 185
+    },
+    "src/validation.py": {
+      "classified": 80,
+      "kill_ratio": 0.375,
+      "killed": 30,
+      "survived": 50,
+      "total": 80
+    }
+  },
+  "run": {
+    "config_fingerprint": {
+      "test_execution": "7229183f5cf8",
+      "test_selection": "fad0c5f60f24",
+      "timeout": "d3052321fdc3",
+      "type_check": "2e38e77b22c3"
+    },
+    "git_commit": "7d50cc0434f491215017172727c7e78056ede6e9",
+    "scratch_dir": "/home/graemer/Projekte/Python/architecture-pattern-mcp/mutants",
+    "stats_time": 15.129810901
+  },
+  "schema": 1,
+  "totals": {
+    "classified": 570,
+    "killed": 413,
+    "survived": 157,
+    "total": 570
+  }
+}

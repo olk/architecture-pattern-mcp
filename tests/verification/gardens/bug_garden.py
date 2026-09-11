@@ -22,11 +22,12 @@
 """
 L3 planted-bug garden (testing-strategies §3.4).
 
-The vacuity authority: >= 20 hand-planted mutants across the four documented
-classes (off-by-one, None-deref, unbounded loop, shape/KeyError) applied to
-pure functions mirroring the verified families (text length discipline,
-printable-content check, jobs automaton guards, normalization dedup, retry
-bounding, score blending).
+The vacuity authority: >= 30 hand-planted mutants across the six documented
+classes (off-by-one, none-deref, unbounded loop, shape/KeyError,
+arithmetic-flip, boundary-tolerance) applied to pure functions mirroring the
+verified families (text length discipline, printable-content check, jobs
+automaton guards, normalization dedup, retry bounding, score blending,
+weight-sum tolerance).
 
 Each mutant carries a ``kill`` oracle — an executable property that must PASS
 on the mutant's reference implementation and FAIL (raise) on the mutant. The
@@ -109,6 +110,16 @@ def ref_blend(scores: list[float], weights: list[float]) -> float:
     if total == 0:
         raise ValueError("zero weights")
     return sum(s * w for s, w in zip(scores, weights)) / total
+
+
+def ref_within_tolerance(values: list[float], target: float = 1.0, tol: float = 1e-3) -> bool:
+    """Mirror of the config weight-sum validators
+    (src/config.py::_check_score_blend_weights / _check_leg_weights_sum_to_one):
+    the sum must land within ``tol`` of ``target`` — boundary semantics the
+    server refuses to start without.
+    """
+    total = sum(values)
+    return abs(total - target) <= tol
 
 
 # ---------------------------------------------------------------- kill oracles
@@ -200,7 +211,7 @@ def kill_dedupe_missing_key(fn: Callable[..., object]) -> None:
 
 def kill_dedupe_value_discipline(fn: Callable[..., object]) -> None:
     """Non-str key values flow through untouched — no deref on item values."""
-    odd: list[dict[str, str]] = [{"k": 5}]  # type: ignore[list-item]
+    odd: list[dict[str, str]] = [cast("dict[str, str]", {"k": 5})]
     assert fn(odd, "k") == odd
 
 
@@ -229,6 +240,25 @@ def kill_blend_discipline(fn: Callable[..., object]) -> None:
     except ValueError:
         return
     raise AssertionError("shape mismatch must raise")
+
+
+def kill_tolerance_discipline(fn: Callable[..., object]) -> None:
+    """Boundary-tolerance kill oracle (mirrors the config weight validators).
+
+    Each case is chosen so exactly one mutant class flips it:
+    - the 0.01-over case kills a widened tolerance constant;
+    - the diff==tol case kills ``<=`` -> ``<`` (boundary must be inclusive);
+    - the negative-diff case kills a dropped ``abs`` (signed compare);
+    - the within-tolerance multi-value case kills a wrong reduction (min/sum);
+    - the exact case kills ``<=`` -> ``>=``.
+    """
+    assert fn([0.7, 0.3]) is True                      # exact hit
+    assert fn([0.7, 0.3001]) is True                   # within default 1e-3
+    assert fn([0.7, 0.31]) is False                    # 0.01 over — outside
+    assert fn([1.0]) is True
+    assert fn([0.5, 0.5], target=2.0) is False         # wrong target
+    assert fn([0.5], target=1.0, tol=0.5) is True      # diff == tol: inclusive
+    assert fn([0.5], target=0.6, tol=0.05) is False    # negative diff: abs is load-bearing
 
 
 # ---------------------------------------------------------------- mutants
@@ -415,6 +445,89 @@ def _m21_blend_endless(scores: list[float], weights: list[float]) -> float:
     raise NonTermination("M-13 never terminates")
 
 
+# --- arithmetic-flip class (added 2026-09-11 plan R8) -----------------------
+
+
+def _m22_blend_mul_to_div(scores: list[float], weights: list[float]) -> float:
+    total = sum(weights)
+    if total == 0:
+        raise ValueError("zero weights")
+    return sum(s / w for s, w in zip(scores, weights)) / total
+
+
+def _m23_blend_total_sign_flip(scores: list[float], weights: list[float]) -> float:
+    total = -sum(weights)
+    return sum(s * w for s, w in zip(scores, weights)) / total
+
+
+def _m24_count_sign_flip(text: str) -> int:
+    if not isinstance(text, str):
+        raise TypeError("text must be a string")
+    return sum(-1 for ch in text if ch.isalnum())
+
+
+def _m25_retry_result_offset(scores: int, succeed_at: int) -> str:
+    if scores <= 0:
+        raise ValueError("steps must be positive")
+    for attempt in range(scores):
+        if attempt == succeed_at:
+            return f"ok-{attempt - 1}"
+    raise RuntimeError("exhausted")
+
+
+def _m26_clamp_off_by_one_len(value: str, max_length: int) -> str:
+    stripped = value.strip()
+    if len(stripped) - 1 > max_length:
+        raise ValueError("arithmetic off-by-one accepts one extra character")
+    return stripped
+
+
+# --- boundary-tolerance class (added 2026-09-11 plan R8) --------------------
+
+
+def _m27_tolerance_widened(values: list[float], target: float = 1.0, tol: float = 1e-1) -> bool:
+    total = sum(values)
+    return abs(total - target) <= tol
+
+
+def _m28_tolerance_exclusive(values: list[float], target: float = 1.0, tol: float = 1e-3) -> bool:
+    total = sum(values)
+    return abs(total - target) < tol
+
+
+def _m29_tolerance_signed(values: list[float], target: float = 1.0, tol: float = 1e-3) -> bool:
+    total = sum(values)
+    return total - target <= tol
+
+
+def _m30_tolerance_min_reduction(values: list[float], target: float = 1.0, tol: float = 1e-3) -> bool:
+    total = min(values)
+    return abs(total - target) <= tol
+
+
+def _m31_tolerance_inverted(values: list[float], target: float = 1.0, tol: float = 1e-3) -> bool:
+    total = sum(values)
+    return abs(total - target) >= tol
+
+
+# --- off-by-one fold-ins (comparison/slice boundary flips) ------------------
+
+
+def _m32_retry_comparison_inverted(steps: int, succeed_at: int) -> str:
+    if steps <= 0:
+        raise ValueError("steps must be positive")
+    for attempt in range(steps):
+        if attempt != succeed_at:
+            return f"ok-{attempt}"
+    raise RuntimeError("exhausted")
+
+
+def _m33_count_first_slice_only(text: str) -> int:
+    if not isinstance(text, str):
+        raise TypeError("text must be a string")
+    return sum(1 for ch in text[:1] if ch.isalnum())
+
+
 MUTANTS: list[Mutant] = [
     Mutant("M-01", "off-by-one", "clamp length check uses >= (rejects equal-to-max)",
            ref_clamp_length, _m01_clamp_ge, kill_clamp_discipline),
@@ -458,6 +571,30 @@ MUTANTS: list[Mutant] = [
            ref_count_visible, _m08_count_dict_lookup, kill_count_visible),
     Mutant("M-21", "shape-keyerror", "clamp silently truncates instead of rejecting",
            ref_clamp_length, _m04_clamp_truncate, kill_clamp_discipline),
+    Mutant("M-22", "arithmetic-flip", "blend multiplies where it must divide (s * w -> s / w)",
+           ref_blend, _m22_blend_mul_to_div, kill_blend_discipline),
+    Mutant("M-23", "arithmetic-flip", "blend normalizer sign-flipped (sum -> -sum)",
+           ref_blend, _m23_blend_total_sign_flip, kill_blend_discipline),
+    Mutant("M-24", "arithmetic-flip", "visible-count sign-flipped (adds -1 per char)",
+           ref_count_visible, _m24_count_sign_flip, kill_count_visible),
+    Mutant("M-25", "arithmetic-flip", "retry result reports attempt - 1",
+           ref_bounded_retry, _m25_retry_result_offset, kill_retry_bounds),
+    Mutant("M-26", "arithmetic-flip", "clamp length check loses one char (len - 1 > max)",
+           ref_clamp_length, _m26_clamp_off_by_one_len, kill_clamp_discipline),
+    Mutant("M-27", "boundary-tolerance", "weight tolerance widened 1e-3 -> 1e-1",
+           ref_within_tolerance, _m27_tolerance_widened, kill_tolerance_discipline),
+    Mutant("M-28", "boundary-tolerance", "tolerance boundary exclusive (<= -> <)",
+           ref_within_tolerance, _m28_tolerance_exclusive, kill_tolerance_discipline),
+    Mutant("M-29", "boundary-tolerance", "abs dropped — signed compare accepts undershoot",
+           ref_within_tolerance, _m29_tolerance_signed, kill_tolerance_discipline),
+    Mutant("M-30", "boundary-tolerance", "sum reduced with min instead of sum",
+           ref_within_tolerance, _m30_tolerance_min_reduction, kill_tolerance_discipline),
+    Mutant("M-31", "boundary-tolerance", "tolerance comparison inverted (<= -> >=)",
+           ref_within_tolerance, _m31_tolerance_inverted, kill_tolerance_discipline),
+    Mutant("M-32", "off-by-one", "retry equality inverted (== -> !=)",
+           ref_bounded_retry, _m32_retry_comparison_inverted, kill_retry_bounds),
+    Mutant("M-33", "off-by-one", "visible-count scans only the first character ([:1])",
+           ref_count_visible, _m33_count_first_slice_only, kill_count_visible),
 ]
 
 

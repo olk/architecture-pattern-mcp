@@ -1,0 +1,16 @@
+# verify/mutmut-thresholds.toml — ratchet parameters for the L3 mutation gate.
+#
+# scripts/mutmut_baseline.py --gate compares the latest `make test-mutations`
+# run against the committed verify/mutmut-baseline.json. The ratchet only ever
+# tightens through a deliberate `make regen-mutmut-baseline` (run after the
+# survivor list has been triaged: kill the survivors in the test suite, or
+# acknowledge true equivalents in verify/mutmut-equivalents.md first).
+#
+# ratio_tolerance   a per-function kill_ratio may drift down by this much
+#                   (FP jitter from test-selection/parallelism) before the
+#                   gate calls it a RATIO-DROP regression.
+# max_new_survivors how many NEW survivor keys a run may introduce before the
+#                   gate fails with NEW-SURVIVOR. 0 = any new survivor fails.
+
+ratio_tolerance = 0.02
+max_new_survivors = 0

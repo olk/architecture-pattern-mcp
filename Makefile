@@ -14,7 +14,7 @@
 
 .PHONY: help install install-mcps \
 	check-lint check-static-typing check-deadcode check-depcheck check-all \
-	test-unit test-oracles test-mutations test-all \
+	test-unit test-oracles test-mutations regen-mutmut-baseline test-all \
 	verify-fizz verify-fizz-simulation verify-fizz-garden regen-fizz-traces \
 	verify-ledger verify-cross-consistency verify-all \
 	client docker-build docker-build-tei \
@@ -90,11 +90,38 @@ test-oracles: install ## Run executable oracles (tests/verification/): L1 canary
 # Hypothesis isolation: the gate re-runs the same tests under many executors;
 # a per-run database keeps the shared repo database free of foreign executors
 # (the normal suite's differing_executors health check stays meaningful).
-MUTMUT_HYPO_DIR := $(shell mktemp -d)
+#
+# mutmut is version-pinned (mutmut==3.7.*) in lockstep with the source-string
+# guards in verify/mutmut/mutmut_compat.py (TCB discipline): the shim fails
+# loudly when the guarded upstream code changes, so a version bump must update
+# the shim and this pin in the same change. Config-key support was verified
+# against 3.7.0's Config dataclass (timeout_constant / timeout_multiplier).
+#
+# Cleanup hygiene: the whole recipe is one shell with an EXIT trap, so the
+# per-run Hypothesis database is removed even when a gate step fails (make
+# would otherwise abort before the old standalone rm line ever ran).
+#
+# Enforcement: `mutmut run` exits 0 even with survivors, so the gate only
+# means something because of the final step — scripts/mutmut_baseline.py
+# distills mutants/ (gitignored scratch) into verify/mutmut-baseline.json and
+# FAILS on a survivor/kill-ratio regression against the committed baseline
+# (ratchet: refresh deliberately via `make regen-mutmut-baseline`).
+MUTMUT_PIN := 'mutmut==3.7.*'
 test-mutations: ## L3: mutmut over Tier A/B/C + gardens (manual/nightly; ephemeral install via uv)
-	HYPOTHESIS_STORAGE_DIRECTORY=$(MUTMUT_HYPO_DIR) $(UV) run --with mutmut python -c "import verify.mutmut.mutmut_compat as compat; compat.apply(); from mutmut.__main__ import cli; raise SystemExit(cli())" run
-	$(UV) run --with mutmut mutmut results
-	rm -rf $(MUTMUT_HYPO_DIR)
+	@bash -o pipefail -c '\
+	HYPO_DIR=$$(mktemp -d); \
+	export HYPOTHESIS_STORAGE_DIRECTORY="$$HYPO_DIR"; \
+	trap '"'"'rm -rf "$$HYPO_DIR"'"'"' EXIT; \
+	$(UV) run --with $(MUTMUT_PIN) python -c "import verify.mutmut.mutmut_compat as compat; compat.apply(); from mutmut.__main__ import cli; raise SystemExit(cli())" run || exit 1; \
+	$(UV) run --with $(MUTMUT_PIN) mutmut results || exit 1; \
+	$(UV) run python scripts/mutmut_baseline.py --gate'
+
+# Deliberate baseline refresh: records the CURRENT mutation run as the new
+# ratchet floor. Only run after inspecting the survivor list — a new survivor
+# is either a test-suite gap to fix or a documented equivalent
+# (verify/mutmut-equivalents.md) to acknowledge.
+regen-mutmut-baseline: ## L3: rewrite verify/mutmut-baseline.json from the last test-mutations run
+	$(UV) run python scripts/mutmut_baseline.py --write verify/mutmut-baseline.json
 
 # Fast-path aggregator: unit + oracles only. test-mutations is deliberately
 # outside — mutmut is a manual/nightly gate (ephemeral toolchain, long runtime).

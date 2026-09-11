@@ -38,3 +38,14 @@
   L4 FizzBee, L6 DST) are the verification authority; a change to the decision
   modules (`src/text_validation.py`, `src/design_normalization.py`) must keep
   `tests/unit/` and `tests/verification/` green.
+- L3 scope changes (any edit to `[tool.mutmut]` in `pyproject.toml`) must
+  update the `verify/mutmut-scope.md` ledger row in the same PR. The Python
+  garden (`tests/verification/gardens/bug_garden.py`) now declares SIX bug
+  classes; `make test-mutations` enforces a ratchet against the committed
+  `verify/mutmut-baseline.json` (new survivors and kill-ratio drops fail the
+  gate; deliberate refresh via `make regen-mutmut-baseline`; acknowledged
+  equivalents go to `verify/mutmut-equivalents.md`). The mutation-scope
+  modules and their oracles are listed there; `tests/unit/` internals tests
+  (`test_text_validation_internals.py`,
+  `test_design_normalization_internals.py`) are the direct kill oracles for
+  the decision-engine primitives.

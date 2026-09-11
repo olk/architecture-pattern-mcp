@@ -64,15 +64,26 @@ Generated inputs instead of chosen ones, keyed by the shared property IDs:
 
 ### L3 — Mutation testing (`mutmut` + gardens)
 The oracle-on-oracles audit, answering the same-model circularity finding
-(AI test suites validate bugs instead of catching them). Two mechanisms:
+(AI test suites validate bugs instead of catching them). Three mechanisms:
 
-1. `tests/verification/gardens/bug_garden.py` — 21 planted mutants across the
-   four documented classes (off-by-one, None-deref, unbounded-loop,
-   shape/KeyError); `test_bug_garden.py` asserts every kill oracle passes on
+1. `tests/verification/gardens/bug_garden.py` — 33 planted mutants across the
+   six documented classes (off-by-one, None-deref, unbounded-loop,
+   shape/KeyError, arithmetic-flip, boundary-tolerance);
+   `test_bug_garden.py` asserts every kill oracle passes on
    the reference and fails on the mutant.
-2. `mutmut` over the Tier A/B/C modules (`make test-mutations`); its mypy
-   filter caveat is documented — the garden, not survivor counts, is the
-   vacuity authority.
+2. `mutmut` over the Tier A/B/C modules plus the R5 decision modules
+   (`src/agent.py`, `src/reasoning/client.py`, `src/patterns/
+   safe_tei_rerank.py`, `src/patterns/retriever.py` — see
+   `verify/mutmut-scope.md`); its mypy filter caveat is documented — the
+   garden, not survivor counts, is the vacuity authority.
+   `make test-mutations` now ENFORCES: it distills each run into the
+   committed `verify/mutmut-baseline.json` and fails on any new survivor or
+   kill-ratio regression against it (ratchet; deliberate refresh via
+   `make regen-mutmut-baseline`). The bridge test
+   (`test_garden_bridge.py`) attests every garden class has engine-side
+   classified mutants at anchor functions, so the two halves cannot drift.
+3. Equivalents are governed, not ignored: survivors acknowledged as true
+   equivalents are recorded in `verify/mutmut-equivalents.md`.
 
 Later oracle layers (`.fizz` assertions) must kill the same
 mutant IDs or are rejected as vacuous (AGENTS.md rule).

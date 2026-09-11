@@ -469,6 +469,154 @@ class TestTraceCache:
         assert agent.calls == 2
 
 
+class _FakeGeneration:
+    """Scripted stand-in for ReasoningClient._generate_trace.
+
+    Lets the cache tests observe generation counts and timing without any LLM
+    or MCP subprocess. An optional gate (asyncio.Event) holds every caller
+    inside the generation so concurrency is deterministic.
+    """
+
+    def __init__(self, *, steps: int = 1, gate: asyncio.Event | None = None, fail: bool = False):
+        self.calls = 0
+        self.inputs: list[dict[str, str]] = []
+        self._steps = steps
+        self._gate = gate
+        self._fail = fail
+
+    async def __call__(self, phase: str, task_inputs: dict[str, str]) -> ReasoningTrace:
+        self.calls += 1
+        self.inputs.append(task_inputs)
+        if self._gate is not None:
+            self._gate.set()
+            await self._gate.wait()
+        if self._fail:
+            raise RuntimeError("generation exploded")
+        return ReasoningTrace(
+            phase=phase,
+            steps=[
+                ReasoningStep(
+                    tool="shannon",
+                    step_number=n + 1,
+                    thought=f"step {n}",
+                )
+                for n in range(self._steps)
+            ],
+        )
+
+
+class TestCacheLRUEviction:
+    """E5F-3 (FG-21): the trace LRU never exceeds _CACHE_MAX_ENTRIES."""
+
+    @pytest.mark.asyncio
+    async def test_cache_size_is_capped_at_the_bound(self):
+        from src.reasoning.client import _CACHE_MAX_ENTRIES
+
+        client = make_client()
+        generator = _FakeGeneration()
+        client._generate_trace = generator.__call__  # type: ignore[method-assign]
+        for i in range(_CACHE_MAX_ENTRIES + 1):
+            await client.run_pre_llm("analyze", {"requirements": f"req-{i}"})
+        assert generator.calls == _CACHE_MAX_ENTRIES + 1
+        assert len(client._trace_cache) == _CACHE_MAX_ENTRIES
+
+    @pytest.mark.asyncio
+    async def test_oldest_entry_evicted_newest_kept(self):
+        """Keys are opaque (phase, sha256) tuples, so eviction is observed
+        behaviorally: the evicted entry regenerates, its neighbours do not."""
+        from src.reasoning.client import _CACHE_MAX_ENTRIES
+
+        client = make_client()
+        generator = _FakeGeneration()
+        client._generate_trace = generator.__call__  # type: ignore[method-assign]
+        for i in range(_CACHE_MAX_ENTRIES + 1):
+            await client.run_pre_llm("analyze", {"requirements": f"req-{i}"})
+        before = generator.calls
+        # req-1 (new oldest) and req-64 (newest) are still served from cache.
+        # Probe them BEFORE req-0: a miss re-inserts its key and would itself
+        # evict req-1 (LRU order changes under the probe).
+        kept_1 = await client.run_pre_llm("analyze", {"requirements": "req-1"})
+        kept_new = await client.run_pre_llm(
+            "analyze", {"requirements": f"req-{_CACHE_MAX_ENTRIES}"}
+        )
+        assert generator.calls == before
+        assert kept_1.cached is True
+        assert kept_new.cached is True
+        # req-0 was pushed out by req-64: it regenerates.
+        await client.run_pre_llm("analyze", {"requirements": "req-0"})
+        assert generator.calls == before + 1
+
+
+class TestSingleFlight:
+    """E5F-4 (FG-22): at most one concurrent trace generation per cache key."""
+
+    @pytest.mark.asyncio
+    async def test_concurrent_same_key_starts_one_generation(self):
+        gate_ev = asyncio.Event()
+        client = make_client()
+        generator = _FakeGeneration(gate=gate_ev)
+        client._generate_trace = generator.__call__  # type: ignore[method-assign]
+        task_a = asyncio.create_task(client.run_pre_llm("analyze", {"requirements": "same"}))
+        await gate_ev.wait()  # caller A is inside the generation
+        task_b = asyncio.create_task(client.run_pre_llm("analyze", {"requirements": "same"}))
+        for _ in range(5):
+            await asyncio.sleep(0)  # let caller B reach the inflight check
+        gate_ev.set()
+        trace_a, trace_b = await asyncio.gather(task_a, task_b)
+        assert generator.calls == 1  # single flight: one generation, two waiters
+        assert trace_a.steps == trace_b.steps
+        assert client._inflight == {}
+
+    @pytest.mark.asyncio
+    async def test_sequential_repeat_after_generation_hits_cache(self):
+        client = make_client()
+        generator = _FakeGeneration()
+        client._generate_trace = generator.__call__  # type: ignore[method-assign]
+        await client.run_pre_llm("analyze", {"requirements": "same"})
+        again = await client.run_pre_llm("analyze", {"requirements": "same"})
+        assert generator.calls == 1
+        assert again.cached is True
+
+    @pytest.mark.asyncio
+    async def test_failed_generation_is_not_cached_and_clears_inflight(self):
+        client = make_client()
+        generator = _FakeGeneration(fail=True)
+        client._generate_trace = generator.__call__  # type: ignore[method-assign]
+        trace = await client.run_pre_llm("analyze", {"requirements": "boom"})
+        assert trace.steps == []
+        assert trace.aborted_reason == "trace generation failed"
+        assert client._inflight == {}
+        assert len(client._trace_cache) == 0  # failure is never cached
+        await client.run_pre_llm("analyze", {"requirements": "boom"})
+        assert generator.calls == 2  # next call retries the generation
+
+    @pytest.mark.asyncio
+    async def test_empty_trace_is_not_cached(self):
+        """``if trace.steps`` guards the cache write: a steps-less trace must
+        not poison the cache for later callers."""
+        client = make_client()
+        generator = _FakeGeneration(steps=0)
+        client._generate_trace = generator.__call__  # type: ignore[method-assign]
+        await client.run_pre_llm("analyze", {"requirements": "empty"})
+        assert len(client._trace_cache) == 0
+        await client.run_pre_llm("analyze", {"requirements": "empty"})
+        assert generator.calls == 2
+
+    @pytest.mark.asyncio
+    async def test_cancelled_caller_clears_inflight_and_raises(self):
+        gate_ev = asyncio.Event()
+        client = make_client()
+        generator = _FakeGeneration(gate=gate_ev)
+        client._generate_trace = generator.__call__  # type: ignore[method-assign]
+        task = asyncio.create_task(client.run_pre_llm("analyze", {"requirements": "slow"}))
+        await gate_ev.wait()
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        assert client._inflight == {}  # the CancelledError path pops the entry
+        gate_ev.set()  # release the shielded orphan so the loop drains
+
+
 class TestHealthCheck:
     @pytest.mark.asyncio
     async def test_all_ok(self):

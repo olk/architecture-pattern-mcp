@@ -199,13 +199,19 @@ The layer that directly attacks the 68% circularity finding. Two mechanisms:
    valid mutants — filter survivors are a *hint*, never a verdict.
 2. **Planted-bug gardens as the vacuity authority** (both plans): hand-planted
    mutants with expected-kill annotations — the Python garden
-   (≥ 20 mutants, four classes: off-by-one, None-deref, unbounded loop,
-   shape/KeyError) audits the decision logic; the FizzBee garden (≥ 15
+   (≥ 30 mutants, six classes: off-by-one, None-deref, unbounded loop,
+   shape/KeyError, arithmetic-flip, boundary-tolerance) audits the decision
+   logic; the FizzBee garden (≥ 15
    mutants: guard drop, transition swap, assertion weaken, bound overflow)
    audits model assertions. Rule: every `.fizz` assertion must kill ≥ 1
    garden mutant or carry a `# spec-explains:` justification; per-phase prune
    passes delete the dead weight (the DARe 88%-removable finding, applied
-   twice).
+   twice). The engine side is ratcheted: `make test-mutations` distills each
+   run into the committed `verify/mutmut-baseline.json` and fails on new
+   survivors or kill-ratio regressions (deliberate refresh via
+   `make regen-mutmut-baseline`); acknowledged equivalents are governed in
+   `verify/mutmut-equivalents.md`, and the M-* <-> engine bridge
+   (`test_garden_bridge.py`) keeps the two L3 halves from drifting.
 
 Evidence for the layer: crucible (tester/critic LLM loop over mutmut) raised
 AI-suite mutation scores 65% → 99%; Nightjar's pipeline found 74 bugs in 34

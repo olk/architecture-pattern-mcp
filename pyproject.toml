@@ -234,45 +234,78 @@ DEP003 = ["litellm", "workflows", "mcp"]
 # unmutated (testing-strategies.md §3.4 scope: the critical 5-10%, never the
 # tree).
 source_paths = ["src/"]
-# mutmut executes pytest from mutants/ — the shim (verify/) must be present
-# there (copied unmutated).
-also_copy = ["verify/"]
+# mutmut executes pytest from mutants/ — the shim (verify/) and the scripts
+# imported by tests/verification meta-tests must be present there (copied
+# unmutated). scripts/ is required by test_fizz_conformance.py /
+# test_fizz_garden.py / test_mutmut_baseline.py / test_garden_bridge.py
+# (`from scripts.… import …` resolves via pythonpath="." against the scratch
+# root); a missing copy aborts the stats run at collection.
+also_copy = ["verify/", "scripts/"]
 # In-process shim: mutmut 3.7 asserts trampoline-hit module names never
 # start with "src." (an src-LAYOUT convention guard) — this repo's import
 # package IS `src`, so the stats run asserts on every legitimate hit. The
 # plugin (copied into mutants/ via also_copy) relaxes exactly that assert;
 # regular pytest runs never import it.
 pytest_add_cli_args = ["-p", "verify.mutmut.mutmut_compat", "--hypothesis-profile=mutmut"]
+# Per-mutant wall-clock ceiling: (clean-suite duration + timeout_constant) *
+# timeout_multiplier. Upstream defaults (1.0 / 15.0) let a hung mutant burn
+# ~16x the clean suite per run; 6x still leaves >50x headroom over the
+# per-mutant test runtime (mutmut runs only the tests that touched the
+# function) while bounding the nightly budget. Key support verified against
+# the 3.7.0 Config dataclass (see Makefile MUTMUT_PIN).
+timeout_constant = 5.0
+timeout_multiplier = 6.0
+# do_not_mutate_patterns is deliberately NOT set: `logger\.`-style exclusions
+# are only equivalent-class noise while every mutated module's tests treat log
+# lines as unobservable. tests/unit/test_retriever.py asserts on caplog, so
+# once src/patterns/retriever.py entered the mutation scope (R5), logger lines
+# became observational there — a global pattern filter would delete live
+# mutation targets (plan review finding P-02).
 do_not_mutate = [
-    "src/agent.py",
-    "src/config.py",
-    "src/errors.py",
+    # --- permanently excluded: framework wiring / declarative / noise ---
+    "src/config.py",          # validators are good targets, but 564 lines of
+                              # Pydantic defaults would flood equivalents;
+                              # needs pragma verification first (see ledger)
     "src/main.py",
     "src/__main__.py",
-    "src/pipeline.py",
+    "src/pipeline.py",        # model-checked by design (DL/P/FP specs); own PR
     "src/server.py",
-    "src/mcp_prompts/*",
-    "src/patterns/*",
-    "src/prompts/*",
-    "src/reasoning/*",
-    "src/resources/*",
-    "src/schemas/*",
-    "src/tools/analyze.py",
-    "src/tools/cancel_architecture_design.py",
-    "src/tools/design.py",
-    "src/tools/evaluate.py",
-    "src/tools/generate.py",
-    "src/tools/get_architecture_design_status.py",
+    "src/mcp_prompts/*",      # prompt text = string-mutant noise
+    "src/patterns/nodes.py",  # thin llama-index factory wiring
+    "src/prompts/*",          # prompt text = string-mutant noise
+    "src/reasoning/config.py",
+    "src/reasoning/schemas.py",
+    "src/reasoning/__init__.py",
+    "src/resources/*",        # FastMCP resource registration wiring
+    "src/schemas/*",          # declarative pydantic models + enums
     "src/tools/__init__.py",
+    "src/tools/analyze.py",   # Tier B: dedicated tests exist but mock the
+    "src/tools/design.py",    # pipeline — add after nightly runtime data
+    "src/tools/evaluate.py",  # (see verify/mutmut-scope.md "Deferred")
+    "src/tools/generate.py",
+    "src/tools/get_architecture_design_status.py",  # tests live in
+                              # unselected test_server.py — needs selection
+                              # work first
     "src/tools/patterns.py",
-    "src/tools/submit_architecture_design.py",
-    "src/tools/_adapters.py",
 ]
 pytest_add_cli_args_test_selection = [
     "tests/unit/test_text_validation.py",
+    "tests/unit/test_text_validation_internals.py",
     "tests/unit/test_normalization.py",
+    "tests/unit/test_design_normalization_internals.py",
     "tests/unit/test_validation.py",
     "tests/unit/test_jobs.py",
     "tests/unit/test_config_expansion.py",
+    # R5 scope: direct unit oracles for the newly mutated decision modules.
+    "tests/unit/test_agent.py",
+    "tests/unit/test_reasoning_client.py",
+    "tests/unit/test_retriever.py",
+    # Scope round 2 (safe-removal audit): each entry is the dedicated kill
+    # oracle for a module that left do_not_mutate alongside it.
+    "tests/unit/test_pattern_loader.py",        # src/patterns/loader.py
+    "tests/unit/test_pattern_embedder.py",      # src/patterns/embedder.py (_normalize)
+    "tests/unit/test_reasoning_prompts.py",     # src/reasoning/prompts.py
+    "tests/unit/test_adapters.py",              # src/tools/_adapters.py + src/errors.py
+    "tests/unit/test_submit_architecture_design.py",  # submit/cancel tool trio
     "tests/verification",
 ]

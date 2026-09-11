@@ -80,12 +80,20 @@ jobs:
           RUN_PERF: "1"
 
   mutmut-sweep:
-    name: TCB canary — mutmut over Tier A/B/C (advisory)
+    name: TCB canary — mutmut over the mutation scope (advisory; ratcheted baseline)
     runs-on: ubuntu-latest
     # Mutation testing runs every mutant against its test slice in series;
     # the cap keeps an over-grown mutant surface from burning the whole
     # night — a timeout still emits the partial results for triage.
-    timeout-minutes: 180
+    # `make test-mutations` ends with scripts/mutmut_baseline.py --gate, which
+    # compares the run against the committed verify/mutmut-baseline.json
+    # (ratchet: new survivors / kill-ratio drops fail the gate step). The job
+    # stays advisory (continue-on-error) — a red here means "triage the
+    # survivor list" (kill or record equivalents, then regen-mutmut-baseline),
+    # never a silent baseline refresh. Raised 180 -> 300 when the scope grew
+    # from 5 to 15 modules: ~4x the mutant surface would otherwise truncate
+    # the sweep before the baseline gate step ever runs.
+    timeout-minutes: 300
     continue-on-error: true
     steps:
       - uses: actions/checkout@v5
@@ -93,7 +101,7 @@ jobs:
         with:
           enable-cache: true
       - run: uv sync
-      - name: mutmut incremental sweep
+      - name: mutmut incremental sweep + baseline gate
         run: make test-mutations
 
   verify-fizz:
