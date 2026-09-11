@@ -7,7 +7,7 @@ set -euo pipefail
 IMAGE="ghcr.io/fizzbee-io/fizzbee:latest"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-# Map a spec path into the container: specs/fizz/x.fizz -> /work/specs/fizz/x.fizz
+# Map a spec path into the container: verify/fizz/x.fizz -> /work/verify/fizz/x.fizz
 ARGS=()
 for arg in "$@"; do
   case "$arg" in

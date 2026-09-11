@@ -124,12 +124,12 @@ Aggregator: `test-unit` + `test-oracles`. The PR-time test entry point.
 `test-mutations` stays outside on purpose (see Conventions).
 
 ### `verify-fizz` — L4
-Runs `fizz` exhaustively over every `specs/fizz/*.fizz` model (bounds per
+Runs `fizz` exhaustively over every `verify/fizz/*.fizz` model (bounds per
 `fizz.yaml`). Requires the `fizz` binary (or
 `FIZZ=scripts/fizz-docker.sh`). CI-authoritative for control-flow claims
 (J-1/J-2/J-3/J-4, P-1, FP-2..FP-5, FC-1/FC-2, RUN-1/RUN-3/RUN-4/C-1,
 E5F-1..E5F-4, TEI-1/RET-1, FUS-1..FUS-3, DL-2..DL-5 — see
-`specs/fizz/README.md`). fizz v0.5.3 exits 0 even on invariant failure
+`verify/fizz/README.md`). fizz v0.5.3 exits 0 even on invariant failure
 (only panics exit non-zero), so the gate captures each run's output and
 requires the `PASSED: Model checker completed successfully` verdict line
 in addition to a zero exit — `|| exit 1` alone would be vacuous. Verified
@@ -176,7 +176,7 @@ wired as a make target.
 
 ### `verify-ledger` — L8
 `scripts/verify_ledger.py` — property-ID ledger consistency: every property
-ID referenced in an artifact must have a `specs/fizz/README.md` ledger row,
+ID referenced in an artifact must have a `verify/fizz/README.md` ledger row,
 and every row must reference an existing artifact or be explicitly deferred.
 
 ### `verify-cross-consistency` — L8

@@ -27,10 +27,10 @@
 
 ## Verification program
 - Changing job/pipeline control flow: update the matching `.fizz` model in
-  `specs/fizz/` in the same PR, prove it with `make verify-fizz`; CI re-checks
+  `verify/fizz/` in the same PR, prove it with `make verify-fizz`; CI re-checks
   all specs on every push regardless of what the agent did; every assertion
   must kill at least one spec-garden mutant and appear in the
-  `specs/fizz/README.md` ledger.
+  `verify/fizz/README.md` ledger.
 - Every `Requires`/`Ensures` contract must survive the phase-0 mutation set
   (`tests/verification/gardens/`); a contract that planted bugs survive must
   be rejected — non-trivial contracts only.

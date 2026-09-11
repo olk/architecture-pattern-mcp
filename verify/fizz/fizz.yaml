@@ -1,4 +1,4 @@
-# specs/fizz/fizz.yaml — suite-wide FizzBee defaults (fizzbee plan §3.3).
+# verify/fizz/fizz.yaml — suite-wide FizzBee defaults (fizzbee plan §3.3).
 # Per-spec frontmatter may tighten but not loosen these bounds; budget diffs
 # are reviewed like code (principle 4/5, fizzbee plan §3.1).
 options:

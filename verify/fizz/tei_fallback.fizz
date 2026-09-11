@@ -6,7 +6,7 @@ options:
   max_concurrent_actions: 2
 ---
 
-# Element→code map (ledger: specs/fizz/README.md):
+# Element→code map (ledger: verify/fizz/README.md):
 #   role Reranker          ↔ SafeTEIReranker._call_api / _safe_tei_rerank_call
 #                            (src/patterns/safe_tei_rerank.py): HTTP status >=
 #                            400 → RuntimeError; non-list body → RuntimeError;

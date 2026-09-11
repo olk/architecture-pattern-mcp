@@ -205,7 +205,7 @@ counterexample-refined.
 or modeled property is re-stated as an executable Hypothesis test under
 `tests/verification/`, keyed by the shared property IDs (`J-1`–`J-4`, `P-1`,
 `FC-*`/`FP-*` with filled oracle columns in
-`specs/fizz/README.md`). Rationale: the contract/model could be vacuous; the
+`verify/fizz/README.md`). Rationale: the contract/model could be vacuous; the
 test checks *observed behaviour*; together they pin both directions (P1).
 Direction of the implication matters and is stated per property: the
 Hypothesis oracle *samples* what the proof *guarantees* and what the model
@@ -392,7 +392,7 @@ Humans remain the oracle for T2 (is the design good?) and for the judgment
 calls the mechanical layers cannot make: vacuity triage, bound justification,
 fairness assumptions, readability budgets, No-Go decisions. Programmed
 elements: required review for critical paths (`jobs.py` transitions,
-`pipeline.py` control flow, any `verify/` or `specs/fizz/` artifact that
+`pipeline.py` control flow, any `verify/` artifact that
 changes a property claim), post-merge canaries for verified paths
 (coarse benchmark smoke, Nagini plan §5.5 — proofs guarantee functional
 correctness, not performance), and the nightly TCB canaries (L3 gardens
@@ -431,7 +431,7 @@ against pinned verifier versions).
 | What changed | Layers due |
 |---|---|
 | `src/*_core.py`, `verify/twin/` | full Nagini loop + L2 oracle update + ledger row |
-| `specs/fizz/*.fizz` | full FizzBee loop + garden re-run + ledger row |
+| `verify/fizz/*.fizz` | full FizzBee loop + garden re-run + ledger row |
 | `src/tools/jobs.py`, `src/pipeline.py` control flow | matching `.fizz` spec + twin in the same PR (AGENTS.md rule); DST experiment objects when adopted |
 | tool signature or schema (`src/tools/*.py`, `src/schemas/*`) | L1b payload-generator update + boundary-fuzzing run (first amendment) |
 | prompt or model config (`src/prompts/`, `src/reasoning/`) | L9 output-contract corpus re-run — advisory drift gate (first amendment); **`src/reasoning/client.py` also triggers the L2 timeout/retry oracle (E5, second amendment)** |
@@ -718,7 +718,7 @@ Docs: <https://fizzbee.io/> (design/testing guides) · Repo: <https://github.com
 |---|---|
 | Exhaustive interleaving exploration up to stated bounds; implicit fault injection (crash at yield points, message loss, partitions); Python-like `.fizz` specs (low learning curve vs TLA+); safety + liveness (+ fairness) invariants; seeded, reproducible runs; model-based-testing adapters against real code | State-space explosion (8 nodes → 65,536 states in ~4 min); bounded ≠ proof — exhaustive claims weaken beyond the concurrency-2 non-atomic regime; error traces hard to read; model-vs-code drift (adapters mitigate, add glue) |
 
-**Usage in this repo:** `specs/fizz/*.fizz`; `verify-fizz` gate (blocking
+**Usage in this repo:** `verify/fizz/*.fizz`; `verify-fizz` gate (blocking
 from F1); seeded nightly simulation (§3.5); owned by the FizzBee plan.
 
 **In the wild:** Jack Vanlightly's independent evaluation

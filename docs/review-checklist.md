@@ -12,7 +12,7 @@
 | `src/tools/jobs.py` transition setters / guards | J-1/J-2 live here; every later proof (twin, `.fizz`, DST) claims what this file does | Guard sets unchanged or deliberately changed WITH the matching twin + `.fizz` + oracle + ledger updates in the same PR (AGENTS.md rule) |
 | `src/pipeline.py` control flow (stage order, attempt bound, cancellation checkpoints) | P-1/FP-2..FP-4 claims | `.fizz` model updated in the same PR; `make verify-fizz` re-run |
 | `src/text_validation_core.py`, `src/design_normalization_core.py` (L5 Nagini contracts) + their adapters (`src/text_validation.py`, `src/design_normalization.py`) | The verified decision cores live here; every contract claims behavior of the runtime path | `nagini_verify_file` (MCP) re-run over both cores; contracts non-vacuous (a planted decision bug would violate them); adapter precomputations still match the L1/L2 oracle tests |
-| `specs/fizz/**` property-claim changes | Model assertions are claims about the implementation | Ledger row updated; assertion kills ≥ 1 spec-garden mutant or carries `# spec-explains:`; bounds still justified |
+| `verify/fizz/**` property-claim changes | Model assertions are claims about the implementation | Ledger row updated; assertion kills ≥ 1 spec-garden mutant or carries `# spec-explains:`; bounds still justified |
 | `tests/verification/gardens/` | The vacuity authority | New mutants have working kills; weakened mutants documented |
 | Secret canary surfaces (`tests/verification/test_secret_canary.py`) | Tier-E information-flow assurance | Capture surfaces still cover payloads/logs/persisted state; negative controls intact |
 

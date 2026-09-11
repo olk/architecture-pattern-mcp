@@ -8,7 +8,7 @@ action_options:
     max_actions: 6             # model bound, not a protocol limit (SlateDB pattern)
 ---
 
-# Element→code map (SlateDB header convention; ledger: specs/fizz/README.md):
+# Element→code map (SlateDB header convention; ledger: verify/fizz/README.md):
 #   role JobClient          ↔ callers of submit_job/get_status/cancel_job (src/tools/jobs.py)
 #   role JobStore           ↔ JobsStore transition setters (set_running/set_completed/...)
 #   atomic action Submit    ↔ jobs.create_job: INSERT (id, pending)

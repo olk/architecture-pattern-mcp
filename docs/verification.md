@@ -90,33 +90,33 @@ Exhaustive exploration of **all interleavings up to stated bounds** with
 implicit fault injection (crash at yield points, message loss) — the
 protocol-level view no other layer can produce. Artifacts:
 
-- `specs/fizz/jobs_protocol.fizz` — job store (durable, atomic guarded
+- `verify/fizz/jobs_protocol.fizz` — job store (durable, atomic guarded
   transitions) × symmetric clients (crash-on-yield); the `GUARDED` constant
   is the F0 A/B flip: `False` reproduces the historical J-1 violation
   trace, `True` (current implementation) must hold. Also carries the two
   liveness rows: FC-1 (every RUNNING job of an alive client eventually
   leaves RUNNING) and FC-2 (an acknowledged cancel ends CANCELLED).
-- `specs/fizz/jobs_runner.fizz` — the background task lifecycle
+- `verify/fizz/jobs_runner.fizz` — the background task lifecycle
   (`_run_job`) and the cancel tool against the store: W0-1 checkpoints,
   the terminal-write race, the done-callback task-map cleanup (RUN-1/3/4,
   C-1); J-1's kill authority lives here (the terminal-write race is the
   genuine second-write path).
-- `specs/fizz/pipeline_control.fizz` — pipeline stage machine
+- `verify/fizz/pipeline_control.fizz` — pipeline stage machine
   (ANALYZE→GENERATE→EVALUATE→REFINE, attempts ≤ 3) with an unreliable LLM
   environment (`oneof` respond/fail) and a bounded fair retry tick;
   FP-2..FP-7 including the FP-5 liveness row (every run eventually ends).
-- `specs/fizz/design_loop.fizz` — `design_loop` triage decisions: guarded
+- `verify/fizz/design_loop.fizz` — `design_loop` triage decisions: guarded
   best-score update, early stop, cancel checkpoint, malformed-continue
   (DL-2..DL-5).
-- `specs/fizz/reasoning_retry.fizz` — the reasoning client's `wait_for`
+- `verify/fizz/reasoning_retry.fizz` — the reasoning client's `wait_for`
   deadline (E5F-1/2) and the trace cache's LRU + single-flight discipline
   (E5F-3/4).
-- `specs/fizz/tei_fallback.fizz` — TEI reranker verdict discipline
+- `verify/fizz/tei_fallback.fizz` — TEI reranker verdict discipline
   (TEI-1) and the no-partial-result-on-rerank-error rule (RET-1).
-- `specs/fizz/retrieval_fusion.fizz` — the retrieval resolution tail:
+- `verify/fizz/retrieval_fusion.fizz` — the retrieval resolution tail:
   real outcomes carry patterns and passed the floor (FUS-1/2); fallbacks
   are tagged (FUS-3).
-- `specs/fizz/README.md` — the property-ID ledger coupling every assertion
+- `verify/fizz/README.md` — the property-ID ledger coupling every assertion
   to its twin contract, Hypothesis oracle, and conformance test, plus the
   spec garden (FG-01..FG-31, each re-validated on the toolchain
   2026-09-10) and run-stats table.
@@ -209,7 +209,7 @@ Aimed above the code: intent drift between prompt, docstring, contract,
 model, and implementation.
 
 - `make verify-ledger` — every property ID referenced in an artifact must
-  have a `specs/fizz/README.md` ledger row, and every row must reference an
+  have a `verify/fizz/README.md` ledger row, and every row must reference an
   existing artifact or be explicitly deferred (range rows like
   `` `N-1..N-4` `` supported).
 - `make verify-cross-consistency` — the NL-Doc gate (VLP evidence: validating
@@ -243,7 +243,7 @@ ledger, NL-Doc, perf smoke blocking; mutmut/Nagini/FizzBee advisory).
 ## Shared property vocabulary
 
 One ID per property across all layers (drift is reviewable 1:1 via the
-`specs/fizz/README.md` ledger):
+`verify/fizz/README.md` ledger):
 
 | ID | Property | Layers |
 |---|---|---|

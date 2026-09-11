@@ -45,10 +45,10 @@ from src.tools.jobs import JobStatus, JobsStore
 class TestFrozenFizzTraces:
     @pytest.mark.asyncio
     async def test_cancel_races_completion(self, jobs_store: JobsStore):
-        """Frozen FizzBee counterexample for J-1 (specs/fizz/README.md ledger).
+        """Frozen FizzBee counterexample for J-1 (verify/fizz/README.md ledger).
 
         Trace: A: Trans(j0, COMPLETED) -> B: Trans(j0, CANCELLED) mid-flight
-        -> j0 left COMPLETED. Source: fizz specs/fizz/jobs_protocol.fizz
+        -> j0 left COMPLETED. Source: fizz verify/fizz/jobs_protocol.fizz
         (exhaustive, GUARDED=False flip). Repair: Week-0 guarded UPDATEs
         (nagini plan §3.6, fourth amendment).
         """

@@ -107,10 +107,10 @@ test-all: ## Run the fast test gates (PR-time; test-mutations is nightly-only)
 # so `|| exit 1` alone is a vacuous gate — every run must also print the
 # PASSED line. Both conditions are checked per spec.
 FIZZ ?= fizz
-SPEC_DIR := specs/fizz
+SPEC_DIR := verify/fizz
 FIZZ_PASS := ^PASSED: Model checker completed successfully
 
-verify-fizz: ## L4: exhaustive FizzBee model checks over specs/fizz/
+verify-fizz: ## L4: exhaustive FizzBee model checks over verify/fizz/
 	@if ! command -v $(FIZZ) >/dev/null 2>&1; then \
 		echo "fizz binary not found: brew install fizzbee, or set FIZZ=scripts/fizz-docker.sh"; exit 1; \
 	else \
@@ -158,7 +158,7 @@ $(NAGINI):
 verify-nagini: $(NAGINI) ## L5: Nagini deductive verification over the annotated cores
 	@failed=0; 	for f in $(NAGINI_VERIFY_FILES); do 		echo "==> verify-nagini: $$f"; 		$(NAGINI) $$f || failed=1; 	done; 	if [ $$failed -ne 0 ]; then 		echo "verify-nagini: FAILED"; exit 1; 	fi; 	echo "verify-nagini: all files verified"
 
-verify-ledger: ## L8: property-ID ledger consistency (specs/fizz/README.md <-> artifacts)
+verify-ledger: ## L8: property-ID ledger consistency (verify/fizz/README.md <-> artifacts)
 	@$(UV) run python scripts/verify_ledger.py
 
 # Advisory NL-Doc cross-consistency gate (mechanical subset; the LLM

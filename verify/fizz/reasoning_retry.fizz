@@ -6,7 +6,7 @@ options:
   max_concurrent_actions: 2
 ---
 
-# Element→code map (ledger: specs/fizz/README.md):
+# Element→code map (ledger: verify/fizz/README.md):
 #   role Caller            ↔ ReasoningClient._call_tool (src/reasoning/client.py)
 #   Caller.countdown       ↔ budget = spawn_timeout_seconds + step_timeout_seconds
 #                            consumed by asyncio.wait_for (one deadline per call)

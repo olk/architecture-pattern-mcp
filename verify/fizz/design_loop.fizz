@@ -6,7 +6,7 @@ options:
   max_concurrent_actions: 2
 ---
 
-# Element→code map (ledger: specs/fizz/README.md):
+# Element→code map (ledger: verify/fizz/README.md):
 #   role Loop ↔ ArchitecturePipeline.design_loop (src/pipeline.py:1015):
 #     for attempt in 1..max_tries: cancel checkpoint → generate → evaluate →
 #     guarded best update (current_score > best_score) → early stop

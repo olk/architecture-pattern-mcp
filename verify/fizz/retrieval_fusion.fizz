@@ -6,7 +6,7 @@ options:
   max_concurrent_actions: 2
 ---
 
-# Element→code map (ledger: specs/fizz/README.md):
+# Element→code map (ledger: verify/fizz/README.md):
 #   role Retriever ↔ HybridPatternRetriever.retrieve's resolution tail
 #     (src/patterns/retriever.py): survivors → filter_by_domain(slug) →
 #     resolved; empty resolved set → _fallback; best < _min_fusion_score →

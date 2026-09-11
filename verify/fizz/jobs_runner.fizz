@@ -11,7 +11,7 @@ action_options:
     crash_on_yield: false
 ---
 
-# Element→code map (ledger: specs/fizz/README.md):
+# Element→code map (ledger: verify/fizz/README.md):
 #   role Submitter         ↔ submit_architecture_design_job (src/tools/submit_architecture_design.py)
 #   role Runner            ↔ the background asyncio task: _run_job (same file)
 #   role Canceller         ↔ cancel_architecture_design (src/tools/cancel_architecture_design.py)

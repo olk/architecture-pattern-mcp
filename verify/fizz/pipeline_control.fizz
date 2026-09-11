@@ -8,7 +8,7 @@ action_options:
     max_actions: 3             # model bound: at most 3 pipeline runs explored
 ---
 
-# Element→code map (ledger: specs/fizz/README.md):
+# Element→code map (ledger: verify/fizz/README.md):
 #   role Pipeline             ↔ ArchitecturePipeline.run_design (src/pipeline.py)
 #   role Llm                  ↔ LiteLLM transport (unreliable environment)
 #   atomic action Start       ↔ design_job start (submit_architecture_design)
@@ -108,7 +108,7 @@ atomic fair action LlmCall:
 
 atomic fair action RetryTick:
     # fairness: the design loop keeps scheduling retries — progress assumption,
-    # ledgered as FC-liveness-assumption in specs/fizz/README.md
+    # ledgered as FC-liveness-assumption in verify/fizz/README.md
     # (`pass` body required: body-less actions do not register as
     # schedulable transitions — found on the first real fizz run, v0.5.3).
     # The tick is bounded (MAX_TICKS) so the non-terminal region stays

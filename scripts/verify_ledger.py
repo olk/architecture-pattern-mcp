@@ -5,7 +5,7 @@
 Property-ID ledger consistency check (testing-strategies.md §3.9, L8; fizzbee
 plan §3.4/§5.3).
 
-The specs/fizz/README.md ledger is the single mapping between the .fizz
+The verify/fizz/README.md ledger is the single mapping between the .fizz
 models, the Nagini twins, the Hypothesis oracles, and the conformance tests.
 This script makes the mapping mechanically checkable:
 
@@ -23,7 +23,7 @@ import re
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-LEDGER = REPO_ROOT / "specs/fizz/README.md"
+LEDGER = REPO_ROOT / "verify/fizz/README.md"
 
 ID_PATTERN = re.compile(r"\b(?:J|P|FP|FC|RUN|C|E5F|TEI|RET|FUS|DL|N)-\d+\b")
 # A ledger row is a table row whose FIRST cell is a backticked property ID
@@ -32,7 +32,7 @@ ID_PATTERN = re.compile(r"\b(?:J|P|FP|FC|RUN|C|E5F|TEI|RET|FUS|DL|N)-\d+\b")
 # the Ledger table's rows.
 LEDGER_ROW = re.compile(r"^\|\s*`([A-Z0-9]+-\d+(?:\.\.[A-Z0-9]+-\d+)?)`\s*\|")
 ARTIFACT_GLOBS = (
-    "specs/fizz/*.fizz",
+    "verify/fizz/*.fizz",
     "tests/verification/*.py",
     "tests/verification/gardens/*.py",
     "src/*_core.py",

@@ -21,7 +21,7 @@
 
 """
 L2 Hypothesis oracles keyed by the shared property IDs (J-1..J-4; see
-specs/fizz/README.md ledger and nagini-verification-plan.md §3.6), plus the
+verify/fizz/README.md ledger and nagini-verification-plan.md §3.6), plus the
 E5 reasoning-client timeout/retry oracle (testing-strategies §3.3).
 
 Direction of the implication (testing-strategies §3.3): these oracles SAMPLE
