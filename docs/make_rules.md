@@ -115,7 +115,7 @@ verification toolchains (fizz, nagini) are installed.
 L3 mutation testing via mutmut over the Tier A/B/C modules, plus the
 planted-bug gardens (the vacuity authority). Runs mutmut ephemerally
 (`uv run --with mutmut` — deliberately not a project dependency) through
-`verify/mutmut_compat.py`, which patches mutmut 3.x for this repo's
+`verify/mutmut/mutmut_compat.py`, which patches mutmut 3.x for this repo's
 `src.*` package layout. **Manual/nightly only** — heavy; CI runs it as a
 separate advisory job (`.github/workflows/verification.yml#mutmut-sweep`).
 

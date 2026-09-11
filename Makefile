@@ -93,7 +93,7 @@ test-oracles: install ## Run executable oracles (tests/verification/): L1 canary
 # (the normal suite's differing_executors health check stays meaningful).
 MUTMUT_HYPO_DIR := $(shell mktemp -d)
 test-mutations: ## L3: mutmut over Tier A/B/C + gardens (manual/nightly; ephemeral install via uv)
-	HYPOTHESIS_STORAGE_DIRECTORY=$(MUTMUT_HYPO_DIR) $(UV) run --with mutmut python -c "import verify.mutmut_compat as compat; compat.apply(); from mutmut.__main__ import cli; raise SystemExit(cli())" run
+	HYPOTHESIS_STORAGE_DIRECTORY=$(MUTMUT_HYPO_DIR) $(UV) run --with mutmut python -c "import verify.mutmut.mutmut_compat as compat; compat.apply(); from mutmut.__main__ import cli; raise SystemExit(cli())" run
 	$(UV) run --with mutmut mutmut results
 	rm -rf $(MUTMUT_HYPO_DIR)
 

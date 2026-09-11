@@ -25,7 +25,7 @@ never match the stripped keys. This shim patches both functions in-process:
 
 Loaded from two places (idempotent):
 - the mutmut main process, via the Makefile bootstrap (generation time);
-- every mutmut pytest run, via ``-p verify.mutmut_compat`` in
+- every mutmut pytest run, via ``-p verify.mutmut.mutmut_compat`` in
   ``[tool.mutmut] pytest_add_cli_args``.
 
 Regular pytest runs never import it. Pinned-version discipline
@@ -47,7 +47,7 @@ def _patch_record_trampoline_hit(mm: Any) -> None:
     original = inspect.getsource(mm.record_trampoline_hit)
     if _TRAMPOLINE_GUARD not in original:
         raise RuntimeError(
-            "verify.mutmut_compat: the upstream trampoline assert changed — "
+            "verify.mutmut.mutmut_compat: the upstream trampoline assert changed — "
             "update this shim together with the mutmut bump (TCB discipline)"
         )
     namespace: dict[str, Any] = dict(mm.__dict__)
@@ -59,7 +59,7 @@ def _patch_get_mutant_name(mm: Any) -> None:
     original = inspect.getsource(mm.get_mutant_name)
     if _NAMING_GUARD not in original:
         raise RuntimeError(
-            "verify.mutmut_compat: the upstream mutant-naming prefix-strip "
+            "verify.mutmut.mutmut_compat: the upstream mutant-naming prefix-strip "
             "changed — update this shim together with the mutmut bump"
         )
     namespace: dict[str, Any] = dict(mm.__dict__)

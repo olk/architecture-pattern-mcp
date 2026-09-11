@@ -251,7 +251,7 @@ also_copy = ["verify/", "nagini_contracts/"]
 # package IS `src`, so the stats run asserts on every legitimate hit. The
 # plugin (copied into mutants/ via also_copy) relaxes exactly that assert;
 # regular pytest runs never import it.
-pytest_add_cli_args = ["-p", "verify.mutmut_compat", "--hypothesis-profile=mutmut"]
+pytest_add_cli_args = ["-p", "verify.mutmut.mutmut_compat", "--hypothesis-profile=mutmut"]
 do_not_mutate = [
     "src/agent.py",
     "src/config.py",
