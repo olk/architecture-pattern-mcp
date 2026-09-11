@@ -107,10 +107,18 @@ jobs:
           enable-cache: true
       - run: uv sync
       - name: Install fizzbee
+        # Pinned to v0.5.3: the gate verdict in scripts/fizz-check.sh keys off
+        # this version's exit-code semantics (exits 0 even on invariant
+        # failure), so a floating "latest" install could silently change what
+        # the gate means. Prebuilt linux_x86 tarball ships the fizz binary at
+        # the archive root; PATH is extended via GITHUB_PATH so `FIZZ ?= fizz`
+        # (Makefile) resolves it.
         run: |
-          git clone --depth 1 https://github.com/fizzbee-io/fizzbee.git /tmp/fizzbee
-          echo /tmp/fizzbee || true
-        # Toolchain installation is finalized when provisioned
-        # (docs/phase-0-decisions.md); until then this job surfaces the gap.
+          curl -fsSL -o /tmp/fizzbee.tar.gz \
+            https://github.com/fizzbee-io/fizzbee/releases/download/v0.5.3/fizzbee-v0.5.3-linux_x86.tar.gz
+          mkdir -p /tmp/fizzbee
+          tar -xzf /tmp/fizzbee.tar.gz -C /tmp/fizzbee --strip-components=1
+          chmod +x /tmp/fizzbee/fizz
+          echo /tmp/fizzbee >> "$GITHUB_PATH"
       - name: Exhaustive model checks
         run: make verify-fizz
