@@ -1,46 +1,5 @@
 # Testing Strategies — architecture-pattern-mcp (The Layered Testing Program)
 
-> **Status:** planning document, research as of September 2026 (Exa web
-> search, companion-document synthesis, Shannon methodology). This document is
-> the **single reference for the testing program** of this repository: which
-> testing layers exist, which bug class each one owns, what each costs, where
-> each is enforced, and — because this codebase is LLM-generated — why the
-> *tests themselves* need the same scrutiny as the code.
->
-> Companion documents (this one integrates them; it replaces none):
-> [`formal_verification.md`](formal_verification.md) — the deep rationale
-> (T1/T2 trust split, tool landscape, layered-stack synthesis, §5 testing
-> evidence);
-> [`fizzbee-verification-plan.md`](fizzbee-verification-plan.md) — the
-> model-checking program (specs, ledgers, seeded simulation).
->
-> External evidence base: Veracode AI-code security study, USENIX Security
-> '25 slopsquatting paper, DORA 2025, crucible mutation study, Augment
-> guides, Carlini/Anthropic property-based-testing agent, JetBrains verify-
-> repair research, VLP/NL-Doc, NL2VC-60, SpecPylot, Clover/airtight-ai,
-> FoundationDB/TigerBeetle DST lineage, SlateDB DST field report (rng.md),
-> flake8-async/blockpath benchmarks. Framework profiles (docs, pros/cons,
-> usage in this repo, adoption, AI-trust rationale) in §8; raw links in §9.
->
-> **First September 2026 amendment** (plan review E1–E9, 2026-09-09): new
-> layer **L1b — MCP boundary fuzzing** (§3.2a); new layer **L9 — LLM-output
-> contract corpus**, the mechanizable T1.5 slice (§3.9a); former L9 (human
-> review) renumbered **L10**; secret-canary test added to L1 (§3.2);
-> **Week-0** guarded-transition bug-fix rollout row (§6, fix-before-proof
-> sequencing); phase-gate continuation note (§6); hygiene: §2 intro count
-> rewording, LOC reconciliation (§1), anti-pattern 7 (§7).
-> **Second September 2026 amendment** (E1–E8 review pass, 2026-09-09; the
-> Week-0 delivery is specified in
-> [`week-0-task-breakdown.md`](week-0-task-breakdown.md)): DST acceptance
-> requires ≥ 1 of the discriminating pair `J-1`/`J-2` (E1, §3.7); the FizzBee
-> program is a standalone decision unit (E2, §6);
-> cross-consistency checker model identity pinned per run (E3, §3.9);
-> secret canary extended to persisted job fields (E4, §3.2);
-> reasoning-client timeout/retry Hypothesis oracle (E5, §3.3 + §5 duty
-> matrix); injectable-lock refactor added to Week 0 (E6, §6); quarterly
-> evidence audit of the load-bearing citations (E7, §9); pipeline-control
-> model sequenced behind FizzBee F2 (E8, §6 cross-ref).
-
 ## 1. Problem Statement: Testing Code Nobody Fully Reads
 
 The server's code is LLM-generated and ~13,400 raw lines (~10,200 excluding

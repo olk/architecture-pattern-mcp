@@ -1,13 +1,5 @@
 # Verification — architecture-pattern-mcp
 
-> **Status:** summary of the implemented verification and testing program
-> (September 2026). This document summarizes the layered stack: which layer
-> exists, which frameworks it uses, what it tests/verifies, and where its
-> gate lives. It summarizes; it does not replace the owning documents:
-> [`testing-strategies.md`](testing-strategies.md) (the stack),
-> [`formal_verification.md`](formal_verification.md) (rationale),
-> [`review-checklist.md`](review-checklist.md) (L10).
-
 ## The trust model in one paragraph
 
 The server's code is LLM-generated and nobody reads all of it. The program
