@@ -115,25 +115,112 @@ def _mock_pipeline_result() -> Any:
 
 
 class _AsyncPipelineMock(MagicMock):
-    """Pipeline double whose every awaited method is an AsyncMock."""
+    """Pipeline double: AsyncMock ONLY for the methods production awaits.
+
+    The tool handlers await exactly ``analyze`` / ``generate`` /
+    ``evaluate`` / ``run_design`` (verified by grep over src/tools). Every
+    other attribute is a plain MagicMock so that output-mapping code which
+    CALLS pipeline-result attributes without awaiting (a legitimate
+    production pattern) never creates an unawaited coroutine.
+    """
+
+    _AWAITED_METHODS = frozenset({"analyze", "generate", "evaluate", "run_design"})
 
     def __getattr__(self, item: str) -> Any:
         if item.startswith("_"):
             raise AttributeError(item)
-        async_mock: AsyncMock = AsyncMock(name=item)
-        setattr(self, item, async_mock)
-        return async_mock
+        if item in self._AWAITED_METHODS:
+            mock_obj: Any = AsyncMock(name=item)
+        else:
+            mock_obj = MagicMock(name=item)
+        setattr(self, item, mock_obj)
+        return mock_obj
+
+
+def _real_design() -> Any:
+    """A real ArchitectureDesign so output mapping runs the success path."""
+    from src.schemas import (
+        ArchitectureDesign,
+        ArchitectureOverview,
+        Component,
+    )
+    from src.schemas.enums import ArchitectureStyle, PatternCategory
+
+    return ArchitectureDesign(
+        overview=ArchitectureOverview(
+            style=ArchitectureStyle.LAYERED_MONOLITH,
+            category=PatternCategory.STRUCTURAL,
+            principles=["p"],
+        ),
+        components=[
+            Component(
+                id="svc-a",
+                name="Service A",
+                type="service",
+                description="d",
+                responsibilities=["r"],
+            )
+        ],
+        relationships=[],
+        patterns=[],
+        quality_attributes={"scalability": "high"},
+        api_contracts=[],
+        shared_data_models=[],
+        event_contracts=[],
+    )
+
+
+def _real_evaluation(score: float) -> Any:
+    from src.schemas import (
+        ArchitectureEvaluation,
+        EvaluationSummary,
+        MetricResult,
+    )
+
+    return ArchitectureEvaluation(
+        summary=EvaluationSummary(
+            overall_score=score,
+            strengths=["s"],
+            weaknesses=["w"],
+            critical_findings=[],
+        ),
+        metrics=[MetricResult(name="overall_quality", score=score, description="")],
+        recommendations={},
+    )
+
+
+def _real_pipeline_result() -> Any:
+    """A real PipelineResult for the design/submit run_design path."""
+    from src.schemas import PipelineResult, QualityMetrics
+
+    return PipelineResult(
+        design=_real_design(),
+        evaluation=_real_evaluation(80.0),
+        attempts=1,
+        final_style="layered-monolith",
+        quality_metrics=QualityMetrics(
+            maintainability=8.0,
+            scalability=8.0,
+            reliability=8.0,
+            security=8.0,
+            performance=8.0,
+            testability=8.0,
+        ),
+    )
 
 
 def _pipeline_mock() -> _AsyncPipelineMock:
     """Pipeline double for the tool handlers.
 
-    Any pipeline method the tool handlers await resolves to an AsyncMock —
-    un-stubbed names would otherwise raise raw TypeError on await, which is
-    a harness artifact, not a boundary property.
+    Every awaited method returns a REAL typed result so the handlers run
+    their SUCCESS path — output mapping over mock-attribute swamps would
+    both weaken the fuzz claim and leak unawaited AsyncMock coroutines.
     """
     pipeline = _AsyncPipelineMock(name="pipeline")
     pipeline.analyze = AsyncMock(return_value=_mock_pipeline_result())
+    pipeline.generate = AsyncMock(return_value=_real_design())
+    pipeline.evaluate = AsyncMock(return_value=_real_evaluation(80.0))
+    pipeline.run_design = AsyncMock(return_value=_real_pipeline_result())
     return pipeline
 
 
