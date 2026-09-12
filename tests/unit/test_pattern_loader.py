@@ -50,6 +50,7 @@ import pytest
 # Import the PatternLoader class
 from src.patterns.loader import (
     PatternLoader,
+    _normalize_domain_slug,
     _validate_pattern,
 )
 
@@ -536,3 +537,46 @@ class TestRealCatalogueParity:
         canonical = loader.filter_by_domain("cloud-native")
         assert [p["name"] for p in legacy] == [p["name"] for p in canonical]
         assert [p["name"] for p in legacy] == ["alias-check"]
+
+
+class TestNormalizeDomainSlugEdges:
+    """Deterministic L1 oracle for `_normalize_domain_slug` regex-branch behavior.
+
+    The L2 Hypothesis properties LD-1/LD-2 (tests/verification/test_loader_properties.py)
+    cover this function probabilistically under the gate's `mutmut` profile (random
+    seeding, max_examples=50). Edge-hyphen / whitespace-collapse behavior is only
+    caught when the random draw produces an input that yields leading/trailing
+    hyphens after the two `re.sub` collapses — an observed ~65% per-LD-2-invocation
+    survival probability. The gate's NEW-SURVIVOR verdict on `x__normalize_domain_slug
+    __mutmut_13` (`.strip("-")` → `.strip(None)`) is the empirical consequence.
+
+    This class pins the canonical form with deterministic assertions so the whole
+    function's mutants are killed stably, run-to-run, stabilizing the ratchet.
+    """
+
+    @pytest.mark.parametrize(
+        ("raw", "expected"),
+        [
+            ("  Data --Storage  ", "data-storage"),  # whitespace + lowercase + interleaved hyphens
+            ("-data-storage-", "data-storage"),  # explicit edge hyphens (strip target)
+            ("---", ""),  # all-hyphen collapse
+            ("Data  Storage", "data-storage"),  # internal whitespace + lowercase
+            ("DATA-STORAGE", "data-storage"),  # pure lowercase
+        ],
+    )
+    def test_edge_and_whitespace_normalization(self, raw: str, expected: str) -> None:
+        assert _normalize_domain_slug(raw) == expected
+
+    @pytest.mark.parametrize(
+        "canonical",
+        [
+            "data-storage",
+            "real-time",
+            "high-performance",
+            "web-services",
+        ],
+    )
+    def test_idempotent_on_canonical_inputs(self, canonical: str) -> None:
+        # LD-1 deterministic mirror; covers any mutant that breaks the fixed-point.
+        assert _normalize_domain_slug(canonical) == canonical
+        assert _normalize_domain_slug(_normalize_domain_slug(canonical)) == canonical
