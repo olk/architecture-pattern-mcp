@@ -72,7 +72,17 @@ def _safe_tei_rerank_call(
             f"TEI reranker {base_url}/rerank returned HTTP {resp.status_code}: {resp.text[:500]}"
         )
 
-    body = resp.json()
+    try:
+        body = resp.json()
+    except ValueError as exc:
+        # JSONDecodeError (incl. the empty-body edge, found by the L2
+        # boundary oracle): a malformed/empty 200 body is a TEI error
+        # signal, so it must surface as RuntimeError per the contract
+        # below — never as a raw json.decoder leak.
+        raise RuntimeError(
+            f"TEI reranker {base_url}/rerank returned malformed JSON "
+            f"(HTTP {resp.status_code}): {exc}"
+        ) from exc
     if not isinstance(body, list):
         raise RuntimeError(  # noqa: TRY004
             f"TEI reranker {base_url}/rerank returned non-list response "

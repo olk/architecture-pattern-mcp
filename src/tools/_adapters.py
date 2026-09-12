@@ -173,8 +173,24 @@ def design_from_dict(data: dict[str, Any]) -> ArchitectureDesign:
     before being passed to the pipeline layer.
 
     Raises MalformedArchitectureOverviewError (ERR_012) when the overview
-    fails validation.
+    fails validation, or when the payload is not a JSON object at all
+    (non-dict payloads previously escaped as raw AttributeError — found by
+    the L1b boundary oracle; tests/verification/test_boundary_fuzz.py).
     """
+    if not isinstance(data, dict):
+        raise MalformedArchitectureOverviewError(
+            locator="payload",
+            errors=[
+                {
+                    "type": "model_type",
+                    "loc": ("payload",),
+                    "msg": (
+                        "Input must be a JSON object with an 'overview' key, "
+                        f"got {type(data).__name__}"
+                    ),
+                }
+            ],
+        )
     components = [_parse_component(c) for c in data.get("components", [])]
     relationships = [_parse_relationship(r) for r in data.get("relationships", [])]
     event_contracts = [_parse_event_contract(e) for e in data.get("event_contracts", [])]

@@ -40,6 +40,7 @@ import json
 
 import pytest
 from hypothesis import given, settings, HealthCheck, strategies as st
+from pydantic import ValidationError
 
 from src.schemas import (
     AnalysisResult,
@@ -646,3 +647,138 @@ class TestPattern:
         assert p.category.value == category
         assert p.suitable_domains == []
         assert p.tradeoffs == []
+
+
+# ─── L2: JSON roundtrips (model_dump_json → model_validate_json) ─────────────
+
+
+def _roundtrip(model_cls, instance) -> None:
+    """JSON string roundtrip: parse-then-revalidate must restore the model."""
+    return model_cls.model_validate_json(instance.model_dump_json())
+
+
+class TestJSONRoundtrips:
+    """Serialization roundtrips over generated instances (L2 strengthening).
+
+    Replaces the weaker echo-style assertions as the property layer; the
+    original construction tests above stay as the L1 behavioural oracle.
+    """
+
+    @given(ep=api_endpoint_strategy())
+    @settings(max_examples=30)
+    def test_api_endpoint_json_roundtrip(self, ep) -> None:
+        assert _roundtrip(ApiEndpoint, ep) == ep
+
+    @given(dm=data_model_strategy())
+    @settings(max_examples=30)
+    def test_data_model_json_roundtrip(self, dm) -> None:
+        assert _roundtrip(DataModel, dm) == dm
+
+    @given(mf=model_field_strategy())
+    @settings(max_examples=30)
+    def test_model_field_json_roundtrip(self, mf) -> None:
+        assert _roundtrip(ModelField, mf) == mf
+
+    @given(rel=relationship_strategy())
+    @settings(max_examples=30)
+    def test_relationship_json_roundtrip(self, rel) -> None:
+        assert _roundtrip(Relationship, rel) == rel
+
+    @given(ev=event_contract_strategy())
+    @settings(max_examples=30)
+    def test_event_contract_json_roundtrip(self, ev) -> None:
+        assert _roundtrip(EventContract, ev) == ev
+
+    @given(
+        style=architecture_styles(),
+        category=pattern_categories(),
+        principles=st.lists(st.text(min_size=1, max_size=50), min_size=1, max_size=5),
+        constraints=st.lists(st.text(max_size=50), max_size=5),
+    )
+    @settings(max_examples=30)
+    def test_overview_json_roundtrip(self, style, category, principles, constraints) -> None:
+        ov = ArchitectureOverview(
+            style=style, category=category, principles=principles,
+            constraints=constraints,
+        )
+        assert _roundtrip(ArchitectureOverview, ov) == ov
+
+    @given(
+        name=st.text(min_size=1, max_size=50),
+        score=st.floats(min_value=0.0, max_value=100.0, allow_nan=False, allow_infinity=False),
+        desc=st.text(max_size=100),
+    )
+    @settings(max_examples=30)
+    def test_metric_result_json_roundtrip(self, name, score, desc) -> None:
+        mr = MetricResult(name=name, score=score, description=desc)
+        assert _roundtrip(MetricResult, mr) == mr
+
+
+# ─── L2: invalid-input rejection ─────────────────────────────────────────────
+
+
+class TestInvalidInputRejection:
+    @given(
+        style=st.text(min_size=1, max_size=30).filter(
+            lambda s: s not in {x.value for x in ArchitectureStyle}
+        )
+    )
+    @settings(max_examples=10)
+    def test_overview_rejects_unknown_style(self, style) -> None:
+        with pytest.raises(ValidationError):
+            ArchitectureOverview(
+                style=style,
+                category=PatternCategory.STRUCTURAL,
+                principles=["p"],
+            )
+
+    @given(
+        category=st.text(min_size=1, max_size=30).filter(
+            lambda s: s not in {x.value for x in PatternCategory}
+        )
+    )
+    @settings(max_examples=10)
+    def test_overview_rejects_unknown_category(self, category) -> None:
+        with pytest.raises(ValidationError):
+            ArchitectureOverview(
+                style=ArchitectureStyle.LAYERED_MONOLITH,
+                category=category,
+                principles=["p"],
+            )
+
+    @given(
+        score=st.one_of(
+            st.floats(max_value=-0.001, allow_nan=False, allow_infinity=False),
+            st.floats(min_value=100.001, allow_nan=False, allow_infinity=False),
+        )
+    )
+    @settings(max_examples=15)
+    def test_quality_metrics_rejects_out_of_range_scores(self, score) -> None:
+        with pytest.raises(ValidationError):
+            QualityMetrics(
+                maintainability=score,
+                scalability=score,
+                reliability=score,
+                security=score,
+                performance=score,
+                testability=score,
+            )
+
+    def test_quality_metrics_rejects_nan(self) -> None:
+        with pytest.raises(ValidationError):
+            QualityMetrics(
+                maintainability=float("nan"),
+                scalability=1.0,
+                reliability=1.0,
+                security=1.0,
+                performance=1.0,
+                testability=1.0,
+            )
+
+    def test_overview_missing_principles_rejected(self) -> None:
+        with pytest.raises(ValidationError):
+            ArchitectureOverview(
+                style=ArchitectureStyle.LAYERED_MONOLITH,
+                category=PatternCategory.STRUCTURAL,
+                principles=[],
+            )

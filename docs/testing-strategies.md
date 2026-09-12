@@ -123,6 +123,17 @@ in both verification programs (the no-runtime-change rule is defined *as*
 
 ### 3.2a L1b — MCP boundary fuzzing: the tool-call surface (first September 2026 amendment)
 
+**Delivered (2026-09-12):**
+`tests/verification/test_boundary_fuzz.py` exercises the tool surface
+in-process (analyze/generate/evaluate/design entry points, the job trio,
+patterns read tools, the ERR_012 adapter boundary, the registration import,
+the jobs store) with the assertion template below, plus TypeAdapter
+schema-layer wrong-type rejection for the Annotated parameter contracts.
+It found and fixed two real boundary gaps on delivery day (empty-200-body
+raw `JSONDecodeError` in `safe_tei_rerank.py`; raw `AttributeError` on
+non-dict payloads in `_adapters.design_from_dict`) — the layer's claimed
+bug class, falsified by the layer's own first run.
+
 T1's promise is "fails on **no** input" — but until this layer existed, that
 promise was only exercised for *single string fields* (Tier A totality) and
 *schema mirroring* (Tier D). The server's actual external attack surface is

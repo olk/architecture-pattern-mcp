@@ -73,7 +73,11 @@ dev = [
     "pytest>=8.0.0",
     "pytest-asyncio>=0.23.0",
     "pytest-cov>=4.1.0",
-    "hypothesis>=6.0.0",
+    # L2 PBT layer (testing-strategies.md §3.3): the crosshair extra is the
+    # documented "weak but useful peer" backend — same properties, second
+    # engine, advisory only. Floor 6.100 keeps the modern st.characters
+    # API (categories=/exclude_categories=) and profiles semantics stable.
+    "hypothesis[crosshair]>=6.100,<7",
     "ruff>=0.2.0",
     "mypy>=2.3.1",
     "pre-commit>=3.6.0",
