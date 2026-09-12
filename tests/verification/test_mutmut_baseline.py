@@ -282,8 +282,22 @@ class TestRatchetGate:
     def test_nulled_scratch_is_detected_as_unclassified(self) -> None:
         """A config-invalidation pass nulls every exit code (observed live:
         2026-09-11 23:21). The gate must refuse such a run — never certify it
-        and never let --write record it as a floor."""
+        and never let --write record it as a floor.
+
+        The gate flags UNCLASSIFIED only for functions that were classified in
+        the baseline (scripts/mutmut_baseline.py: `base.classified > 0 and
+        cur.classified == 0`) — a function whose mutants were never covered
+        ("no tests", e.g. the mocked embedder paths) cannot regress to
+        unclassified. The nulled run therefore mirrors the gate's classifiable
+        subset; the widened post-regen baseline (2970 mutants, 14 fully
+        uncovered functions) is what exposed this contract.
+        """
         live_functions = functions_from_json(_load_baseline()["functions"])
+        classifiable = {
+            label: stats
+            for label, stats in live_functions.items()
+            if stats.classified > 0
+        }
         nulled = {
             label: FunctionStats(
                 total=stats.total,
@@ -294,12 +308,13 @@ class TestRatchetGate:
                 kill_ratio=None,
                 survivor_keys=[],
             )
-            for label, stats in live_functions.items()
+            for label, stats in classifiable.items()
         }
         failures = gate(live_functions, nulled, Thresholds())
         unclassified = [f for f in failures if "UNCLASSIFIED" in f]
-        assert len(unclassified) == len(live_functions), (
-            "every function must be flagged unclassified"
+        assert classifiable, "baseline must contain at least one classified function"
+        assert len(unclassified) == len(classifiable), (
+            "every previously-classified function must be flagged unclassified"
         )
 
 

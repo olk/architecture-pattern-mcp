@@ -238,13 +238,18 @@ DEP003 = ["litellm", "workflows", "mcp"]
 # unmutated (testing-strategies.md §3.4 scope: the critical 5-10%, never the
 # tree).
 source_paths = ["src/"]
-# mutmut executes pytest from mutants/ — the shim (verify/) and the scripts
-# imported by tests/verification meta-tests must be present there (copied
-# unmutated). scripts/ is required by test_fizz_conformance.py /
-# test_fizz_garden.py / test_mutmut_baseline.py / test_garden_bridge.py
-# (`from scripts.… import …` resolves via pythonpath="." against the scratch
-# root); a missing copy aborts the stats run at collection.
-also_copy = ["verify/", "scripts/"]
+# mutmut executes pytest from mutants/ — the shim (verify/), the scripts
+# imported by tests/verification meta-tests, and the real pattern catalogue
+# must be present there (copied unmutated). scripts/ is required by
+# test_fizz_conformance.py / test_fizz_garden.py / test_mutmut_baseline.py /
+# test_garden_bridge.py (`from scripts.… import …` resolves via
+# pythonpath="." against the scratch root); a missing copy aborts the stats
+# run at collection. pattern/ is required by the LD-4/LD-6 oracles in
+# test_loader_properties.py, which pin the REAL catalogue via
+# `PatternLoader("pattern")` (CWD-relative); a missing copy fails LD-6
+# ("catalogue must not be empty") and silently vacuates LD-4 — observed
+# 2026-09-12.
+also_copy = ["verify/", "scripts/", "pattern/"]
 # In-process shim: mutmut 3.7 asserts trampoline-hit module names never
 # start with "src." (an src-LAYOUT convention guard) — this repo's import
 # package IS `src`, so the stats run asserts on every legitimate hit. The
@@ -259,6 +264,17 @@ pytest_add_cli_args = ["-p", "verify.mutmut.mutmut_compat", "--hypothesis-profil
 # the 3.7.0 Config dataclass (see Makefile MUTMUT_PIN).
 timeout_constant = 5.0
 timeout_multiplier = 6.0
+# Non-Python dependency policy (keys verified present in the 3.7.0 Config
+# dataclass). The gate is a manual/nightly ratchet: mutmut's default "warn"
+# KEEPS cached results when a watched non-Python file changes, so a config or
+# catalogue edit between two runs would let scripts/mutmut_baseline.py --gate
+# distill stale verdicts (observed trap 2026-09-12: a pyproject.toml edit
+# between two consecutive `make test-mutations` runs kept the first run's
+# results). "rerun" resets all cached results instead. cache_invalidation_files
+# additionally pins the pattern catalogue the LD-4/LD-6 oracles read — the
+# data-side behaviour of loader.py mutants must re-test when it changes.
+on_dependency_change = "rerun"
+cache_invalidation_files = ["pattern/*.json"]
 # do_not_mutate_patterns is deliberately NOT set: `logger\.`-style exclusions
 # are only equivalent-class noise while every mutated module's tests treat log
 # lines as unobservable. tests/unit/test_retriever.py asserts on caplog, so

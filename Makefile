@@ -101,6 +101,16 @@ test-oracles: install ## Run executable oracles (tests/verification/): L1 canary
 # per-run Hypothesis database is removed even when a gate step fails (make
 # would otherwise abort before the old standalone rm line ever ran).
 #
+# Pytest tmp isolation: every pytest process under this gate (stats, clean,
+# forced-fail, per-mutant runs) pins its own per-PID --basetemp under
+# MUTMUT_PYTEST_TMP (consumed by verify/mutmut/mutmut_compat.py's
+# pytest_configure; same EXIT-trap lifecycle as HYPO_DIR). Without it the
+# parallel children share /tmp/pytest-of-<user>/ and race on the
+# pytest-current symlink at teardown: FileNotFoundError inside
+# cleanup_dead_symlinks kills children whose nonzero exit
+# scripts/mutmut_baseline.py then records as "killed" — silent kill-ratio
+# inflation (observed on every run before this fix).
+#
 # Enforcement: `mutmut run` exits 0 even with survivors, so the gate only
 # means something because of the final step — scripts/mutmut_baseline.py
 # distills mutants/ (gitignored scratch) into verify/mutmut-baseline.json and
@@ -111,6 +121,8 @@ test-mutations: ## L3: mutmut over Tier A/B/C + gardens (manual/nightly; ephemer
 	@bash -o pipefail -c '\
 	HYPO_DIR=$$(mktemp -d); \
 	export HYPOTHESIS_STORAGE_DIRECTORY="$$HYPO_DIR"; \
+	export MUTMUT_PYTEST_TMP="$$HYPO_DIR/pytest-tmp"; \
+	mkdir -p "$$MUTMUT_PYTEST_TMP"; \
 	trap '"'"'rm -rf "$$HYPO_DIR"'"'"' EXIT; \
 	$(UV) run --with $(MUTMUT_PIN) python -c "import verify.mutmut.mutmut_compat as compat; compat.apply(); from mutmut.__main__ import cli; raise SystemExit(cli())" run || exit 1; \
 	$(UV) run --with $(MUTMUT_PIN) mutmut results || exit 1; \

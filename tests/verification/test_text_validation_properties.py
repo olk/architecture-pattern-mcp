@@ -67,8 +67,6 @@ from tests.verification.strategies import (
     disallowed_somewhere,
 )
 
-_ALLOWED_WHITESPACE = ("\t", "\n", "\r")
-
 _printable_text_adapter: TypeAdapter[str] = TypeAdapter(PrintableText)
 _domain_name_adapter: TypeAdapter[str] = TypeAdapter(DomainName)
 _pattern_name_adapter: TypeAdapter[str] = TypeAdapter(PatternName)
@@ -85,12 +83,22 @@ def _char_model(value: str, allow_line_breaks: bool) -> tuple[list[int], list[bo
 
 
 def _first_violation(value: str, allow_line_breaks: bool) -> int | None:
-    """Reference scan: first index where the control/format rule breaks."""
+    """Reference scan: first index where the control/format rule breaks.
+
+    The allowed-whitespace rule mirrors ``_char_model``'s ``allowed_ws``
+    expression EXACTLY: ``\\t`` is always allowed, ``\\n``/``\\r`` only when
+    ``allow_line_breaks``. (An earlier version whitelisted ``\\n``/``\\r``
+    unconditionally via ``ch not in _ALLOWED_WHITESPACE`` — with
+    ``allow_line_breaks=False`` the reference then disagreed with the SUT on
+    any line-break-bearing draw; found 2026-09-12 by the mutmut clean-test
+    run on value='\\n'.)
+    """
     for i, ch in enumerate(value):
-        if unicodedata.category(ch).startswith("C") and ch not in _ALLOWED_WHITESPACE:
-            if ch in ("\n", "\r") and allow_line_breaks:
-                continue
-            return i
+        if not unicodedata.category(ch).startswith("C"):
+            continue
+        if ch == "\t" or (allow_line_breaks and ch in ("\n", "\r")):
+            continue
+        return i
     return None
 
 
@@ -153,10 +161,29 @@ class TestV3StripWindowMaximality:
         )
         assert verdict.kind != KIND_DISALLOWED
         expected_lo = len(value) - len(value.lstrip())
-        expected_hi = len(value.rstrip())
+        # Half-open window [lo, hi): for ALL-whitespace input the rstrip length
+        # is 0, but the well-formed window is (n, n) — exactly what
+        # compute_strip_window's ``while hi > lo`` clamp yields and what the L1
+        # pin test_all_whitespace_window_is_empty_at_n locks in. A bare
+        # len(value.rstrip()) here would assert an inverted interval (n, 0),
+        # violating V-2's own lo <= hi invariant (found 2026-09-12 by the
+        # mutmut clean-test run drawing value=' ', max_length=0).
+        expected_hi = max(expected_lo, len(value.rstrip()))
         assert (verdict.window_lo, verdict.window_hi) == (expected_lo, expected_hi), (
             f"window mismatch for {value!r}"
         )
+
+    def test_all_whitespace_window_is_well_formed_empty_at_n(self) -> None:
+        """Deterministic pin for the degenerate corner the property test can
+        only sample rarely: all-whitespace input must yield the empty,
+        well-formed (n, n) window regardless of draw luck."""
+        for value in ("", " ", "   \t\n  "):
+            categories, strip_ws, allowed_ws = _char_model(value, allow_line_breaks=True)
+            verdict = evaluate_printable_text(
+                value, categories, strip_ws, allowed_ws, max_length=0
+            )
+            n = len(value)
+            assert (verdict.window_lo, verdict.window_hi) == (n, n)
 
 
 class TestV4TooLongIff:
@@ -211,6 +238,30 @@ class TestV6FirstDisallowed:
         assert (verdict.kind == KIND_DISALLOWED) == (reference_index is not None)
         if reference_index is not None:
             assert verdict.error_index == reference_index
+
+    def test_line_break_mode_matrix_sut_matches_reference(self) -> None:
+        """Deterministic pin for the (\\n, \\r, \\t) × (True, False) matrix the
+        property test can only sample rarely: \\t allowed in BOTH modes;
+        \\n/\\r allowed only with allow_line_breaks. Locks SUT⇔reference
+        agreement and the reference's index choice at index 0."""
+        for ch in ("\n", "\r", "\t"):
+            for allow_line_breaks in (True, False):
+                categories, strip_ws, allowed_ws = _char_model(
+                    ch, allow_line_breaks=allow_line_breaks
+                )
+                verdict = evaluate_printable_text(
+                    ch, categories, strip_ws, allowed_ws, max_length=10_000
+                )
+                reference_index = _first_violation(ch, allow_line_breaks)
+                assert (verdict.kind == KIND_DISALLOWED) == (
+                    reference_index is not None
+                ), (ch, allow_line_breaks)
+        assert _first_violation("\t", False) is None
+        assert _first_violation("\t", True) is None
+        assert _first_violation("\n", True) is None
+        assert _first_violation("\r", True) is None
+        assert _first_violation("\n", False) == 0
+        assert _first_violation("\r", False) == 0
 
 
 class TestKnownCorners:

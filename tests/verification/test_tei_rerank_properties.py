@@ -43,8 +43,15 @@ _error_bodies = st.one_of(
     st.integers(min_value=0, max_value=999),
 )
 
+# Scores must be FINITE: the mock handler materialises the body via
+# httpx `json=` (strict encoding — no Infinity/NaN literals), and a real
+# TEI server (Rust/serde) can only emit JSON-representable floats anyway.
+# Same guard as every other verification-oracle float strategy.
 _tei_result_row = st.fixed_dictionaries(
-    {"index": st.integers(min_value=0, max_value=64), "score": st.floats(allow_nan=False)}
+    {
+        "index": st.integers(min_value=0, max_value=64),
+        "score": st.floats(allow_nan=False, allow_infinity=False),
+    }
 )
 
 

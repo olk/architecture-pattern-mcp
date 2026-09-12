@@ -18,14 +18,14 @@ rows hold; it leaves scope only through a row edit here.
 
 | Module | Decision functions | Ownership (kill authority) | Why in scope | Expected survivors |
 |---|---|---|---|---|
-| `src/text_validation.py` | `compute_strip_window`, `evaluate_printable_text`, `_category_code`, `ensure_printable_text`, the three `AfterValidator`s | L1 `test_text_validation.py` (behavioral oracle) + L1 `test_text_validation_internals.py` (direct, kills index-arithmetic mutants the wrapper cannot see) **+ L2 `tests/verification/test_text_validation_properties.py` (V-1..V-6, 2026-09-12: totality, verdict well-formedness, strip-window maximality, TOO_LONG/NO_PRINTABLE iff-laws, first-disallowed index; Annotated wrappers pinned via TypeAdapter at Field boundaries)** | MCP input boundary; totality + verdict discipline (Tier A totality promise) | yes — wrapper-level error-message f-string mutants partially overlap (see equivalents ledger) |
+| `src/text_validation.py` | `compute_strip_window`, `evaluate_printable_text`, `_category_code`, `ensure_printable_text`, the three `AfterValidator`s | L1 `test_text_validation.py` (behavioral oracle) + L1 `test_text_validation_internals.py` (direct, kills index-arithmetic mutants the wrapper cannot see) **+ L2 `tests/verification/test_text_validation_properties.py` (V-1..V-6, 2026-09-12: totality, verdict well-formedness, strip-window maximality, TOO_LONG/NO_PRINTABLE iff-laws, first-disallowed index; Annotated wrappers pinned via TypeAdapter at Field boundaries; V-3 reference arithmetic corrected same day — the all-whitespace corner must assert the well-formed `(n, n)` half-open window, not the inverted `len(rstrip())` interval, mirroring the L1 pin `test_all_whitespace_window_is_empty_at_n`; V-6 reference scan corrected same day — `\n`/`\r` must be allowed only when `allow_line_breaks` (the unconditional `_ALLOWED_WHITESPACE` whitelist disagreed with the SUT on line-break-bearing draws; deterministic mode-matrix pin added)** | MCP input boundary; totality + verdict discipline (Tier A totality promise) | yes — wrapper-level error-message f-string mutants partially overlap (see equivalents ledger) |
 | `src/design_normalization.py` | `promote_api_contract_ids`, `promote_shared_model_keys`, `dedupe_event_names`, `_select_first` | L2 `test_normalization_idempotence.py` (N-1..N-4) + L1 `test_design_normalization_internals.py` | §4.11 denormalization precedence/dedup — wrong dedup silently drops contracts | rare (kill ratio 0.96 at baseline) |
 | `src/validation.py` | `format_validation_errors`, `validate_with_retries` | L1 `test_validation.py` + L2 E5 retry oracle (`test_jobs_properties.py`) | self-healing retry loop at the LLM boundary — unbounded retry = hang class | **yes — 50 of 80 at baseline; the weakest audited module, triage pending** |
 | `src/config_expansion.py` | `expand_env`, `expand_env_in_obj` | L1 `test_config_expansion.py` **+ L2 `tests/verification/test_config_properties.py` (CE-1..CE-6, 2026-09-12: no-op/env-wins/default/empty-wins laws, idempotence, structural-recursion shadow walker, malformed-placeholder passthrough; + CV Field-bound properties)** | `{env:VAR}` expansion feeds every config secret/URL — silent mis-expansion is a config-injection class | none at baseline (30/30 killed) — L2 must hold the ratio |
 | `src/tools/jobs.py` | `JobsStore` lifecycle + `_guarded_update` | L1 `test_jobs.py` (transition matrix) + L2 J-oracles + L4 `jobs_protocol`/`jobs_runner` conformance **+ L1b `test_boundary_fuzz.py` job-trio surfaces (2026-09-12)** | W0-1 guarded transitions (J-1/J-2); the single most safety-critical automaton in the server | yes — mostly SQL-string f-string mutants killed only via behavior; triage pending |
 | `src/agent.py` *(R5)* | `_generate_structured_once`, `generate_structured` retry wiring | L2 E5 raw-transport mapping oracle + L1 `test_agent.py` | the raw-exception → `LLMError` mapping; an unmapped exception escapes into the pipeline | triage pending (new in R5) |
 | `src/reasoning/client.py` *(R5)* | `_run_cached` (LRU + single-flight), `_generate_trace` (step bound), `_validate_draft` | L1 `test_reasoning_client.py` `TestCacheLRUEviction`/`TestSingleFlight` (E5F-3/E5F-4) + L4 `reasoning_retry.fizz` (FG-20..22) **+ L2 E5F-2/3/4 oracle extensions in `test_jobs_properties.py` (2026-09-12: step-loop bound, LRU bound incl. recency, single-flight over the REAL cache/loop)** | silent-degradation failure mode (E5F family); cache poisoning and unbounded generation are kill classes | triage pending (new in R5); `logger\.` lines are OBSERVATIONAL here (caplog tests) — no pattern exclusion |
-| `src/patterns/safe_tei_rerank.py` *(R5)* | `_safe_tei_rerank_call`, `SafeTEIReranker._call_api` | L1 `test_retriever.py` HTTP-error tests + L4 `tei_fallback.fizz` (FG-23/24, TEI-1/RET-1) **+ L2 `tests/verification/test_tei_rerank_properties.py` (2026-09-12: generated status/body matrix, malformed-JSON branch added — the oracle found the empty-200-body raw-JSONDecodeError leak, fixed same PR)** | error verdicts must stay pure signals — a partial result masquerading as REAL is the RET-1 kill class | triage pending (new in R5) |
+| `src/patterns/safe_tei_rerank.py` *(R5)* | `_safe_tei_rerank_call`, `SafeTEIReranker._call_api` | L1 `test_retriever.py` HTTP-error tests + L4 `tei_fallback.fizz` (FG-23/24, TEI-1/RET-1) **+ L2 `tests/verification/test_tei_rerank_properties.py` (2026-09-12: generated status/body matrix, malformed-JSON branch added — the oracle found the empty-200-body raw-JSONDecodeError leak, fixed same PR; TEI-1 happy-path row strategy corrected same day: `score` now excludes ±inf, the one float strategy missing `allow_infinity=False` — non-finite scores are unrepresentable in strict JSON and crashed the mock `json=` encoder before the SUT ran)** | error verdicts must stay pure signals — a partial result masquerading as REAL is the RET-1 kill class | triage pending (new in R5) |
 | `src/patterns/retriever.py` *(R5)* | `HybridPatternRetriever.retrieve` resolution/floor/fallback tail, `reciprocal_rank_score` | L1 `test_retriever.py`/`test_fusion_rrf.py` + L4 `retrieval_fusion.fizz` (FG-25..27, FUS-1..3) **+ L2 `tests/verification/test_retrieval_fusion_properties.py` (FUS-1/2/3 over generated leg orderings + floors, branch-steered via `target()`) and `test_scoring_properties.py` (S-1/S-2 RRF laws; 2026-09-12)** | the fallback decision decides whether users get real patterns or layered-monolith | triage pending (new in R5) |
 | `src/errors.py` *(round 2)* | `JobStateError.__init__`, `MalformedArchitectureOverviewError.__init__` | L1 `test_jobs.py` (attribute asserts) + L1 `test_adapters.py` (locator/message) | error attribute contracts (`job_id`, `current_status`) are asserted by callers — attribute-drop mutants are killable | not expected (both attrs pinned) |
 | `src/patterns/loader.py` *(round 2)* | `PatternLoader.load_all`, `filter_by_domain`, domain normalization | L1 `test_pattern_loader.py` (19 tests: discovery, lowercase/spaces→hyphens, alias, unsuitable filter) **+ L2 `tests/verification/test_loader_properties.py` (LD-1..LD-6, 2026-09-12: normalization idempotence/canonical-form laws, alias-map closure, real-catalogue filter equivalence under case/whitespace corruption, catalogue shape)** | pattern discovery + domain normalization decide which patterns a query can ever see | triage pending |
@@ -54,9 +54,13 @@ rows hold; it leaves scope only through a row edit here.
 1. mutmut is pinned `==3.7.*` in lockstep with `verify/mutmut/mutmut_compat.py`
    (source-string guards fail loudly on an upstream change — bump pin + shim
    together).
-2. `also_copy = ["verify/", "scripts/"]`: the scratch tree must carry the
-   shim AND the scripts package the `tests/verification` meta-tests import
-   (a missing copy aborts the run at stats collection — observed 2026-09-11).
+2. `also_copy = ["verify/", "scripts/", "pattern/"]`: the scratch tree must
+   carry the shim, the scripts package the `tests/verification` meta-tests
+   import (a missing copy aborts the run at stats collection — observed
+   2026-09-11), and the real pattern catalogue (observed 2026-09-12: a
+   missing `pattern/` copy fails the LD-6 real-data pin with "catalogue must
+   not be empty" and silently vacuates LD-4, whose corruption pool collapses
+   to the empty set).
 3. Per-mutant budget: `timeout_constant = 5.0`, `timeout_multiplier = 6.0`
    (verified present in the 3.7.0 `Config` dataclass).
 4. The recipe runs in one shell with an `EXIT` trap — the per-run Hypothesis
@@ -73,7 +77,18 @@ rows hold; it leaves scope only through a row edit here.
    selection) plus an interrupted run can leave `mutants/` with a stale
    config fingerprint and half-invalidated results — the documented reset is
    `rm -rf mutants/` (gitignored, fully regenerable; the committed baseline
-   is unaffected). Done 2026-09-11 after the round-2 scope expansion.
+   is unaffected). Done 2026-09-11 after the round-2 scope expansion,
+   2026-09-12 after adding `pattern/` to `also_copy`, and 2026-09-12 after
+   the consecutive-run cache warning ("pyproject.toml changed … cached
+   results were kept").
+8. Dependency-change policy: `on_dependency_change = "rerun"` +
+   `cache_invalidation_files = ["pattern/*.json"]` (both keys verified
+   present in the 3.7.0 `Config` dataclass). The default "warn" KEEPS cached
+   mutant results when a watched non-Python file changes — for a manual
+   nightly ratchet that means `scripts/mutmut_baseline.py --gate` could
+   distill stale verdicts (observed 2026-09-12). "rerun" discards all
+   results instead; the catalogue glob additionally re-tests the loader
+   mutants when the `pattern/` data the LD-4/LD-6 oracles read changes.
 
 ## mutmut 4 migration note (R11)
 
