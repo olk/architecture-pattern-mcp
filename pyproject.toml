@@ -282,31 +282,32 @@ cache_invalidation_files = ["pattern/*.json"]
 # became observational there — a global pattern filter would delete live
 # mutation targets (plan review finding P-02).
 do_not_mutate = [
-    # --- permanently excluded: framework wiring / declarative / noise ---
-    "src/config.py",          # validators are good targets, but 564 lines of
-                              # Pydantic defaults would flood equivalents;
-                              # needs pragma verification first (see ledger)
+    # Rationale lives in verify/mutmut-scope.md — this list only mirrors it
+    # (AGENTS.md L3 rule: any change here must edit a ledger row in the same
+    # PR). Group comments name the ledger section holding each entry's row.
+    # [Deferred → "Awaiting scope sign-off"]
+    "src/config.py",
+    "src/reasoning/config.py",
+    "src/tools/analyze.py",
+    "src/tools/design.py",
+    "src/tools/evaluate.py",
+    "src/tools/generate.py",
+    "src/tools/get_architecture_design_status.py",
+    "src/tools/patterns.py",
+    # [Deferred → "Model-checked (L4)"]
+    "src/pipeline.py",
+    # [Permanent → "Permanent (excluded by design)"]
     "src/main.py",
     "src/__main__.py",
-    "src/pipeline.py",        # model-checked by design (DL/P/FP specs); own PR
     "src/server.py",
-    "src/mcp_prompts/*",      # prompt text = string-mutant noise
-    "src/patterns/nodes.py",  # thin llama-index factory wiring
-    "src/prompts/*",          # prompt text = string-mutant noise
-    "src/reasoning/config.py",
+    "src/mcp_prompts/*",
+    "src/patterns/nodes.py",
+    "src/prompts/*",
     "src/reasoning/schemas.py",
     "src/reasoning/__init__.py",
-    "src/resources/*",        # FastMCP resource registration wiring
-    "src/schemas/*",          # declarative pydantic models + enums
+    "src/resources/*",
+    "src/schemas/*",
     "src/tools/__init__.py",
-    "src/tools/analyze.py",   # Tier B: dedicated tests exist but mock the
-    "src/tools/design.py",    # pipeline — add after nightly runtime data
-    "src/tools/evaluate.py",  # (see verify/mutmut-scope.md "Deferred")
-    "src/tools/generate.py",
-    "src/tools/get_architecture_design_status.py",  # tests live in
-                              # unselected test_server.py — needs selection
-                              # work first
-    "src/tools/patterns.py",
 ]
 pytest_add_cli_args_test_selection = [
     "tests/unit/test_text_validation.py",
