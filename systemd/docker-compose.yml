@@ -17,7 +17,7 @@
 services:
   architecture-pattern-mcp:
     image: ${MCP_IMAGE:-architecture-pattern-mcp:latest}
-    container_name: architecture-pattern-mcp
+    container_name: "architecture-pattern-mcp"
     networks: [pattern-tei-shared]
     environment:
       - CONFIG_PATH=/app/config/config.json

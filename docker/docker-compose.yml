@@ -17,7 +17,7 @@ name: architecture-pattern-mcp-dev
 services:
   architecture-pattern-mcp:
     image: ${MCP_IMAGE:-architecture-pattern-mcp:latest}
-    container_name: architecture-pattern-mcp
+    container_name: "architecture-pattern-mcp-dev"
     environment:
       - CONFIG_PATH=/app/config/config.json
       - GENERATOR_PROVIDER=minimax
@@ -96,7 +96,7 @@ services:
 
   pattern-tei-embed:
     image: ${TEI_IMAGE:-pattern-tei-embed:latest}
-    container_name: architecture-pattern-tei-embed
+    container_name: pattern-tei-embed-dev
     restart: unless-stopped
     # No ports published — internal only (reached by MCP via Docker DNS)
     environment:
@@ -120,7 +120,7 @@ services:
 
   pattern-tei-rerank:
     image: ${TEI_RERANK_IMAGE:-pattern-tei-rerank:latest}
-    container_name: architecture-pattern-tei-rerank
+    container_name: pattern-tei-rerank-dev
     restart: unless-stopped
     # No ports published — internal only (reached by MCP via Docker DNS)
     environment:
