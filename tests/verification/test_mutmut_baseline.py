@@ -20,7 +20,7 @@
 # SOFTWARE.
 
 """
-L3 meta-oracle for the mutmut baseline gate (plan R2 / review fixes P-01..P-08).
+L3 meta-oracle for the mutmut baseline gate (plan R2 / review fixes).
 
 The gate itself (scripts/mutmut_baseline.py) audits the LAST mutation run
 against the committed verify/mutmut-baseline.json. These tests audit the
@@ -88,7 +88,7 @@ class TestCommittedBaseline:
         assert document["schema"] == SCHEMA_VERSION
 
     def test_baseline_carries_run_provenance(self) -> None:
-        """P-01: the baseline is the only committed record of a mutation run —
+        """The baseline is the only committed record of a mutation run —
         it must name the commit the run was made at."""
         run = _load_baseline()["run"]
         assert isinstance(run, dict)
@@ -249,7 +249,7 @@ class TestRatchetGate:
         assert gate(baseline, current, Thresholds()) == []
 
     def test_vanished_module_fails_but_deleted_function_does_not(self) -> None:
-        """P-08 asymmetry: a deleted function is a regen concern; a vanished
+        """Asymmetry: a deleted function is a regen concern; a vanished
         module means the run died early — that is a regression."""
         baseline = {
             "gone.py::fn": TestRatchetGate._stats(1, 0),
