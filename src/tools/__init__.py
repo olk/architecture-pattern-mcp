@@ -48,18 +48,6 @@ from src.tools.submit_architecture_design import (
     submit_architecture_design_job_tool,
 )
 
-__all__ = [
-    "analyze_architecture_tool",
-    "cancel_architecture_design_tool",
-    "design_architecture_tool",
-    "evaluate_architecture_tool",
-    "generate_architecture_tool",
-    "get_architecture_design_status_tool",
-    "get_architecture_pattern_tool",
-    "list_architecture_patterns_tool",
-    "submit_architecture_design_job_tool",
-]
-
 
 def create_all_tools(
     agent: SoftwareArchitectAgent,

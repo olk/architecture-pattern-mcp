@@ -28,11 +28,11 @@ Testing carries a double burden here:
 
 | # | Principle | Enforcement in this repo |
 |---|---|---|
-| P1 | **Decorrelated oracles.** Layers are chosen so their blind spots do not overlap; residuals multiply instead of add (`formal_verification.md` §6.1) | The §2 stack: type system / sampling / mutation / interleaving / proof are orthogonal bug-class owners |
+| P1 | **Decorrelated oracles.** Layers are chosen so their blind spots do not overlap; residuals multiply instead of add | The §2 stack: type system / sampling / mutation / interleaving / proof are orthogonal bug-class owners |
 | P2 | **Vacuity control everywhere.** Every oracle must be able to fail; an oracle that cannot fail is deleted | Mutant-kill rules: `.fizz` assertions must each kill ≥ 1 garden mutant; Hypothesis oracles face the same mutmut audit |
 | P3 | **One definition of green.** Hooks, agent loops, and CI execute literally the same `make` targets | All layers delegate to Make targets (§5); no duplicated commands |
 | P4 | **The agent is untrusted.** AGENTS.md rules are advisory for an LLM; enforcement is mechanical | CI re-runs the full gate set on every push regardless of what the agent did locally |
-| P5 | **Honest claims.** Every layer states what it certifies *and its boundary* — sampled ≠ exhaustive ≠ ∀-inputs; bounded model ≠ unbounded theorem | Per-layer claim wording in §2 and the trust stories of both plans (§9 each) |
+| P5 | **Honest claims.** Every layer states what it certifies *and its boundary* — sampled ≠ exhaustive ≠ ∀-inputs; bounded model ≠ unbounded theorem | Per-layer claim wording in §2 and the per-layer claims in §3 |
 | P6 | **Cheapest-first sequencing.** A bug should be caught by the cheapest layer able to catch it | §5 duty matrix orders checks by cost; expensive layers are path-filtered |
 
 ## 2. The Stack at a Glance
@@ -52,14 +52,14 @@ once and would again). "Gate" = where enforcement is mandatory.
 | L5 | Deductive verification | — (*retired 2026-09*) | ∀-inputs decision-logic properties, now pinned by the L1/L2 oracles (`tests/unit/`, `tests/verification/test_normalization_idempotence.py`) | — | — | — |
 | L6 | Deterministic simulation | simloom / frontrun (Phase-0 head-to-head) | real asyncio schedules of the *real implementation*, replayable seeds | h (bounded search) | Phase-0 experiment | FoundationDB/TigerBeetle school; simloom `systematic=True` = bounded proof on unmodified asyncio |
 | L7 | Dependency & supply chain | deptry, `uv.lock` pinning, (candidate: pip-audit) | hallucinated/unused/vulnerable deps, slopsquatting | s | pre-push + CI | USENIX '25: 19.7% hallucinated packages |
-| L8 | Spec & doc-level testing | NL-Doc cross-consistency gate, property-ID ledger checks, SpecPylot-style spec inference | intent drift: code ≠ docstring ≠ contract ≠ model | min | advisory → blocking per plan | VLP: intermediate-artifact validation 84% vs 40% direct review; Clover six-way consistency |
+| L8 | Spec & doc-level testing | NL-Doc cross-consistency gate, property-ID ledger checks, SpecPylot-style spec inference | intent drift: code ≠ docstring ≠ contract ≠ model | min | advisory → blocking | VLP: intermediate-artifact validation 84% vs 40% direct review; Clover six-way consistency |
 | L9 | LLM-output contract corpus | in-repo `tests/eval/` corpus + structural invariant assertions (run under `ARCH_BENCH_LLM`) | **structural well-formedness of LLM output** (the T1.5 slice): cited pattern names exist, component/event reference closure, producer+consumer pairs, score ranges, section completeness; prompt/model drift detection | min (LLM API) | advisory drift gate on prompt/model changes | VLP intent-layer evidence; owned by §3.9a — never judges design quality (T2) |
 | L10 | Human review + canaries | PR review on critical paths; post-merge canaries; nightly TCB canaries | intent, design quality (T2), tool regressions | h | PR-required for critical paths | DORA 2025; AxDafny lesson: verified ≠ performant |
 
 Explicitly **out of scope for any layer**: semantic quality of LLM output
 (T2) — the architecture designs themselves are judged by evaluation rubrics
 and human review, never by a theorem or a test. That boundary is the core
-claim of `formal_verification.md` and is repeated here because testing
+claim of this program and is repeated here because testing
 programs fail most often by silent scope creep. (L9 sits deliberately close
 to this boundary and is worded to stay on the T1 side: it certifies
 *well-formedness and internal consistency* of output, never whether the
@@ -82,7 +82,7 @@ functions, sync primitives in async context, missing awaits) and
 reachability for blocking calls). Benchmark rationale: 51% of blocking calls
 in surveyed repositories sit at depth ≥ 2 where per-file linters are blind
 (ruff ASYNC flagged 0 of 81 such sites), at 98.2% measured precision. Wired
-as `make verify-async-lint`; advisory through Phase 0, blocking from Phase 1.
+as `make verify-async-lint` (planned); advisory through Phase 0, blocking from Phase 1.
 The `jobs.py` check-then-act race is exactly this layer's bug class — it
 should have been caught *before* any runtime oracle was written.
 
@@ -119,7 +119,7 @@ in both verification programs (the no-runtime-change rule is defined *as*
   `--sif` proof targets (secrets never reach prompts/log sinks) at roughly 1%
   of its cost, from day one; the `--sif` phase proceeds only where the canary
   or review demonstrates residual risk the canary cannot cover. Delivered as
-  Week-0 task W0-3 ([`week-0-task-breakdown.md`](week-0-task-breakdown.md)).
+  Week-0 task W0-3.
 
 ### 3.2a L1b — MCP boundary fuzzing: the tool-call surface (first September 2026 amendment)
 
@@ -154,7 +154,7 @@ generated payload, (a) no unhandled exception escapes the tool invocation;
 traceback or internal-path text appears in any response. A violation is a
 T1 bug of exactly the class the trust story claims cannot happen.
 
-**Gate:** CI, collected by `make verify-hypothesis-oracles` (same target
+**Gate:** CI, collected by `make test-oracles` (same target
 family as L2 — no new Make target). Advisory through Phase 0 (findings tune
 the payload generators), blocking from Phase 1 under the standard §4.4
 lifecycle. Cost: days to stand up; seconds per CI run. L1 duty: any change to
@@ -183,8 +183,8 @@ bounds*.
 Backends: `hypothesis[crosshair]` adds a symbolic backend to the same
 properties (CrossHair as the "weak but useful peer" — never treated as a
 proof; its bounded-search blind spots are documented). Run gate:
-`make verify-hypothesis-oracles` — which also collects the trace-replay
-tests of the FizzBee program (§3.4 there), making one target the home of
+`make test-oracles` — which also collects the trace-replay
+tests of the FizzBee conformance corpus, making one target the home of
 "executable oracles".
 
 **Reasoning-client oracle (E5, second September 2026 amendment).** The LLM
@@ -196,7 +196,7 @@ must produce a structured `ToolError`/`LLMError` mapping, never a hang, and
 retry counts stay within the configured bound (`timeout ⇒ structured error,
 bounded retries`). Decorrelated from the unit suite: generated schedules of
 failure injection instead of chosen cases. Runs under
-`make verify-hypothesis-oracles`; added to the §5 duty matrix for
+`make test-oracles`; added to the §5 duty matrix for
 `src/reasoning/` changes.
 
 ### 3.4 L3 — Mutation testing: who tests the tests?
@@ -204,11 +204,11 @@ failure injection instead of chosen cases. Runs under
 The layer that directly attacks the 68% circularity finding. Two mechanisms:
 
 1. **mutmut over Tier A/B/C modules + `tests/verification/`**
-   (`make mutation-tests`, testing-strategies §5.2): audits the *Python* oracles.
+   (`make test-mutations`, §5): audits the *Python* oracles.
    Synergy: mutmut's mypy-based mutant filtering raises mutant quality in a
    `--strict` codebase. Caveat (mutmut's own docs): the type filter can hide
    valid mutants — filter survivors are a *hint*, never a verdict.
-2. **Planted-bug gardens as the vacuity authority** (both plans): hand-planted
+2. **Planted-bug gardens as the vacuity authority:** hand-planted
    mutants with expected-kill annotations — the Python garden
    (≥ 30 mutants, six classes: off-by-one, None-deref, unbounded loop,
    shape/KeyError, arithmetic-flip, boundary-tolerance) audits the decision
@@ -229,14 +229,15 @@ AI-suite mutation scores 65% → 99%; Nightjar's pipeline found 74 bugs in 34
 packages with zero false positives using mutation as one stage. Optional
 later: a crucible-style loop over the survivor lists.
 
-**Garden-canary rule (TCB guard, both plans §6.3/§6.4):** nightly re-runs of
+**Garden-canary rule (TCB guard):** nightly re-runs of
 the gardens against pinned tool versions; a mutant that stops being killed
 after a dependency bump blocks the bump until triaged.
 
 ### 3.5 L4 — Model checking (FizzBee): exhaustive over schedules
 
-Owned by [`fizzbee-verification-plan.md`](fizzbee-verification-plan.md);
-summarized here because the *testing strategy* matters at stack level:
+Owned by the in-repo suite (`verify/fizz/*.fizz`, assertion ledger in
+[`verify/fizz/README.md`](../verify/fizz/README.md)); summarized here
+because the *testing strategy* matters at stack level:
 
 - **Exhaustive mode** (`fizz <spec>`, concurrency ≤ 2, bounded): the gate.
   A green run means *no interleaving up to the stated bounds* violates the
@@ -250,7 +251,7 @@ summarized here because the *testing strategy* matters at stack level:
 - **Anti-PBT-confusion rule:** exhaustive checking is not "fuzzing that
   passed". The claim it licenses is bounded-universal (§P5); simulation alone
   would license only "not found in N runs". Both are kept because they sit at
-  different points of the budget/concurrency curve (FizzBee plan §5.6).
+  different points of the budget/concurrency curve.
 
 ### 3.6 L5 — Deductive verification: retired (2026-09)
 
@@ -264,7 +265,7 @@ hand-off table.
 
 ### 3.7 L6 — Deterministic simulation testing (DST): the real implementation's schedules
 
-The third exploration cell (`formal_verification.md` §2.7): seeded
+The third exploration cell: seeded
 schedulers, virtual clocks, and in-memory fault injection over the *actual*
 asyncio code — no model, no twin, no drift. Status in this repo: a **Phase-0
 head-to-head sub-experiment** (simloom
@@ -283,7 +284,7 @@ inception" as a harness-smell, not a success.
 
 AI code hallucinates dependencies (19.7% of recommended packages in the
 USENIX '25 study — and attackers now register those names: slopsquatting).
-Current gates: `deptry` (`make depcheck`), fully pinned `uv.lock`. Additions,
+Current gates: `deptry` (`make check-depcheck`), fully pinned `uv.lock`. Additions,
 in priority order: (1) an import-inventory diff in review for any new
 third-party import (AGENTS.md already requires typed-lib/stub checks — the
 diff makes it mechanical); (2) a vulnerability scanner (pip-audit or
@@ -297,8 +298,7 @@ scan-based.
 The newest layer, and the one aimed at the failure mode *above* the code:
 intent drift between prompt, docstring, contract, model, and implementation.
 
-- **NL-Doc cross-consistency gate** (`make verify-cross-consistency`,
-  formal_verification.md §3.1 VLP entry): a *second* LLM summarizes each
+- **NL-Doc cross-consistency gate** (`make verify-cross-consistency`): a *second* LLM summarizes each
   decision-module function; summary
   is diffed against docstring + property documentation. Evidence: VLP
   (pass@1 28.7–73.2% → 65.4–93.5% via validated intermediate artifacts) and
@@ -309,7 +309,7 @@ intent drift between prompt, docstring, contract, model, and implementation.
   the promotion trigger is scored against a *named* model, and a silently
   downgraded checker is a gate-avoidance finding — the mechanical counter
   to a weak second model inflating a clean score.
-- **Property-ID ledger checks** (`make verify-ledger`, FizzBee plan §5.3):
+- **Property-ID ledger checks** (`make verify-ledger`):
   mechanical diff of the assertion/oracle/conformance mapping — the
   drift gate for the model layer.
 - **Spec-inference as a bootstrap** (SpecPylot-style):
@@ -353,9 +353,8 @@ layered later without changing the invariant set.
 
 **The boundary sentence (part of the layer's claim template).** This layer
 certifies **well-formedness and internal consistency** — never whether the
-design is *good*. It is the cheap mechanical precursor to the FizzBee
-`design_meta.fizz` experiment (FizzBee plan §3.6, F3), not a substitute for
-T2 rubrics or human review. Cost: minutes per run (LLM API), on prompt/model
+design is *good*. It is a cheap mechanical precursor to design-level
+model checking, not a substitute for T2 rubrics or human review. Cost: minutes per run (LLM API), on prompt/model
 changes and on demand; baseline recorded at Phase 0 (§6).
 
 ### 3.10 L10 — Human review and canaries
@@ -366,8 +365,8 @@ fairness assumptions, readability budgets, No-Go decisions. Programmed
 elements: required review for critical paths (`jobs.py` transitions,
 `pipeline.py` control flow, any `verify/` artifact that
 changes a property claim), post-merge canaries for the decision-module paths
-(coarse benchmark smoke, formal_verification.md §4.5 — proofs guarantee
-functional correctness, not performance), and the nightly TCB canaries (L3
+(coarse benchmark smoke — verified functional correctness does not imply
+performance), and the nightly TCB canaries (L3
 gardens against pinned verifier versions).
 
 ## 4. Cross-Cutting Principles (applied, not aspirational)
@@ -396,7 +395,7 @@ gardens against pinned verifier versions).
 | pre-push (local) | vulture, deptry, `pytest tests/unit/`, `verify-fizz` (path-filtered) | ~1–5 min | whole project |
 | CI (every push/PR) | everything above, unconditional + Hypothesis oracles/trace-replay, boundary fuzzing (L1b), ledger check, async linters (from Phase 1), cross-consistency (advisory) | minutes | server-side, authoritative |
 | nightly | both gardens (TCB canary), FizzBee seeded simulation, mutmut (optional), pip-audit (when adopted), performance smoke | ~30 min | scheduled |
-| manual | `mutation-tests`, garden authoring, spec-inference experiments, L9 output-contract corpus (on prompt/model changes) | on demand | per task |
+| manual | `test-mutations`, garden authoring, spec-inference experiments, L9 output-contract corpus (on prompt/model changes) | on demand | per task |
 
 **Duty matrix — what triggers what (agent- and human-facing):**
 
@@ -416,8 +415,8 @@ gardens against pinned verifier versions).
 | Program phase | Testing layers activated |
 |---|---|
 | Today | L0 (ruff, mypy), L1 (unit), L7 (deptry, pinning) |
-| **Week 0** (first amendment — before Phase 0) | **guarded-transition bug fix in `src/tools/jobs.py` + unit tests** (the fix-before-proof sequencing correction: `J-1`/`J-2` become true of the implementation before any `.fizz` model or DST experiment claims them — formal_verification.md §4.5). **Second amendment (E6/E4):** the same Week-0 window adds the constructor-injectable `JobsStore` lock (E6) and the E4-extended secret canary (W0-3) — the full task list with acceptance criteria is [`week-0-task-breakdown.md`](week-0-task-breakdown.md) |
-| Phase 0 (both plans, weeks 1–2) | L2 (Hypothesis oracles), L3 (gardens + Go/No-Go), L4 pilot (FizzBee F0, in-spec A/B flip), L1b boundary fuzzing advisory, L9 corpus baseline, async linters advisory, L6 experiment, L8 advisory (ledger, cross-consistency) |
+| **Week 0** (first amendment — before Phase 0) | **guarded-transition bug fix in `src/tools/jobs.py` + unit tests** (the fix-before-proof sequencing correction: `J-1`/`J-2` become true of the implementation before any `.fizz` model or DST experiment claims them). **Second amendment (E6/E4):** the same Week-0 window adds the init-guard-injectable `JobsStore` lock (`get_instance(lock=…)`, E6) and the E4-extended secret canary (W0-3) |
+| Phase 0 (weeks 1–2) | L2 (Hypothesis oracles), L3 (gardens + Go/No-Go), L4 pilot (FizzBee F0, in-spec A/B flip), L1b boundary fuzzing advisory, L9 corpus baseline, async linters advisory, L6 experiment, L8 advisory (ledger, cross-consistency) |
 | Phases F1–F2 (FizzBee) | L4 gate (`verify-fizz` blocking), L1b blocking (from Phase 1), L8 ledger blocking, async linters blocking |
 | Continuous | nightly set complete (gardens, simulation, canaries, smoke), L10 cadence, L9 corpus on prompt/model changes |
 
@@ -428,7 +427,7 @@ stack document inherits their numbers rather than inventing new ones. **The
 two gates are independent decision units (E2, second September 2026
 amendment):** a No-Go in one program does not rescope the other; each
 program's descope path leaves the other's ledgers, oracles, and CI targets
-intact (FizzBee plan §6.3).
+intact.
 
 ## 7. Anti-Patterns and Risks
 
@@ -445,7 +444,7 @@ intact (FizzBee plan §6.3).
    writes code, tests, *and* the spec review; countered by the cross-LLM
    gates (L8) and the untrusted-agent CI rule (P4).
 6. **Stack sprawl** — nine layers is a maintenance surface; every layer has a
-   named Make target, an owner (this document + the two program plans), and a
+   named Make target, an owner (this document + [`verification.md`](verification.md)), and a
    descope path (any layer can be demoted with a recorded decision, as the
    DST rejection path shows).
 7. **Boundary trust by proxy** (first amendment) — assuming Pydantic schema
@@ -488,7 +487,8 @@ Docs: <https://docs.astral.sh/ruff/> · Repo: <https://github.com/astral-sh/ruff
 |---|---|
 | 10–100× faster than flake8/pylint in published benchmarks; 900+ rules replacing flake8 + isort + Black + pyupgrade in one tool; safe autofixes; single `[tool.ruff]` config; official pre-commit hook and GitHub Action | Not a type checker — no type-level or cross-module reasoning; shallower than Pylint's semantic checks (return-type consistency, None paths); per-file AST analysis only |
 
-**Usage in this repo:** `make lint` / `make lint-fix`; config in
+**Usage in this repo:** `make check-lint` (mutating runs go directly via
+`uv run ruff check --fix .` / `uv run ruff format .`); config in
 `pyproject.toml` (`[tool.ruff]`, 120 cols, py312, extended rule set);
 mandatory gate per AGENTS.md.
 
@@ -512,7 +512,7 @@ Docs: <https://mypy.readthedocs.io/en/stable/> · Repo: <https://github.com/pyth
 |---|---|
 | Reference PEP-484 checker with the widest plugin ecosystem; catches wrong argument types, None misuse, missing returns; enables confident large refactors; `--strict` maximizes coverage of the fragment | Annotation burden is real (Instagram: ~8 months to 50% coverage of 1M LOC, <https://eightfold.ai/engineering-blog/static-type-checking-large-scale-python-codebase/>); slower than Rust-based rivals; untyped deps degrade to `Any`; plugins unsupported by zuban — forbidden here (AGENTS.md) |
 
-**Usage in this repo:** `make static-typing` (`uv run mypy --strict`,
+**Usage in this repo:** `make check-static-typing` (`uv run mypy --strict`,
 `files = ["src"]`); AGENTS.md makes strict typing mandatory; zuban LSP must
 show zero diagnostics in touched files (known accepted divergence recorded
 in AGENTS.md).
@@ -575,7 +575,7 @@ Docs: <https://docs.pytest.org/en/stable/how-to/fixtures.html> · <https://pytes
 |---|---|
 | Fixture DI with scopes/autouse/yield-teardown; three parametrization levels; enormous plugin ecosystem; pytest-asyncio is the de-facto async runner; `asyncio_mode = "auto"` keeps annotations minimal | Loop-scope mismatch is the classic flakiness source (session fixture on function loop → "Event loop is closed", <https://qaskills.sh/blog/pytest-asyncio-event-loop-is-closed-fix>); async tests *silently pass* if the plugin/marker is missing; deprecated `event_loop` recipes still circulate |
 
-**Usage in this repo:** `make unit-tests` (`pytest tests/unit/ -v`);
+**Usage in this repo:** `make test-unit` (`pytest tests/unit/ -v`);
 `asyncio_mode = "auto"` in pyproject; per-test tmp SQLite +
 `JobsStore.reset_for_test()` (conftest) so jobs never bleed between tests;
 perf/llm markers opt-in via `RUN_PERF`/`ARCH_BENCH_LLM`.
@@ -600,7 +600,7 @@ Docs: <https://hypothesis.readthedocs.io/en/latest/> (settings/profiles: <https:
 **Usage in this repo:** hand-written strategies already exist
 (`tests/schemas/test_schemas.py`); L2 oracle home `tests/verification/`
 keyed by shared property IDs (§3.3); gate
-`make verify-hypothesis-oracles`.
+`make test-oracles`.
 
 **In the wild:** SymPy (novel bugs "after several million examples",
 Hypothesis docs); Django (first-class integration); NumPy/SciPy/pandas
@@ -643,7 +643,7 @@ Docs: <https://mutmut.readthedocs.io/en/latest/> · Repo: <https://github.com/bo
 |---|---|
 | Fork-based mutation schemata (parallel, fast); incremental re-runs cover only changed functions; optional mypy-based mutant filtering; interactive `browse` UI + HTML report; mature (~700+ downstream projects) | Runtime blowup (a 10 s suite → 43 min at 513 mutants, <https://nedbatchelder.com/blog/201903/mutmut>); equivalent mutants persist as false positives; the mypy filter can hide valid mutants — survivors are hints, not verdicts (§3.4); fork-only, no native Windows |
 
-**Usage in this repo:** `make mutation-tests` over Tier A/B/C modules +
+**Usage in this repo:** `make test-mutations` over Tier A/B/C modules +
 `tests/verification/` (§3.4); the standard affordability
 pattern is incremental PR-scoped runs + nightly full sweeps — matches the
 §5 wiring.
@@ -686,7 +686,7 @@ Docs: <https://fizzbee.io/> (design/testing guides) · Repo: <https://github.com
 | Exhaustive interleaving exploration up to stated bounds; implicit fault injection (crash at yield points, message loss, partitions); Python-like `.fizz` specs (low learning curve vs TLA+); safety + liveness (+ fairness) invariants; seeded, reproducible runs; model-based-testing adapters against real code | State-space explosion (8 nodes → 65,536 states in ~4 min); bounded ≠ proof — exhaustive claims weaken beyond the concurrency-2 non-atomic regime; error traces hard to read; model-vs-code drift (adapters mitigate, add glue) |
 
 **Usage in this repo:** `verify/fizz/*.fizz`; `verify-fizz` gate (blocking
-from F1); seeded nightly simulation (§3.5); owned by the FizzBee plan.
+from F1); seeded nightly simulation (§3.5); owned by the in-repo suite (ledger: `verify/fizz/README.md`).
 
 **In the wild:** Jack Vanlightly's independent evaluation
 (<https://jack-vanlightly.com/blog/2024/12/6/to-be-atomic-or-non-atomic-that-is-the-question-fizzbee>);
@@ -751,7 +751,7 @@ Docs: <https://deptry.com/> · Repo: <https://github.com/osprey-oss/deptry>
 |---|---|
 | Rust-powered AST scan for unused (DEP002), missing (DEP001) and transitive (DEP003) dependencies; PEP 621 / Poetry / PDM / uv support; ~8.8M downloads/month | Name→module mapping false positives (needs `package_module_name_map` — this repo has one); must run inside the project venv; group/exclusion config noise |
 
-**Usage in this repo:** `make depcheck`; per-rule ignores for
+**Usage in this repo:** `make check-depcheck`; per-rule ignores for
 transitively-provided imports (litellm/workflows/mcp) in pyproject — each
 with a justification comment.
 
@@ -830,9 +830,9 @@ Repo: <https://github.com/jendrikseipp/vulture>
 |---|---|
 | Fast AST scan with confidence scores (60–100%); `--min-confidence` tiers; `--sort-by-size` prioritizes cleanup; whitelist files preferred over noqa | False positives on framework-registered / dynamic code — needs `--ignore-decorators` + whitelist (this repo has both); dead code referenced *only by tests* resolves as "used" |
 
-**Usage in this repo:** `make deadcode` (`--min-confidence 80`,
-`--ignore-decorators` for `@step`, `@field_validator`, `@*.resource`,
-`@*.prompt`; `whitelist.py`), scanning `src examples` — aligned with
+**Usage in this repo:** `make check-deadcode` (`--min-confidence 80`,
+`--ignore-decorators` for `@step`, `@field_validator`, `@model_validator`,
+`@*.resource`, `@*.prompt`; `whitelist.py`), scanning `src examples` — aligned with
 AGENTS.md's quality gates.
 
 **In the wild:** Django dead-code cleanup recipe
@@ -874,12 +874,13 @@ untrusted-agent control pair; unconditional CI (P4) is the other half.
 **Layer-specific primary sources:**
 - Hypothesis: <https://hypothesis.readthedocs.io/en/latest/>; Anthropic PBT agent: <https://arxiv.org/abs/2510.09907>
 - mutmut (incl. mypy-filter caveat): <https://mutmut.readthedocs.io/en/latest/>
-- FizzBee (exhaustive + simulation): <https://fizzbee.io/>, [`fizzbee-verification-plan.md`](fizzbee-verification-plan.md) §5–§6
+- FizzBee (exhaustive + simulation): <https://fizzbee.io/>; in-repo suite and assertion ledger: [`verify/fizz/README.md`](../verify/fizz/README.md)
 - DST: simloom <https://pypi.org/project/simloom/>, frontrun <https://pypi.org/project/frontrun/>; FoundationDB <https://apple.github.io/foundationdb/testing.html>; SlateDB DST field report: <https://rng.md/posts/deterministic-simulation-testing-is-really-hard/>
 - flake8-async: <https://flake8-async.readthedocs.io/>; blockpath: <https://pypi.org/project/blockpath/>
 - VLP / NL-Doc: <https://arxiv.org/abs/2607.02333>; SpecPylot: <https://arxiv.org/abs/2604.16560>; Clover: <https://arxiv.org/abs/2310.17807>; airtight-ai: <https://pypi.org/project/airtight-ai/>
 - NL2VC-60 (vacuous verification): <https://arxiv.org/pdf/2604.22601>
 
 **Companion documents:**
-- Rationale and tool landscape: [`formal_verification.md`](formal_verification.md)
-- Model-checking program: [`fizzbee-verification-plan.md`](fizzbee-verification-plan.md)
+- Layer status and rollout: [`verification.md`](verification.md)
+- Make targets: [`make_rules.md`](make_rules.md)
+- Model-checking suite and assertion ledger: [`verify/fizz/README.md`](../verify/fizz/README.md)

@@ -70,12 +70,10 @@ class JobsStore:
     _instance: "JobsStore | None" = None
     _db: aiosqlite.Connection | None = None
     _lock: asyncio.Lock = asyncio.Lock()
-    _init_lock: asyncio.Lock
 
-    def __new__(cls, lock: asyncio.Lock | None = None) -> "JobsStore":
+    def __new__(cls) -> "JobsStore":
         if cls._instance is None:
             cls._instance = super().__new__(cls)
-            cls._instance._init_lock = lock if lock is not None else cls._lock
             cls._instance._db = None
         return cls._instance
 
@@ -87,7 +85,7 @@ class JobsStore:
         if cls._instance is None or cls._instance._db is None:
             async with (lock if lock is not None else cls._lock):
                 if cls._instance is None or cls._instance._db is None:
-                    cls._instance = cls(lock=lock)
+                    cls._instance = cls()
                     await cls._instance._init()
         return cls._instance
 

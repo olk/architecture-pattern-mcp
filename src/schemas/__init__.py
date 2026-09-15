@@ -22,7 +22,9 @@
 """
 Schema package — Pydantic v2 models for MCP architecture pattern system.
 
-Exports all typed schemas for FastMCP tool I/O boundaries and validation.
+Exports the schema symbols imported through this package for FastMCP tool I/O
+boundaries and validation; the Modules list below maps the package layout
+(import a submodule directly for symbols not re-exported here).
 
 Modules:
 - enums: PatternCategory, ArchitectureDomain, ArchitectureStyle
@@ -39,16 +41,7 @@ Modules:
               ArchitectureDesignResponseWire (lean wire schema for generation)
 """
 
-from src.schemas.analysis import (
-    AnalysisResult,
-    QUALITY_ATTRIBUTE_KEYS,
-    RequirementWeights,
-)
-from src.schemas.architecture import (
-    ArchitectureDesignResponse,
-    ArchitectureDesignResponseWire,
-    ArchitectureOverviewWire,
-)
+from src.schemas.analysis import AnalysisResult
 from src.schemas.contracts import (
     ApiContract,
     ApiEndpoint,
@@ -59,11 +52,7 @@ from src.schemas.contracts import (
 from src.schemas.components import Component, Relationship
 
 from src.schemas.design import ArchitectureDesign, ArchitectureOverview
-from src.schemas.enums import (
-    ArchitectureDomain,
-    ArchitectureStyle,
-    PatternCategory,
-)
+from src.schemas.enums import ArchitectureStyle, PatternCategory
 from src.schemas.evaluation import (
     ArchitectureEvaluation,
     EvaluationSummary,
@@ -75,7 +64,6 @@ from src.schemas.quality import QualityMetrics
 
 __all__ = [
     # enums
-    "ArchitectureDomain",
     "ArchitectureStyle",
     "PatternCategory",
     # quality
@@ -101,10 +89,4 @@ __all__ = [
     "ArchitectureOverview",
     # analysis
     "AnalysisResult",
-    "QUALITY_ATTRIBUTE_KEYS",
-    "RequirementWeights",
-    # architecture (LLM wire schema)
-    "ArchitectureOverviewWire",
-    "ArchitectureDesignResponse",
-    "ArchitectureDesignResponseWire",
 ]

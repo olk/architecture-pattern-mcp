@@ -32,10 +32,7 @@ explore_pattern_catalog
 evaluate_my_architecture
 compare_architecture_styles
 
-# Interface-compatibility parameters: accepted-and-ignored to satisfy the
-# upstream BaseEmbedding / BaseReader signatures our classes extend.
-# VectorStoreIndex node embedding passes show_progress to the upstream
-# BaseEmbedding.get_text_embedding_batch (batching is now upstream).
-show_progress
+# Interface-compatibility parameter: accepted-and-ignored to satisfy the
+# upstream BaseReader signature our PatternJSONReader extends.
 # PatternJSONReader.load_data(extra_info=...) per BaseReader contract.
 extra_info

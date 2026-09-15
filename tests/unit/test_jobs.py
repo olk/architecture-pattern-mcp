@@ -258,29 +258,23 @@ class TestGuardedTransitions:
 
 
 class TestInjectableLock:
-    """W0-2 (E6): constructor-injectable lock; default singleton path unchanged."""
+    """W0-2 (E6): init lock injectable via get_instance; default singleton path unchanged."""
 
     @pytest.mark.asyncio
-    async def test_default_singleton_shares_class_lock(self, jobs_store: JobsStore):
+    async def test_default_singleton_identity(self, jobs_store: JobsStore):
         assert JobsStore() is jobs_store
         assert await JobsStore.get_instance() is jobs_store
-        assert jobs_store._init_lock is JobsStore._lock
 
     @pytest.mark.asyncio
     async def test_independent_locks_allow_parallel_stores(self, tmp_path, monkeypatch):
-        """Two stores with independent locks operate concurrently without deadlock."""
-        lock_a, lock_b = asyncio.Lock(), asyncio.Lock()
+        """Two stores with independent injected init locks operate concurrently."""
         monkeypatch.setattr(JobsStore, "_instance", None)
         monkeypatch.setenv("ARCHITECTURE_PATTERN_JOBS_DB", str(tmp_path / "a.db"))
-        store_a = JobsStore(lock=lock_a)
-        await store_a._init()
+        store_a = await JobsStore.get_instance(lock=asyncio.Lock())
         monkeypatch.setattr(JobsStore, "_instance", None)
         monkeypatch.setenv("ARCHITECTURE_PATTERN_JOBS_DB", str(tmp_path / "b.db"))
-        store_b = JobsStore(lock=lock_b)
-        await store_b._init()
+        store_b = await JobsStore.get_instance(lock=asyncio.Lock())
         assert store_a is not store_b
-        assert store_a._init_lock is lock_a
-        assert store_b._init_lock is lock_b
 
         id_a = await store_a.create_job(requirements="req", domain="dom")
         id_b = await store_b.create_job(requirements="req", domain="dom")
