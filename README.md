@@ -41,8 +41,7 @@ An MCP (Model Context Protocol) server that provides architecture design experti
 
 ```bash
 # 1. Clone
-git clone https://github.com/architecture-pattern/architecture-pattern-mcp.git
-cd architecture-pattern-mcp
+git clone https://github.com/olk/architecture-pattern-mcp.git && cd architecture-pattern-mcp
 
 # 2. Add your API key
 export GENERATOR_API_KEY=your_key_here
