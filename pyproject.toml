@@ -183,6 +183,28 @@ explicit_package_bases = true
 # Policy: NO mypy plugins (e.g. pydantic.mypy) — zuban LSP (Rust) cannot run
 # mypy plugins and would diverge from CI. Use PEP-681-compatible style instead
 # (Field(default=...) keyword form, annotated default_factory functions).
+disallow_untyped_defs = true
+check_untyped_defs = true
+# NOT implied by strict=true. Enabling it surfaced 14 stale dict-or-model
+# isinstance branches in src/pipeline.py and src/tools/_adapters.py; those were
+# removed — Pydantic validates the fields they guarded (list[dict[str, Any]],
+# list[ApiContract], ...), so no runtime input could ever reach them.
+warn_unreachable = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+
+[tool.zuban]
+mode = "mypy"
+strict = true
+disallow_untyped_defs = true
+check_untyped_defs = true
+warn_unreachable = true
+allow_untyped_globals = false
+follow_untyped_imports = true
+local_partial_types = true
+warn_no_return = true
+exclude_gitignore = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

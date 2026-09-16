@@ -80,7 +80,6 @@ from src.prompts import (
     get_style_guidance,
 )
 from src.schemas.architecture import ArchitectureDesignResponse, ArchitectureDesignResponseWire
-from src.schemas.components import Component, Relationship
 from src.schemas.contracts import (
     ApiContract,
     DataModel,
@@ -867,30 +866,21 @@ class ArchitecturePipeline(Workflow):
             wire: ArchitectureDesignResponse | ArchitectureDesignResponseWire
             if use_lean:
                 wire = cast(ArchitectureDesignResponseWire, design_response)
-                api_contracts: list[Any] = []
-                shared_data_models: list[Any] = []
-                event_contracts: list[Any] = []
+                api_contracts: list[ApiContract] = []
+                shared_data_models: list[DataModel] = []
+                event_contracts: list[EventContract] = []
             else:
                 full = cast(ArchitectureDesignResponse, design_response)
-                api_contracts = [
-                    ApiContract.model_validate(c) if isinstance(c, dict) else c
-                    for c in full.api_contracts
-                ]
-                shared_data_models = [
-                    DataModel.model_validate(d) if isinstance(d, dict) else d
-                    for d in full.shared_data_models
-                ]
-                event_contracts = [
-                    EventContract.model_validate(e) if isinstance(e, dict) else e
-                    for e in full.event_contracts
-                ]
+                api_contracts = full.api_contracts
+                shared_data_models = full.shared_data_models
+                event_contracts = full.event_contracts
                 wire = full
 
             try:
                 design = ArchitectureDesign(
                     overview=wire.overview,
-                    components=[Component.model_validate(c) if isinstance(c, dict) else c for c in wire.components],
-                    relationships=[Relationship.model_validate(r) if isinstance(r, dict) else r for r in wire.relationships],
+                    components=wire.components,
+                    relationships=wire.relationships,
                     quality_attributes=dict(wire.quality_attributes),
                     api_contracts=api_contracts,
                     shared_data_models=shared_data_models,
@@ -2229,9 +2219,7 @@ For each metric: reasoning first (rubric application), then findings
             (p for p in analysis_result.selected_patterns if p.get("name") == style),
             analysis_result.selected_patterns[0],
         )
-        if isinstance(match, dict):
-            return Pattern.model_validate(match)
-        return match
+        return Pattern.model_validate(match)
 
     def _render_retry_pattern_section(self, selected_pattern: Pattern | None) -> str:
         """Render the TARGET PATTERN block for the retry prompt (empty when None)."""

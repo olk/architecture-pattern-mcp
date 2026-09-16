@@ -101,14 +101,9 @@ def analysis_to_pydantic(dc: AnalysisResultDC) -> AnalysisResult:
     """
     qm = dc.quality_metrics
 
-    patterns: list[ScoredPattern] = []
-    for p in dc.selected_patterns:
-        if isinstance(p, ScoredPattern):
-            patterns.append(p)
-        elif hasattr(p, "model_dump"):
-            patterns.append(ScoredPattern.model_validate(p.model_dump()))
-        elif isinstance(p, dict):
-            patterns.append(_lint_convert(ScoredPattern, p))
+    patterns: list[ScoredPattern] = [
+        _lint_convert(ScoredPattern, p) for p in dc.selected_patterns
+    ]
 
     matched_domains = [
         MatchedDomain(
@@ -230,8 +225,6 @@ def _parse_overview(data: dict[str, Any]) -> ArchitectureOverview:
 
 
 def _parse_component(data: dict[str, Any]) -> Component:
-    if isinstance(data, Component):
-        return data
     api_contract = None
     if data.get("api_contract"):
         try:
@@ -300,8 +293,6 @@ def _parse_component(data: dict[str, Any]) -> Component:
 
 
 def _parse_relationship(data: dict[str, Any]) -> Relationship:
-    if isinstance(data, Relationship):
-        return data
     return Relationship(
         source=data.get("source", ""),
         target=data.get("target", ""),
@@ -311,8 +302,6 @@ def _parse_relationship(data: dict[str, Any]) -> Relationship:
 
 
 def _parse_event_contract(data: dict[str, Any]) -> EventContract:
-    if isinstance(data, EventContract):
-        return data
     return EventContract(
         event_name=data.get("event_name", ""),
         payload_schema=data.get("payload_schema", {}),

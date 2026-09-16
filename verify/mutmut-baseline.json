@@ -1658,11 +1658,11 @@
       "total": 10
     },
     "src/tools/_adapters.py::analysis_to_pydantic": {
-      "classified": 67,
-      "kill_ratio": 0.2537,
+      "classified": 57,
+      "kill_ratio": 0.2982,
       "killed": 17,
       "other": 0,
-      "survived": 50,
+      "survived": 40,
       "survivor_keys": [
         "src.tools._adapters.x_analysis_to_pydantic__mutmut_10",
         "src.tools._adapters.x_analysis_to_pydantic__mutmut_11",
@@ -1671,28 +1671,29 @@
         "src.tools._adapters.x_analysis_to_pydantic__mutmut_14",
         "src.tools._adapters.x_analysis_to_pydantic__mutmut_15",
         "src.tools._adapters.x_analysis_to_pydantic__mutmut_16",
+        "src.tools._adapters.x_analysis_to_pydantic__mutmut_17",
         "src.tools._adapters.x_analysis_to_pydantic__mutmut_18",
         "src.tools._adapters.x_analysis_to_pydantic__mutmut_19",
         "src.tools._adapters.x_analysis_to_pydantic__mutmut_20",
-        "src.tools._adapters.x_analysis_to_pydantic__mutmut_21",
-        "src.tools._adapters.x_analysis_to_pydantic__mutmut_22",
-        "src.tools._adapters.x_analysis_to_pydantic__mutmut_23",
-        "src.tools._adapters.x_analysis_to_pydantic__mutmut_24",
-        "src.tools._adapters.x_analysis_to_pydantic__mutmut_25",
-        "src.tools._adapters.x_analysis_to_pydantic__mutmut_26",
-        "src.tools._adapters.x_analysis_to_pydantic__mutmut_27",
-        "src.tools._adapters.x_analysis_to_pydantic__mutmut_28",
-        "src.tools._adapters.x_analysis_to_pydantic__mutmut_29",
         "src.tools._adapters.x_analysis_to_pydantic__mutmut_3",
         "src.tools._adapters.x_analysis_to_pydantic__mutmut_30",
+        "src.tools._adapters.x_analysis_to_pydantic__mutmut_31",
+        "src.tools._adapters.x_analysis_to_pydantic__mutmut_32",
+        "src.tools._adapters.x_analysis_to_pydantic__mutmut_35",
+        "src.tools._adapters.x_analysis_to_pydantic__mutmut_36",
+        "src.tools._adapters.x_analysis_to_pydantic__mutmut_37",
         "src.tools._adapters.x_analysis_to_pydantic__mutmut_4",
-        "src.tools._adapters.x_analysis_to_pydantic__mutmut_40",
         "src.tools._adapters.x_analysis_to_pydantic__mutmut_41",
         "src.tools._adapters.x_analysis_to_pydantic__mutmut_42",
+        "src.tools._adapters.x_analysis_to_pydantic__mutmut_43",
+        "src.tools._adapters.x_analysis_to_pydantic__mutmut_44",
         "src.tools._adapters.x_analysis_to_pydantic__mutmut_45",
         "src.tools._adapters.x_analysis_to_pydantic__mutmut_46",
         "src.tools._adapters.x_analysis_to_pydantic__mutmut_47",
+        "src.tools._adapters.x_analysis_to_pydantic__mutmut_48",
+        "src.tools._adapters.x_analysis_to_pydantic__mutmut_49",
         "src.tools._adapters.x_analysis_to_pydantic__mutmut_5",
+        "src.tools._adapters.x_analysis_to_pydantic__mutmut_50",
         "src.tools._adapters.x_analysis_to_pydantic__mutmut_51",
         "src.tools._adapters.x_analysis_to_pydantic__mutmut_52",
         "src.tools._adapters.x_analysis_to_pydantic__mutmut_53",
@@ -1700,22 +1701,11 @@
         "src.tools._adapters.x_analysis_to_pydantic__mutmut_55",
         "src.tools._adapters.x_analysis_to_pydantic__mutmut_56",
         "src.tools._adapters.x_analysis_to_pydantic__mutmut_57",
-        "src.tools._adapters.x_analysis_to_pydantic__mutmut_58",
-        "src.tools._adapters.x_analysis_to_pydantic__mutmut_59",
         "src.tools._adapters.x_analysis_to_pydantic__mutmut_6",
-        "src.tools._adapters.x_analysis_to_pydantic__mutmut_60",
-        "src.tools._adapters.x_analysis_to_pydantic__mutmut_61",
-        "src.tools._adapters.x_analysis_to_pydantic__mutmut_62",
-        "src.tools._adapters.x_analysis_to_pydantic__mutmut_63",
-        "src.tools._adapters.x_analysis_to_pydantic__mutmut_64",
-        "src.tools._adapters.x_analysis_to_pydantic__mutmut_65",
-        "src.tools._adapters.x_analysis_to_pydantic__mutmut_66",
-        "src.tools._adapters.x_analysis_to_pydantic__mutmut_67",
-        "src.tools._adapters.x_analysis_to_pydantic__mutmut_7",
         "src.tools._adapters.x_analysis_to_pydantic__mutmut_8",
         "src.tools._adapters.x_analysis_to_pydantic__mutmut_9"
       ],
-      "total": 67
+      "total": 57
     },
     "src/tools/_adapters.py::design_from_dict": {
       "classified": 90,
@@ -1929,17 +1919,16 @@
       "total": 21
     },
     "src/tools/jobs.py::get_instance": {
-      "classified": 9,
-      "kill_ratio": 0.6667,
+      "classified": 8,
+      "kill_ratio": 0.75,
       "killed": 6,
       "other": 0,
-      "survived": 3,
+      "survived": 2,
       "survivor_keys": [
         "src.tools.jobs.x\u01c1JobsStore\u01c1get_instance__mutmut_3",
-        "src.tools.jobs.x\u01c1JobsStore\u01c1get_instance__mutmut_7",
-        "src.tools.jobs.x\u01c1JobsStore\u01c1get_instance__mutmut_9"
+        "src.tools.jobs.x\u01c1JobsStore\u01c1get_instance__mutmut_7"
       ],
-      "total": 9
+      "total": 8
     },
     "src/tools/jobs.py::get_job": {
       "classified": 11,
@@ -2325,11 +2314,11 @@
       "total": 154
     },
     "src/tools/_adapters.py": {
-      "classified": 463,
-      "kill_ratio": 0.2635,
+      "classified": 453,
+      "kill_ratio": 0.2693,
       "killed": 122,
-      "survived": 341,
-      "total": 625
+      "survived": 331,
+      "total": 615
     },
     "src/tools/cancel_architecture_design.py": {
       "classified": 24,
@@ -2339,11 +2328,11 @@
       "total": 25
     },
     "src/tools/jobs.py": {
-      "classified": 185,
-      "kill_ratio": 0.6703,
+      "classified": 184,
+      "kill_ratio": 0.6739,
       "killed": 124,
-      "survived": 61,
-      "total": 185
+      "survived": 60,
+      "total": 184
     },
     "src/tools/submit_architecture_design.py": {
       "classified": 77,
@@ -2367,15 +2356,15 @@
       "timeout": "938eb71709f6",
       "type_check": "2e38e77b22c3"
     },
-    "git_commit": "4b97916fc1c796e894c2c409469fb55033d27c74",
+    "git_commit": "a052eee49e2d83c10fe6ce4ee0dad1e157cbf90b",
     "scratch_dir": "/home/graemer/Projekte/Python/architecture-pattern-mcp/mutants",
-    "stats_time": 24.79892294
+    "stats_time": 24.665622818
   },
   "schema": 1,
   "totals": {
-    "classified": 2722,
+    "classified": 2711,
     "killed": 1553,
-    "survived": 1169,
-    "total": 2970
+    "survived": 1158,
+    "total": 2959
   }
 }
