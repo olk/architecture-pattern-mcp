@@ -114,8 +114,14 @@ USER 1000:1000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8050/health')" || exit 1
 
-# IC-42: python -m src.main for running the MCP server
-CMD ["/app/.venv/bin/python", "-m", "src.main"]
+# IC-42: python -m src.main for running the MCP server.
+# ENTRYPOINT/CMD split (MCP Registry OCI convention): container launchers that
+# consume OCI packages append server args AFTER the image reference, e.g.
+#   docker run -i <image> --transport stdio
+# which only works when the executable is the ENTRYPOINT and the bare run keeps
+# the previous default (streamable-http) via CMD.
+ENTRYPOINT ["/app/.venv/bin/python", "-m", "src.main"]
+CMD ["--transport", "streamable-http"]
 
 LABEL org.opencontainers.image.title="architecture-pattern-mcp" \
       org.opencontainers.image.description="MCP server providing architecture pattern expertise with embedded structured reasoning" \
