@@ -279,6 +279,9 @@ docker-publish: docker-build ## Push MCP server image to Docker Hub + GHCR + git
 		git tag -a "v$(DOCKER_TAG)" -m "Release v$(DOCKER_TAG)"; \
 	fi
 	git push origin "v$(DOCKER_TAG)"
+	mcp-publisher validate server.json
+	mcp-publisher login github
+	mcp-publisher publish
 
 docker-publish-tei: docker-build-tei ## Push both TEI images to Docker Hub + GHCR
 	docker login ghcr.io -u olk
