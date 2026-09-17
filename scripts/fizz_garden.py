@@ -15,7 +15,10 @@ table in `verify/fizz/README.md`. For every FG-* row this script
 3. checks anchor health: every mutation op matches EXACTLY ONCE and changes
    the spec text — a silent no-op (stale anchor after a spec edit) is a gate
    failure, never a vacuous green;
-4. for each executable mutant (expect-fail / expect-pass), applies the
+4. checks the simulator dialect rule (README §model-authoring): no ``require``
+   inside ``any``/``oneof`` blocks — the seeded simulator reads an in-block
+   requires-failure as a stutter pick and reports a false "Deadlock/stuttering";
+5. for each executable mutant (expect-fail / expect-pass), applies the
    mutation to a HERMETIC TEMP COPY (never the working tree — the fizz gate
    convention from scripts/fizz-check.sh) and requires the documented
    outcome from an exhaustive fizz run.
@@ -63,6 +66,8 @@ DECLARATION_RE = re.compile(
 )
 README_ROW_RE = re.compile(r"^\|\s*(FG-\d+)\s*\|(.+)\|\s*$")
 FRONTMATTER_BUDGET_RE = re.compile(r"^  max_actions:\s*\d+.*$", re.MULTILINE)
+ANY_BLOCK_RE = re.compile(r"^[ \t]*(?:any|oneof)\s+\w+\s+in\s+")
+REQUIRE_RE = re.compile(r"^[ \t]*require\b")
 
 EXECUTABLE_STATUSES = ("expect-fail", "expect-pass")
 
@@ -300,6 +305,36 @@ def anchor_errors(mutants: list[Mutant], specs_dir: Path) -> list[str]:
     return errors
 
 
+def stutter_rule_errors(specs_dir: Path) -> list[str]:
+    """Simulator dialect rule (README §model-authoring): ``require`` never
+    sits inside an ``any``/``oneof`` block.
+
+    The seeded simulator samples an in-block ``require`` that fails as a
+    no-op pick and reports the sampled state as "Deadlock/stuttering" — a
+    false verdict on states the action is simply not enabled in (hit by
+    ``jobs_runner.fizz`` on 2026-09-17: ~5% of seeds, and the nightly target
+    runs one seeded trace per spec). Toolchain-free so the rule cannot
+    regress silently.
+    """
+    errors: list[str] = []
+    for spec_path in sorted(specs_dir.glob("*.fizz")):
+        block_indent: int | None = None
+        for line_no, line in enumerate(spec_path.read_text(encoding="utf-8").splitlines(), start=1):
+            if not line.strip():
+                continue
+            indent = len(line) - len(line.lstrip())
+            if block_indent is not None and indent <= block_indent:
+                block_indent = None
+            if ANY_BLOCK_RE.match(line):
+                block_indent = indent
+            elif block_indent is not None and REQUIRE_RE.match(line):
+                errors.append(
+                    f"STUTTER-RULE: {spec_path.name}:{line_no}: `require` inside an "
+                    f"any/oneof block — hoist it to the action level"
+                )
+    return errors
+
+
 def _override_budget(spec_text: str, max_actions: int) -> tuple[str, bool]:
     """Rewrite the options-level max_actions in a spec frontmatter / fizz.yaml."""
     def sub(match: re.Match[str]) -> str:
@@ -433,7 +468,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--readme", type=Path, default=DEFAULT_README, help="ledger README with the garden table")
     parser.add_argument("--fizz-bin", default="fizz", help="fizz binary (default: fizz)")
     parser.add_argument("--only", default="", help="comma-separated FG-IDs to run (default: all)")
-    parser.add_argument("--check-only", action="store_true", help="consistency + coverage + anchors, no fizz run")
+    parser.add_argument("--check-only", action="store_true", help="consistency + coverage + anchors + dialect, no fizz run")
     parser.add_argument("--list", action="store_true", help="list the garden table and exit")
     args = parser.parse_args(argv)
 
@@ -449,6 +484,7 @@ def main(argv: list[str] | None = None) -> int:
     errors = consistency_errors(mutants, readme_rows)
     errors += coverage_errors(mutants, args.specs)
     errors += anchor_errors(mutants, args.specs)
+    errors += stutter_rule_errors(args.specs)
     if errors:
         print("SPEC-GARDEN DEFECTS DETECTED:")
         for error in errors:
@@ -459,7 +495,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.check_only:
         print(
             f"check-only: garden consistent ({len(mutants)} rows, {executable_count} executable); "
-            "consistency + coverage + anchor checks passed"
+            "consistency + coverage + anchor + dialect checks passed"
         )
         return 0
 

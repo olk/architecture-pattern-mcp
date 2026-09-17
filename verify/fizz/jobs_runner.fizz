@@ -113,21 +113,27 @@ role Runner:
     # checker while EnvOk stayed fireable). crash_on_yield is off for both:
     # a crashed task still runs its done-callback (map pop) before process
     # death — see header.
+    # j0 is addressed directly (no `any jid in store.status.keys()` loop):
+    # MAX_JOBS = 1 makes the store's key set the single-element domain {j0},
+    # and requires nested in `any` are sampled by the seeded simulator as
+    # no-op picks and flagged "Deadlock/stuttering" — a false verdict on
+    # every terminal state (suite rule, README §model-authoring; hit by the
+    # 2026-09-17 nightly runs, ~5% of seeds). Guarding at the action level
+    # leaves the reachable state graph identical (458 states, verified).
     fair action RunStart:
-        any jid in store.status.keys():
-            require runner.active[jid] == True
-            require runner.phase[jid] == "NONE"
-            # set_running is ATTEMPTED even if cancel already won the race
-            # (the real code runs the guarded UPDATE and catches the W0-1
-            # rejection) — the store guard decides, so a cancelled-before-
-            # start job still gets its done-callback cleanup.
-            require store.status[jid] != "RUNNING"
-            store.Trans(jid, "RUNNING")
-            if store.status[jid] != "RUNNING":
-                runner.fate[jid] = "race_lost_set_running"
-                runner.finish(jid)
-                return
-            runner.phase[jid] = "STARTED"
+        require runner.active.get("j0") == True
+        require runner.phase.get("j0") == "NONE"
+        # set_running is ATTEMPTED even if cancel already won the race
+        # (the real code runs the guarded UPDATE and catches the W0-1
+        # rejection) — the store guard decides, so a cancelled-before-
+        # start job still gets its done-callback cleanup.
+        require store.status.get("j0") != "RUNNING"
+        store.Trans("j0", "RUNNING")
+        if store.status["j0"] != "RUNNING":
+            runner.fate["j0"] = "race_lost_set_running"
+            runner.finish("j0")
+            return
+        runner.phase["j0"] = "STARTED"
 
     fair action RunFinish:
         require runner.active.get("j0") == True

@@ -133,7 +133,12 @@ HEAD behaviour):
 - **Simulator stutter rule:** the seeded simulator (`-x`) samples actions
   whose *in-any requires* fail as no-op picks and flags them as
   stuttering. `require` must stay outside `any`/`oneof` blocks; role
-  actions address their single instance directly.
+  actions address their single instance directly. Enforced since
+  2026-09-17 by `scripts/fizz_garden.py::stutter_rule_errors` (part of the
+  `--check-only` layer and of `make verify-fizz-garden`, so it also rides
+  `make test-oracles` via `tests/verification/test_fizz_garden.py`); the
+  violation was `jobs_runner.fizz::Runner.RunStart`, which cost ~5% of the
+  seeded nightly simulation runs a false "Deadlock/stuttering" verdict.
 - **No parameterized actions:** role/top-level actions take no arguments —
   per-instance selection uses `any VAR in COLLECTION` (deprecated in favour
   of `oneof VAR in COLLECTION` in current HEAD; the suite uses the
@@ -149,7 +154,7 @@ HEAD behaviour):
 |---|---|---|---|
 | `jobs_protocol.fizz` | PASSED (F1: RUNNING status + StartRun; globally unique jids — per-client counters collided across symmetric clients and broke FC-2's ack bookkeeping; submit budget 1; fair Cancel/Complete/Fail; FC-1/FC-2 + exists coverage. **2026-09-11 guard tightening:** Complete/Fail now require RUNNING, mirroring `set_completed`/`set_failed` — the L4 conformance harness caught the model accepting PENDING→COMPLETED/FAILED, which the real guards reject; 487 → 307 states) | 307 | 1.1 s |
 | `pipeline_control.fizz` | PASSED (F1: FP-5 liveness; fair LlmCall/RunFinish; RetryTick bounded by MAX_TICKS) | 196 | 0.3 s |
-| `jobs_runner.fizz` | PASSED (F2+F3: W0-1 races with crash_on_yield off for the runner, idempotent done-callback finish, phase gate, bounded fair StoreTick) | 458 | 2.0 s |
+| `jobs_runner.fizz` | PASSED (F2+F3: W0-1 races with crash_on_yield off for the runner, idempotent done-callback finish, phase gate, bounded fair StoreTick). **2026-09-17 fix:** `RunStart`'s in-`any` requires hoisted to action-level guards — the seeded simulator read the no-op picks as stutter and failed ~5% of nightly seeds with a false "Deadlock/stuttering"; reachable graph unchanged (458 states before and after) | 458 | 2.0 s |
 | `design_loop.fizz` | PASSED (F6b: DL-2..DL-5) | 154 | 0.2 s |
 | `reasoning_retry.fizz` | PASSED (F4: E5F-1..E5F-4) | 4 213 | 6.7 s |
 | `tei_fallback.fizz` | PASSED (F5: TEI-1, RET-1) | 19 | <0.1 s |

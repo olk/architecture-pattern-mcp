@@ -753,14 +753,17 @@ class MCPArchitectServer:
         """Run the FastMCP server asynchronously using FastMCP's built-in dispatcher."""
         logger.info("Starting MCPArchitectServer", extra={"transport": self._config.transport})
         transport = self._config.transport
-        if transport not in ("stdio", "streamable-http"):
+        if transport == "stdio":
+            await self._mcp.run_async(transport="stdio")
+        elif transport == "streamable-http":
+            await self._mcp.run_async(
+                transport="streamable-http",
+                host=self._config.host,
+                port=self._config.port,
+            )
+        else:
             raise ValueError(
                 f"Invalid transport value: {transport!r}. "
                 "Must be one of: 'stdio', 'streamable-http'. "
                 "Note: 'sse' was deprecated in FastMCP 2.3 and is no longer supported."
             )
-        await self._mcp.run_async(
-            transport=transport,  # type: ignore[arg-type]
-            host=self._config.host,
-            port=self._config.port,
-        )

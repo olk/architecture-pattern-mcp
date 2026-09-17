@@ -770,19 +770,19 @@
       "total": 41
     },
     "src/reasoning/client.py::__init__": {
-      "classified": 5,
+      "classified": 2,
       "kill_ratio": 1.0,
-      "killed": 5,
-      "other": 0,
+      "killed": 2,
+      "other": 3,
       "survived": 0,
       "survivor_keys": [],
       "total": 5
     },
     "src/reasoning/client.py::_cache_key": {
-      "classified": 13,
-      "kill_ratio": 0.4615,
-      "killed": 6,
-      "other": 0,
+      "classified": 8,
+      "kill_ratio": 0.125,
+      "killed": 1,
+      "other": 5,
       "survived": 7,
       "survivor_keys": [
         "src.reasoning.client.x__cache_key__mutmut_13",
@@ -1026,10 +1026,10 @@
       "total": 28
     },
     "src/reasoning/client.py::_run_cached": {
-      "classified": 54,
-      "kill_ratio": 0.7593,
-      "killed": 41,
-      "other": 0,
+      "classified": 48,
+      "kill_ratio": 0.7292,
+      "killed": 35,
+      "other": 6,
       "survived": 13,
       "survivor_keys": [
         "src.reasoning.client.x\u01c1ReasoningClient\u01c1_run_cached__mutmut_11",
@@ -1108,10 +1108,10 @@
       "total": 12
     },
     "src/reasoning/client.py::run_pre_llm": {
-      "classified": 16,
+      "classified": 14,
       "kill_ratio": 1.0,
-      "killed": 16,
-      "other": 0,
+      "killed": 14,
+      "other": 2,
       "survived": 0,
       "survivor_keys": [],
       "total": 16
@@ -2286,9 +2286,9 @@
       "total": 65
     },
     "src/reasoning/client.py": {
-      "classified": 501,
-      "kill_ratio": 0.6168,
-      "killed": 309,
+      "classified": 485,
+      "kill_ratio": 0.6041,
+      "killed": 293,
       "survived": 192,
       "total": 502
     },
@@ -2356,14 +2356,14 @@
       "timeout": "938eb71709f6",
       "type_check": "2e38e77b22c3"
     },
-    "git_commit": "a052eee49e2d83c10fe6ce4ee0dad1e157cbf90b",
+    "git_commit": "276fe96dfd73c82f85d83643ce44f20913c62b7c",
     "scratch_dir": "/home/graemer/Projekte/Python/architecture-pattern-mcp/mutants",
-    "stats_time": 24.665622818
+    "stats_time": 24.782663833
   },
   "schema": 1,
   "totals": {
-    "classified": 2711,
-    "killed": 1553,
+    "classified": 2695,
+    "killed": 1537,
     "survived": 1158,
     "total": 2959
   }

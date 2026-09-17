@@ -265,16 +265,16 @@ class TestMCPArchitectServerTransport:
 
     @pytest.mark.asyncio
     async def test_run_dispatches_to_stdio(self):
-        """Verify run() calls mcp.run_async with transport='stdio'."""
+        """Verify run() calls mcp.run_async with transport='stdio' and no HTTP kwargs.
+
+        FastMCP forwards every transport kwarg to run_stdio_async, which takes
+        no host/port — passing them aborts stdio sessions with a TypeError.
+        """
         server = MCPArchitectServer()
         server._config.transport = "stdio"
         with patch.object(server._mcp, "run_async", new_callable=AsyncMock) as mock_run:
             await server.run()
-            mock_run.assert_called_once_with(
-                transport="stdio",
-                host=server._config.host,
-                port=server._config.port,
-            )
+            mock_run.assert_called_once_with(transport="stdio")
 
     @pytest.mark.asyncio
     async def test_run_dispatches_to_streamable_http(self):

@@ -127,7 +127,10 @@ protocol-level view no other layer can produce. Artifacts:
   the machine-executable encoding of the garden: 1:1 ID agreement with the
   README table, the AGENTS.md assertion-coverage rule (every `always`
   assertion kills a mutant or carries `# spec-explains:`), mutation anchor
-  health (a stale anchor is a gate failure, never a vacuous green), and the
+  health (a stale anchor is a gate failure, never a vacuous green), the
+  simulator dialect rule (no `require` inside `any`/`oneof` — the seeded
+  simulator reads the no-op picks as stutter; added 2026-09-17 after
+  `jobs_runner.fizz` failed ~5% of nightly seeds), and the
   full mutant re-run in hermetic temp copies with five-outcome semantics
   (killed / survived / inconclusive-budget / broken / wrong — survived and
   inconclusive fail the gate). `make verify-fizz-garden` runs it; the

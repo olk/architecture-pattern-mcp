@@ -6,9 +6,10 @@
 These tests pin the meta-oracle itself: scripts/fizz_garden.py must be able to
 fail (repo vacuity rule). They exercise the runner's check layer — README<->>
 garden.toml consistency, the AGENTS.md assertion-coverage rule, mutation
-anchor health, and the outcome classifier — against the REAL repo artifacts,
-plus synthetic classifier cases. None of them require the fizz binary;
-`make verify-fizz-garden` runs the mutants themselves (nightly).
+anchor health, the simulator dialect rule (no ``require`` inside
+``any``/``oneof``), and the outcome classifier — against the REAL repo
+artifacts, plus synthetic classifier cases. None of them require the fizz
+binary; `make verify-fizz-garden` runs the mutants themselves (nightly).
 """
 
 from pathlib import Path
@@ -28,6 +29,7 @@ from scripts.fizz_garden import (
     load_garden,
     parse_assertions,
     parse_readme_garden,
+    stutter_rule_errors,
 )
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -127,6 +129,43 @@ class TestAnchorHealth:
     def test_mutating_untracked_spec_is_flagged(self) -> None:
         errors = anchor_errors([_mutant(spec="nonexistent")], SPECS)
         assert any("nonexistent.fizz not found" in e for e in errors)
+
+
+class TestStutterRule:
+    def test_no_require_inside_any_blocks(self) -> None:
+        assert stutter_rule_errors(SPECS) == []
+
+    def test_in_block_require_is_flagged(self, tmp_path: Path) -> None:
+        spec = tmp_path / "bad.fizz"
+        spec.write_text(
+            "role R:\n"
+            "    action Init:\n"
+            "        pass\n"
+            "\n"
+            "    action A:\n"
+            '        any jid in ["j0"]:\n'
+            "            require True\n"
+            "        require True\n",
+            encoding="utf-8",
+        )
+        errors = stutter_rule_errors(tmp_path)
+        assert len(errors) == 1
+        assert "bad.fizz:7" in errors[0]
+
+    def test_hoisted_require_after_block_is_clean(self, tmp_path: Path) -> None:
+        spec = tmp_path / "good.fizz"
+        spec.write_text(
+            "role R:\n"
+            "    action Init:\n"
+            "        pass\n"
+            "\n"
+            "    action A:\n"
+            "        require True\n"
+            '        any jid in ["j0"]:\n'
+            "            pass\n",
+            encoding="utf-8",
+        )
+        assert stutter_rule_errors(tmp_path) == []
 
 
 class TestClassifier:
