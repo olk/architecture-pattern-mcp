@@ -123,4 +123,5 @@ LABEL org.opencontainers.image.title="architecture-pattern-mcp" \
       org.opencontainers.image.authors="Oliver Kowalke" \
       org.opencontainers.image.source="https://github.com/olk/architecture-pattern-mcp" \
       org.opencontainers.image.licenses="MIT" \
-      io.architecture-pattern-mcp.reasoning-mcps="shannon,code-reasoning"
+      io.architecture-pattern-mcp.reasoning-mcps="shannon,code-reasoning" \
+      io.modelcontextprotocol.server.name="io.github.olk/architecture-pattern-mcp"
