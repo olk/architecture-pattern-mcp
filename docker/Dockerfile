@@ -125,7 +125,7 @@ CMD ["--transport", "streamable-http"]
 
 LABEL org.opencontainers.image.title="architecture-pattern-mcp" \
       org.opencontainers.image.description="MCP server providing architecture pattern expertise with embedded structured reasoning" \
-      org.opencontainers.image.version="1.1.1" \
+      org.opencontainers.image.version="1.1.2" \
       org.opencontainers.image.authors="Oliver Kowalke" \
       org.opencontainers.image.source="https://github.com/olk/architecture-pattern-mcp" \
       org.opencontainers.image.licenses="MIT" \
