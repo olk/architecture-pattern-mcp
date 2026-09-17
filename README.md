@@ -138,24 +138,30 @@ codex mcp add architecture-pattern \
 
 ## 🧑‍🏫 SKILL for AI Agents
 
-AI coding agents (Claude Code, OpenCode, Codex CLI) can load a SKILL that teaches them how and when to use this server's tools — including timeout-aware entry-point selection, output interpretation, and the full workflow recipe.
-
-The SKILL lives in `skills/architecture-pattern-mcp/`:
+The SKILL in `skills/architecture-pattern-mcp/` is written for **Oh My Pi (OMP)**, where this server's tools are reached as `xd://mcp__architecture_pattern_*` devices and every MCP request is bounded by a deadline (`OMP_MCP_TIMEOUT_MS` → per-server `timeout` → 30 s). It teaches the agent which entry point fits that deadline, how to read the results, and the full workflow recipes.
 
 ```
 skills/architecture-pattern-mcp/
-├── SKILL.md                 # Discovery, critical rules, decision guide
+├── SKILL.md                 # OMP constraints, entry-point decision guide, device quick reference
 └── references/
-    ├── tools.md             # All 9 tool signatures and output schemas
-    └── workflows.md         # 4 worked examples, 4 prompts, best practices
+    ├── tools.md             # 11 tool signatures, output schemas, error codes, design-dict shape
+    └── workflows.md         # 5 recipes, result interpretation, OMP troubleshooting
 ```
 
-**For agents that support file-based skills** (OpenCode, Claude Code): point the agent's skill loader at `skills/architecture-pattern-mcp/SKILL.md`. The skill tells the agent:
+**Install for OMP** — copy the skill directory into the user skills root, or point `skills.customDirectories` at this repository's `skills/` directory in OMP's config:
 
-- Which tool to use based on client type and timeout budget
+```bash
+cp -r skills/architecture-pattern-mcp ~/.omp/agent/skills/
+```
+
+The skill then tells the agent:
+
+- Which entry point fits OMP's deadline: the async job trio by default, one-shot `design_architecture` only after raising the server's `timeout` (`analyze_architecture` alone measured 66 s, `evaluate_architecture` 197 s)
 - How to phrase `requirements`, `domain`, and `style` as separate structured arguments
 - How to interpret `final_quality_score`, `attempts > 1`, and `evaluation.recommendations`
-- When to use the async job trio vs `design_architecture` directly
+- That `read mcp://pattern://…` is ambiguous while the sibling `agent-pattern` server is connected, so the tool route (`get_architecture_pattern`) is authoritative
+
+The tool schemas, error codes and design-dict shape in `references/` are client-agnostic; only the deadline/device guidance is OMP-specific.
 
 ---
 

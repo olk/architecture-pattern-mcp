@@ -1,245 +1,254 @@
-# Workflow Examples
+# Workflows — architecture-pattern MCP in OMP
 
-Four tested orchestration recipes for the architecture-pattern-mcp server's tools and prompts.
+Recipes for the four jobs this server is used for. Tool parameters and output fields are in
+`tools.md`; the entry-point rules (deadline, job trio) are in `SKILL.md`.
 
----
+Every call below is a JSON write to a device:
 
-## Workflow 1 — Full Design via `design_architecture`
-
-For clients with heartbeat coverage (Claude Code, OpenCode, Codex CLI). Runs the complete analyse → generate → evaluate → refine pipeline in one blocking call.
-
-```
-Call design_architecture with:
-  requirements: "ETL pipeline for IoT: ingest 10k events/sec from Kafka,
-    parse JSON, enrich with geolocation from Redis, write to InfluxDB and S3"
-  domain: "data-processing"
-```
-
-**What happens:**
-1. Server runs `analyze_architecture` — derives recommended style + top-k patterns
-2. Server runs `generate_architecture` with recommended style
-3. Server runs `evaluate_architecture` against quality criteria
-4. If `final_quality_score < 50`, retry generate (up to 2 times)
-5. Returns `{design, evaluation, attempts, final_style, quality_metrics, final_quality_score, matched_domains}`
-
-**Interpreting `attempts > 1`:** the pipeline retried generation automatically. Inspect `evaluation.recommendations` to see what the retried design changed.
-
-**Expected runtime:** 5–10 minutes. Claude Code / OpenCode / Codex CLI handle this via heartbeat notifications every 30 s.
-
----
-
-## Workflow 2 — Async Job Trio (for timeout-constrained clients)
-
-For clients with hard 60-second timeouts (Claude Desktop, Cursor, TS-SDK agents). Three steps: submit → poll → handle result.
-
-### Step 1 — Submit the job
-
-```
-Call submit_architecture_design_job with:
-  requirements: "ETL pipeline for IoT: Kafka → JSON parse → Redis geo-enrich → InfluxDB + S3"
-  domain: "data-processing"
-```
-
-Returns `{job_id: "<uuid>", status: "pending", message: "..."}` immediately.
-
-### Step 2 — Poll until terminal status
-
-```
-Call get_architecture_design_status with:
-  job_id: "<uuid from step 1>"
-```
-
-Poll every 10–30 seconds. Branch on `status`:
-
-| Status received | Action |
-|----------------|--------|
-| `pending` or `running` | Wait, poll again |
-| `completed` | Extract `result.design` and `result.evaluation` |
-| `failed` | Read `error` field for error details |
-| `cancelled` | Inform user; offer to resubmit |
-
-### Step 3 — Cancel if needed
-
-```
-Call cancel_architecture_design with:
-  job_id: "<uuid>"
-```
-
-Cancellation is best-effort: takes effect at the next pipeline stage boundary.
-
----
-
-## Workflow 3 — Explore Catalog Then Generate with Specific Patterns
-
-Use the read-only catalog tools to explore, then call `generate_architecture` with explicit pattern selection.
-
-### Explore patterns
-
-```
-Call list_architecture_patterns with:
-  category: "messaging"
-```
-
-```
-Call list_architecture_patterns with:
-  domain: "e-commerce"
-```
-
-### Get full detail on a candidate
-
-```
-Call get_architecture_pattern with:
-  name: "saga"
-```
-
-### Generate with explicit pattern selection
-
-```
-Call generate_architecture with:
-  requirements: "E-commerce checkout: handle distributed transactions across
-    order, payment, and inventory services with saga orchestration"
-  style: "microservices"
-  domain: "e-commerce"
-  selected_patterns: ["saga", "api-gateway", "event-sourcing"]
-```
-
-**Why use `generate_architecture` instead of `design_architecture`?** When you already know which style and patterns you want and do not need the full analyse → evaluate pipeline.
-
----
-
-## Workflow 4 — Evaluate an Existing Architecture Design
-
-When the user already has an architecture and wants quality-attribute scores.
-
-```
-Call evaluate_architecture with:
-  architecture: {
-    "overview": {
-      "style": "microservices",
-      "category": "distributed",
-      "principles": ["single-responsibility", "autonomous-services"],
-      "constraints": ["max-100ms-latency", "PCI-DSS-compliance"]
-    },
-    "components": [
-      {"id": "c1", "name": "OrderService", "type": "microservice",
-       "description": "Manages order lifecycle", "interfaces": ["REST"], "technology_stack": ["Node.js", "PostgreSQL"]},
-      {"id": "c2", "name": "PaymentService", "type": "microservice",
-       "description": "Processes payments", "interfaces": ["REST"], "technology_stack": ["Python", "PostgreSQL"]}
-    ],
-    "relationships": [
-      {"source": "c1", "target": "c2", "type": "sync-http", "description": "Payment authorisation call"}
-    ],
-    "quality_attributes": {"maintainability": "7", "scalability": "8", "reliability": "8", "security": "9", "performance": "7"}
-  }
-  criteria: "scalability, reliability, security"
-  domain: "e-commerce"
-```
-
-**Focus on critical findings** (any attribute score < 70) first. Group recommendations by quality attribute.
-
----
-
-## MCP Prompts (Slash Commands)
-
-Four user-invoked workflow templates. The LLM does not auto-invoke these — the user selects one explicitly.
-
-### `/design_architecture_workflow`
-
-```
-/design_architecture_workflow requirements="..." domain="data-processing" style="microservices"
-```
-
-Guides the user through: (1) call `design_architecture`, (2) review quality scores, (3) list tradeoffs, (4) if any score < 75, propose refinements via `evaluate_architecture`.
-
-**Prompt argument → tool argument mapping:**
-- `style` maps to `override_style` in `design_architecture`
-
----
-
-### `/explore_pattern_catalog`
-
-```
-/explore_pattern_catalog domain="microservices" category="messaging"
-```
-
-Dynamically embeds the live pattern catalog (all 40 pattern names) into the prompt body at registration time — so the prompt always reflects the current catalog. Guides the user through: (1) `list_architecture_patterns` with optional filters, (2) `get_architecture_pattern` for the chosen name, (3) `mcp_read_resource(uri='pattern://...')` for full JSON detail.
-
----
-
-### `/evaluate_my_architecture`
-
-```
-/evaluate_my_architecture focus="security"
-```
-
-Guides: (1) help user structure their design as a dict, (2) call `evaluate_architecture`, (3) flag critical findings (score < 70), (4) group recommendations by attribute. Extra attention to `security` if `focus` is specified.
-
----
-
-### `/compare_architecture_styles`
-
-```
-/compare_architecture_styles style_a="microservices" style_b="event-driven" requirements="E-commerce platform handling flash sales"
-```
-
-Generates two designs side-by-side and compares tradeoffs. **Cost note:** triggers two `generate_architecture` calls — approximately 2× token cost and latency. If both scores are within 5 points, note that either style works.
-
----
-
-### Tool-Only Clients: `list_prompts` / `get_prompt`
-
-Clients without native `prompts/list` support (e.g. Cursor) can access all four prompts via the generated tools:
-```
-list_prompts()                           # list available prompts
-get_prompt(name="design_architecture_workflow", arguments={...})  # invoke one
+```text
+write xd://mcp__architecture_pattern_<tool>  <json args>
 ```
 
 ---
 
-## Interpreting Results
+## Recipe 1 — Full design via the job trio (default)
+
+Use this whenever the user wants a design. With OMP's default 30 s deadline the job-trio calls
+are also the only ones that fit: `analyze_architecture` measured 66.2 s and `evaluate_architecture`
+196.9 s in a test, both aborted by the deadline, and `design_architecture` alone runs 5–10 minutes.
+
+**Step 1 — submit** (returns in ~30 ms):
+
+```json
+{"requirements": "ETL pipeline for IoT telemetry: ingest 10k events/sec from Kafka, parse JSON payloads, enrich with geolocation from Redis, write to InfluxDB and S3, with dead-letter handling",
+ "domain": "data-processing"}
+```
+
+→ `{"job_id": "df4d6e18-…", "status": "pending", "message": "Job df4d6e18-… created. Poll …"}`
+
+**Step 2 — record the `job_id`** before polling. There is no job-listing tool; the id is the only
+handle, and the server persists it in SQLite (`~/.config/architecture-pattern-mcp/jobs.db`), so a
+later turn or a restarted client can still resume polling it. Write it to a scratch file
+(e.g. `.omp/architecture-pattern-job.txt`) if the poll loop may outlive the turn.
+
+**Step 3 — poll** every 10–30 s with `{"job_id": "df4d6e18-…"}`:
+
+| `status` | Action |
+|----------|--------|
+| `pending` / `running` | wait, poll again |
+| `completed` | read `result.design` and `result.evaluation` |
+| `failed` | report `error` (carries `ERR_009:` for provider failures, `ERR_999:` otherwise) |
+| `cancelled` | report; offer to resubmit |
+
+Between polls, interleave useful work (or `bash sleep 15`); the poll call itself is ~10 ms.
+
+**Step 4 — cancel** if the user changes their mind or the job is no longer needed:
+
+```json
+{"job_id": "df4d6e18-…"}
+```
+
+→ `{"status": "cancelled", "cancelled": true, "task_was_running": true, …}` — takes effect at the
+next stage boundary, so up to one LLM call may still land (and is then discarded).
+
+**What the pipeline did:** analyse (style + top-k patterns) → generate → evaluate → refine while
+the best score stays below 50, up to `retrieval.max_tries` generate attempts (config default 3).
+Normal first attempts measured 395 s and 454 s in the server log (both stopped early at scores
+71.0 / 71.4), so expect the whole job to land in the 5–10 minute range.
+
+---
+
+## Recipe 2 — One-shot `design_architecture`
+
+Only for a user who prefers one blocking call and accepts a multi-minute turn. First raise the
+deadline for this server in `~/.omp/agent/mcp.json`:
+
+```json
+"architecture-pattern": { "type": "http", "url": "http://localhost:8050/mcp", "timeout": 900000 }
+```
+
+- `timeout` is milliseconds; `0` disables the client-side deadline entirely.
+- `OMP_MCP_TIMEOUT_MS` overrides every per-server value process-wide.
+- A project `.omp/mcp.json` entry shadows the user entry; the user file's `disabledServers`
+  beats `enabledServers` in every source.
+- Run `/mcp reload` after editing, then confirm with `/mcp list`.
+
+Then in one call:
+
+```json
+{"requirements": "Cloud-native e-commerce platform: product catalogue, cart, checkout, payments and inventory across five teams",
+ "domain": "e-commerce-platforms",
+ "override_style": "microservices"}
+```
+
+Expect 5–10 minutes; the result carries `design`, `evaluation`, `attempts`, `final_style`,
+`quality_metrics`, `final_quality_score`, `matched_domains`, `is_fallback`, `alternative_styles`.
+`override_style` is not validated against the style catalogue at call time: an unknown value flows
+into generation as a generic style instead of erroring, but the design's `overview.style` must
+still validate against the 40 `ArchitectureStyle` values, so prefer a real name from
+`list_architecture_patterns`.
+
+---
+
+## Recipe 3 — Explore the catalog, then generate with chosen patterns
+
+**List by category** (fast, no LLM):
+
+```json
+{"category": "messaging"}
+```
+
+→ 5 patterns for `messaging`; unknown categories return `[]`, so a typo looks like an empty
+catalog — cross-check against the 10 valid category values in `tools.md`.
+
+**Narrow by domain** instead when the category is unclear:
+
+```json
+{"domain": "e-commerce-platforms"}
+```
+
+**Fetch a candidate in full:**
+
+```json
+{"name": "saga"}
+```
+
+**Generate with the style and patterns you picked** (skips the analyse leg, one LLM round trip —
+raise the timeout first, Recipe 2):
+
+```json
+{"requirements": "E-commerce checkout: handle distributed transactions across order, payment and inventory services with saga orchestration",
+ "style": "microservices",
+ "domain": "e-commerce-platforms",
+ "selected_patterns": ["saga", "api-gateway", "event-sourcing"]}
+```
+
+Pattern names are exact and carry no `-architecture` suffix; useful ones here include `saga`,
+`event-driven`, `event-sourcing`, `api-gateway`, `backend-for-frontend`, `service-mesh`,
+`strangler-fig`, `serverless`, `hexagonal`, `pipe-and-filter`, `lambda-architecture`,
+`kappa-architecture`, `modular-monolith`, `microkernel-plugin`. Unknown `selected_patterns`
+entries are skipped with a log line, not an error.
+
+---
+
+## Recipe 4 — Evaluate an existing design
+
+```json
+{"architecture": {"overview": {"style": "microservices", "category": "structural",
+                               "principles": ["single-responsibility", "autonomous-services"],
+                               "constraints": ["max-100ms-latency"]},
+                  "components": [{"id": "order-service", "name": "Order Service", "type": "microservice",
+                                  "description": "Manages the order lifecycle",
+                                  "responsibilities": ["order lifecycle"],
+                                  "interfaces": ["REST"], "technology_stack": ["Node.js", "PostgreSQL"]},
+                                 {"id": "payment-service", "name": "Payment Service", "type": "microservice",
+                                  "description": "Processes payments",
+                                  "responsibilities": ["payment authorisation"],
+                                  "interfaces": ["REST"], "technology_stack": ["Python", "PostgreSQL"]}],
+                  "relationships": [{"source": "order-service", "target": "payment-service",
+                                     "type": "sync-http", "description": "Payment authorisation call"}],
+                  "quality_attributes": {"maintainability": "7", "scalability": "8"}},
+ "criteria": "scalability, reliability, security",
+ "domain": "e-commerce-platforms"}
+```
+
+Returns `{summary, metrics, recommendations}` — `summary` is a string carrying the overall `n/100`
+score, `metrics` maps attribute → score on a **0–10** scale (including `overall_quality`), and
+`recommendations` is a flat string list (the per-area map is flattened, each entry tagged with the
+component it targets). The call is an LLM round trip — measured 196.9 s, so it needs the raised
+timeout from Recipe 2.
+
+Input validation is strict: `overview.style` must be one of the 40 `ArchitectureStyle` values,
+`overview.category` one of the 10 categories, `principles` needs at least one entry, and every
+component needs a kebab-case `id` plus a non-empty `responsibilities` list — otherwise
+`ERR_012: overview failed validation` comes back in ~10 ms, before any LLM work. See the design
+dict shape in `tools.md` for the minimum viable payload.
+
+Report order: state the overall score first, then metrics below ~7 on the 0–10 scale, then the
+recommendations grouped by the component/attribute they target.
+
+---
+
+## Recipe 5 — Prompts (both routes)
+
+Interactive TUI — one slash command per server prompt, `key=value` args, quote multi-word values:
+
+```text
+/architecture-pattern:design_architecture_workflow requirements="ETL pipeline for IoT telemetry" domain="data-processing" style="event-driven"
+/architecture-pattern:explore_pattern_catalog domain="e-commerce-platforms" category="messaging"
+/architecture-pattern:evaluate_my_architecture focus="security"
+/architecture-pattern:compare_architecture_styles style_a="microservices" style_b="event-driven" requirements="Flash-sale e-commerce platform"
+```
+
+`/mcp prompts` lists the connected prompts; `/mcp resources` lists resources.
+
+Non-interactive (agent-driven, works in scripts and headless runs):
+
+```json
+{"name": "design_architecture_workflow",
+ "arguments": {"requirements": "…", "domain": "data-processing", "style": "microservices"}}
+```
+
+→ `{"messages": [{"role": "user", "content": "…"}]}`; follow the returned instructions in the
+current turn. `list_prompts` (no args) enumerates prompt names and arguments.
+
+Cost note: `compare_architecture_styles` triggers two `generate_architecture` calls — roughly 2×
+tokens and latency, and each one needs a raised timeout. If the two designs score within ~5 points
+of each other, say so and pick either.
+
+---
+
+## Interpreting results
 
 ### `final_quality_score`
 
-0–100 scale. Scores ≥ 75 are strong; 50–74 indicate notable tradeoffs; < 50 triggers automatic retry (up to 2 times). After retries, the best attempt is returned regardless of score.
+0–100. ≥ 75 strong; 50–74 workable with named tradeoffs; < 50 means the pipeline regenerated and
+still returned its best attempt — surface `evaluation.recommendations` instead of presenting the
+design as finished.
 
 ### `attempts`
 
 | Value | Meaning |
 |-------|---------|
-| `1` | Succeeded first try |
-| `2` | First generation was retry-eligible; retry succeeded |
-| `3` | Two retries were needed |
+| 1 | succeeded first try |
+| 2 | first attempt scored below `min_quality_score` (50); the retry succeeded |
+| 3 | two retries — the default `retrieval.max_tries` ceiling |
 
-`attempts > 1` is not a failure — it means the pipeline self-healed. Inspect `evaluation.recommendations` for what changed.
+`attempts > 1` is the loop self-healing, not a failure — read the recommendations to see what
+changed.
 
 ### `evaluation.recommendations`
 
-Improvement suggestions grouped by quality attribute. Process: (1) address critical findings (score < 70) first, (2) then address recommendations for attributes below target threshold.
+A map keyed by area (`{"scalability": [...], "security": [...]}`) inside `design_architecture` /
+job results; `evaluate_architecture` flattens it to a list. Fix critical findings first — metric
+score < 70 on the pipeline's 0–100 scale (the workflow prompts' "below 75/70" thresholds refer to
+the same 0–100 scale) — then work down the attributes the user cares about.
 
-### `matched_domains`
+### `matched_domains` and fallback
 
-Top domain slugs from BM25 + dense retrieval with fusion scores. If the top score is low, the server falls back to `layered-monolith` — this is expected behaviour, not an error.
+Top domain slugs with `fusion_score` and `rerank_score`. When the top score is below
+`retrieval.style_score_threshold` (50) or `is_fallback` is `true`, the analyser substituted
+`layered-monolith` — expected behaviour. Pass `override_style` (design/submit) or `style`
+(generate) when the requirement clearly calls for another style.
 
-### `layered-monolith` fallback
+### `alternative_styles`
 
-When retrieval score < `style_score_threshold` (default 50), the server uses `layered-monolith` as the style. If your requirements clearly call for a different style, pass `override_style` explicitly.
+`{pattern_name, style, score}` runner-ups (present in `design_architecture` and job results; the
+bare `analyze_architecture` call returns `selected_patterns` with `analysis_score` instead). Use
+them to present a genuine second option — e.g. `microservices` → `modular-monolith` — instead of an
+invented comparison.
 
 ---
 
-## Best Practices
+## Troubleshooting (OMP-specific)
 
-1. **Pass `domain` and `style` as separate structured arguments** — never embed them in the `requirements` text. The server uses domain for pattern retrieval; embedding it loses that signal.
-
-2. **Pick your entry point by client type** — `design_architecture` for heartbeat clients; job trio for 60 s timeout clients. Do not use `design_architecture` with Claude Desktop or Cursor.
-
-3. **Explore the catalog first** when requirements are vague — use `list_architecture_patterns` with domain/category filters to discover candidate patterns before committing to a full design.
-
-4. **Expect `layered-monolith` as fallback** when domain is ambiguous. Pass explicit `override_style` if you know the desired style.
-
-5. **Tune heartbeat interval for borderline clients** — set `TASKS_HEARTBEAT_INTERVAL_SECONDS=45` (keep below the client's idle timeout). This avoids the job trio migration for clients that could otherwise use `design_architecture`.
-
-6. **Use `generate_architecture` with explicit patterns** when you know the style and patterns upfront — skips the analyse phase, saving one LLM round trip.
-
-7. **For full design prefer `design_architecture`** over chaining `analyze_architecture` + `generate_architecture` + `evaluate_architecture` yourself — the pipeline handles retries and refinement automatically.
-
-8. **Cancel via `cancel_architecture_design`** rather than abandoning a timed-out request — the server-side task checks the cancellation flag at stage boundaries, freeing resources.
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| `MCP failure … failure: timeout … Request timeout after 30000ms` | OMP's per-request MCP deadline; server progress notifications do not extend it | use the job trio, or set `"timeout": 900000` (or `0`) for `architecture-pattern` and `/mcp reload`. The aborted call's outcome is unknown — a job submitted before the timeout can still be polled; a one-shot call was discarded |
+| `read mcp://pattern://microservices` says `Pattern not found: microservices` | `pattern://` (and `template://`, `component://`) are registered by both pattern servers; OMP picked the sibling | read patterns via `get_architecture_pattern` |
+| `read mcp://template://layered-architecture-template` says `Template not found` | same sibling collision; the template exists on this server | use a client where the target server is unambiguous, or skip templates |
+| `ERR_012: overview failed validation` on evaluate | hand-written design failed schema validation | use the design dict shape in `tools.md`; check `overview.style`/`category` and component `id`/`responsibilities` |
+| `1 validation error for call[analyze] …` (no `ERR_` code) | FastMCP schema validation rejected the argument before the tool ran | fix the argument (blank/stripped requirements, control characters, over-length strings) |
+| Tool list changed / calls fail after an edit to `src/` | OMP keeps stale MCP connections | `/mcp reload` (full) or `/mcp reconnect architecture-pattern` |
+| `ERR_009` | LLM provider problem on the server side (model, credentials, quota) | report the message; do not retry blindly — check the server's generator config |
+| Job stuck in `running` past ~15 min | server-side pipeline stall or provider hang | `cancel_architecture_design`, then resubmit; check server logs |
