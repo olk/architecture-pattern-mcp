@@ -17,7 +17,7 @@ name: architecture-pattern-mcp-dev
 services:
   architecture-pattern-mcp:
     image: ${MCP_IMAGE:-architecture-pattern-mcp:latest}
-    container_name: "architecture-pattern-mcp-dev"
+    container_name: architecture-pattern-mcp-dev
     environment:
       - CONFIG_PATH=/app/config/config.json
       - GENERATOR_PROVIDER=minimax
