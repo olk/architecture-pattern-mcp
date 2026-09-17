@@ -31,10 +31,21 @@ config
 # Helm charts (not needed for Docker image)
 charts
 
-# Docker itself (the docker/ directory and Dockerfile are used by docker build, not needed in context)
+# Sidecar Dockerfiles + compose (docker/Dockerfile.tei-*, docker-compose*.yml);
+# the MCP server Dockerfile now sits at the project root.
 docker
 
 # Root-level project files not needed inside the image
 Makefile
 README.md
 *.md
+
+# Test, verification, and developer tooling trees (never copied into the image)
+tests
+verify
+mutants
+scripts
+examples
+systemd
+skills
+.pre-commit-config.yaml

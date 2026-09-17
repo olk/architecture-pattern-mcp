@@ -9,7 +9,7 @@
 # Build automation targets for MCP server implementation
 # Uses uv pip install for dependency management as specified in implementation_guidance
 #
-# Docker files: docker/Dockerfile, docker/docker-compose.yml
+# Docker files: Dockerfile, docker/docker-compose.yml
 # =============================================================================
 
 .PHONY: help install install-mcps \
@@ -235,8 +235,8 @@ client-async: ## Run the async job trio demo (submit_architecture_design_job + g
 
 ##@ Docker
 docker-build: ## Build MCP server Docker image with dev dependencies
-	docker build --target production -f docker/Dockerfile -t $(DOCKER_IMAGE):$(DOCKER_TAG) .
-	docker build --target production -f docker/Dockerfile -t $(DOCKER_IMAGE):latest .
+	docker build --target production -f Dockerfile -t $(DOCKER_IMAGE):$(DOCKER_TAG) .
+	docker build --target production -f Dockerfile -t $(DOCKER_IMAGE):latest .
 
 docker-build-tei: ## Build both TEI images (embedder + reranker)
 	docker build -f docker/Dockerfile.tei-embed \

@@ -59,7 +59,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 # Embedded entry points baked into the production Docker image by the
-# build-mcps stage (docker/Dockerfile). Version pins verified on npm
+# build-mcps stage (Dockerfile). Version pins verified on npm
 # 2026-08-31: server-shannon-thinking@0.1.1, @mettamatt/code-reasoning@0.8.1.
 SHANNON_EMBEDDED_CMD: list[str] = [
     "node",

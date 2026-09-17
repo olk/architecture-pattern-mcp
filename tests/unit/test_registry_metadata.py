@@ -31,7 +31,7 @@ from typing import Any
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SERVER_JSON = REPO_ROOT / "server.json"
 PYPROJECT = REPO_ROOT / "pyproject.toml"
-DOCKERFILE = REPO_ROOT / "docker" / "Dockerfile"
+DOCKERFILE = REPO_ROOT / "Dockerfile"
 
 
 def _server_json() -> dict[str, Any]:
@@ -48,7 +48,7 @@ def _pyproject_version() -> str:
 def _dockerfile_label(label: str) -> str:
     text = DOCKERFILE.read_text(encoding="utf-8")
     match = re.search(rf'^\s*{re.escape(label)}="([^"]*)"', text, re.MULTILINE)
-    assert match, f"docker/Dockerfile declares no LABEL {label}"
+    assert match, f"Dockerfile declares no LABEL {label}"
     return match.group(1)
 
 
