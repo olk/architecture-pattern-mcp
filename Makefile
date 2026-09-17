@@ -181,7 +181,7 @@ verify-fizz-simulation: ## L4: seeded parallel FizzBee simulation (nightly relie
 # that survives is a vacuous assertion, a budget-stopped run is inconclusive
 # (both fail the gate). Mutations never touch the working tree. The
 # toolchain-free subset (consistency, AGENTS.md assertion coverage, anchor
-# health, classifier) rides every `make test-oracles` pass via
+# health, dialect rule, classifier) rides every `make test-oracles` pass via
 # tests/verification/test_fizz_garden.py.
 verify-fizz-garden: ## L3/L4: re-run the FG-* spec garden against the fizz toolchain
 	@if ! command -v $(FIZZ) >/dev/null 2>&1; then \
