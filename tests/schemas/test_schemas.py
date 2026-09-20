@@ -37,6 +37,7 @@ Covers:
 from __future__ import annotations
 
 import json
+from typing import Any
 
 import pytest
 from hypothesis import given, settings, HealthCheck, strategies as st
@@ -59,6 +60,10 @@ from src.schemas import (
     QualityMetrics,
 )
 from src.schemas.enums import ArchitectureStyle, PatternCategory
+from src.schemas.architecture import (
+    ArchitectureDesignResponse,
+    ArchitectureDesignResponseWire,
+)
 from src.schemas.patterns import ScoredPattern
 from src.schemas.evaluation import MetricResult, EvaluationSummary
 from src.config import ValidationConfig
@@ -417,6 +422,96 @@ class TestArchitectureDesign:
         assert len(revalidated.api_contracts) == len(design.api_contracts)
         assert len(revalidated.shared_data_models) == len(design.shared_data_models)
         assert len(revalidated.event_contracts) == len(design.event_contracts)
+
+
+class TestArchitectureDesignResponseIntegrity:
+    """DIV-2..5 cross-reference gate on the LLM wire schemas.
+
+    The gate's decision engine has its own kill oracle
+    (tests/unit/test_design_validation_internals.py); these cases pin the
+    enforcement seam: rejection happens at model validation (feeding the
+    self-healing retry) and the correction message names the exact locator.
+    """
+
+    def _valid_payload(self) -> dict[str, Any]:
+        return {
+            "overview": {
+                "reasoning": "test rationale",
+                "style": "microservices",
+                "category": "structural",
+                "principles": ["single responsibility"],
+                "constraints": [],
+            },
+            "components": [
+                {
+                    "id": "ingest",
+                    "name": "Ingest",
+                    "type": "service",
+                    "description": "ingest service",
+                    "responsibilities": ["ingest"],
+                    "interfaces": [],
+                    "technology_stack": [],
+                    "api_contract": None,
+                    "data_models": [],
+                    "config_requirements": [],
+                },
+                {
+                    "id": "worker",
+                    "name": "Worker",
+                    "type": "service",
+                    "description": "worker service",
+                    "responsibilities": ["work"],
+                    "interfaces": [],
+                    "technology_stack": [],
+                    "api_contract": None,
+                    "data_models": [],
+                    "config_requirements": [],
+                },
+            ],
+            "relationships": [
+                {
+                    "source": "ingest",
+                    "target": "worker",
+                    "type": "async",
+                    "description": "enqueue",
+                }
+            ],
+            "quality_attributes": {},
+            "api_contracts": [{"component_id": "worker", "base_path": "/api/v1/jobs"}],
+            "shared_data_models": [],
+            "event_contracts": [
+                {
+                    "event_name": "job.done",
+                    "payload_schema": {"type": "object"},
+                    "published_by": "worker",
+                    "consumed_by": ["ingest"],
+                }
+            ],
+        }
+
+    def test_closed_reference_graph_is_accepted(self) -> None:
+        response = ArchitectureDesignResponse.model_validate(self._valid_payload())
+        assert [c.id for c in response.components] == ["ingest", "worker"]
+
+    def test_dangling_relationship_target_is_rejected_with_locator(self) -> None:
+        payload = self._valid_payload()
+        payload["relationships"][0]["target"] = "ghost"
+        with pytest.raises(ValidationError) as exc_info:
+            ArchitectureDesignResponse.model_validate(payload)
+        assert "relationships[0].target" in str(exc_info.value)
+
+    def test_duplicate_component_id_is_rejected(self) -> None:
+        payload = self._valid_payload()
+        payload["components"][1]["id"] = "ingest"
+        with pytest.raises(ValidationError, match=r"components\[1\]\.id"):
+            ArchitectureDesignResponse.model_validate(payload)
+
+    def test_lean_wire_schema_gates_dangling_relationship(self) -> None:
+        payload = self._valid_payload()
+        payload["relationships"][0]["target"] = "ghost"
+        with pytest.raises(ValidationError) as exc_info:
+            ArchitectureDesignResponseWire.model_validate(payload)
+        assert "relationships[0].target" in str(exc_info.value)
 
 
 # ─── AnalysisResult ────────────────────────────────────────────────────────────

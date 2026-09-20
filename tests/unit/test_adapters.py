@@ -30,7 +30,14 @@ import pytest
 
 from src.errors import ERROR_INVALID_ARCHITECTURE, MalformedArchitectureOverviewError
 from src.schemas.enums import ArchitectureStyle, PatternCategory
-from src.tools._adapters import _parse_overview, design_from_dict
+from src.tools._adapters import (
+    _parse_api_contract,
+    _parse_event_contract,
+    _parse_overview,
+    _parse_relationship,
+    design_from_dict,
+    design_integrity_findings,
+)
 
 
 class TestParseOverviewValidInput:
@@ -205,3 +212,161 @@ class TestDesignFromDict:
         result = design_from_dict(data)
         assert result.overview.style == ArchitectureStyle.ACTOR_BASED
         assert len(result.components) == 1
+
+
+class TestSubRecordParsers:
+    """Direct pins for the caller-payload sub-record parsers.
+
+    `_parse_relationship` / `_parse_event_contract` / `_parse_api_contract`
+    were mutation-uncovered until the design-integrity work made the selection
+    reach them (the earlier adapter tests fed empty relationship/event/contract
+    lists, so the functions never ran and their mutants went unclassified).
+    Full-payload cases pin the parsed values (kills `data.get("<key>")` key
+    mutants), minimal-payload cases pin the schema defaults (kills the
+    default-value mutants).
+    """
+
+    def test_relationship_parses_declared_fields(self) -> None:
+        rel = _parse_relationship(
+            {"source": "ingest", "target": "worker", "type": "async", "description": "enqueue"}
+        )
+        assert (rel.source, rel.target, rel.type, rel.description) == (
+            "ingest",
+            "worker",
+            "async",
+            "enqueue",
+        )
+
+    def test_relationship_defaults_missing_fields_to_empty_strings(self) -> None:
+        rel = _parse_relationship({})
+        assert (rel.source, rel.target, rel.type, rel.description) == ("", "", "", "")
+
+    def test_event_contract_parses_declared_fields(self) -> None:
+        event = _parse_event_contract(
+            {
+                "event_name": "job.done",
+                "payload_schema": {"type": "object"},
+                "published_by": "worker",
+                "consumed_by": ["ingest"],
+                "description": "job finished",
+            }
+        )
+        assert event.event_name == "job.done"
+        assert event.payload_schema == {"type": "object"}
+        assert event.published_by == "worker"
+        assert event.consumed_by == ["ingest"]
+        assert event.description == "job finished"
+
+    def test_event_contract_defaults_missing_fields(self) -> None:
+        event = _parse_event_contract({})
+        assert event.event_name == ""
+        assert event.payload_schema == {}
+        assert event.published_by == ""
+        assert event.consumed_by == []
+        assert event.description == ""
+
+    def test_api_contract_parses_declared_fields_and_endpoints(self) -> None:
+        contract = _parse_api_contract(
+            {
+                "component_id": "user-service",
+                "base_path": "/api/v1/users",
+                "description": "User API",
+                "endpoints": [
+                    {
+                        "method": "POST",
+                        "path": "/",
+                        "summary": "Create user",
+                        "request_schema": {"type": "object"},
+                        "response_schema": {"type": "object"},
+                        "auth_required": False,
+                        "tags": ["users"],
+                    }
+                ],
+            }
+        )
+        assert contract.component_id == "user-service"
+        assert contract.base_path == "/api/v1/users"
+        assert contract.description == "User API"
+        endpoint = contract.endpoints[0]
+        assert (endpoint.method, endpoint.path, endpoint.summary) == ("POST", "/", "Create user")
+        assert endpoint.request_schema == {"type": "object"}
+        assert endpoint.response_schema == {"type": "object"}
+        assert endpoint.auth_required is False
+        assert endpoint.tags == ["users"]
+
+    def test_api_contract_defaults_missing_fields(self) -> None:
+        contract = _parse_api_contract({"endpoints": [{"method": "GET", "path": "/health"}]})
+        assert (contract.component_id, contract.base_path, contract.description) == ("", "", "")
+        endpoint = contract.endpoints[0]
+        assert endpoint.summary == ""
+        assert endpoint.request_schema is None
+        assert endpoint.response_schema is None
+        assert endpoint.auth_required is True
+        assert endpoint.tags == []
+
+    def test_api_contract_without_endpoints_parses_empty_list(self) -> None:
+        assert _parse_api_contract({}).endpoints == []
+
+
+class TestDesignIntegrityFindings:
+    """design_integrity_findings: soft DIV-2..5 findings for caller-authored designs."""
+
+    def _payload(self) -> dict:
+        return {
+            "overview": {
+                "style": "actor-based",
+                "category": "structural",
+                "principles": ["p1"],
+                "constraints": [],
+            },
+            "components": [
+                {
+                    "id": "ingest",
+                    "name": "Ingest",
+                    "type": "service",
+                    "description": "Ingest component",
+                    "responsibilities": ["ingest"],
+                },
+                {
+                    "id": "worker",
+                    "name": "Worker",
+                    "type": "service",
+                    "description": "Worker component",
+                    "responsibilities": ["work"],
+                },
+            ],
+            "relationships": [
+                {
+                    "source": "ingest",
+                    "target": "worker",
+                    "type": "async",
+                    "description": "enqueue",
+                }
+            ],
+            "api_contracts": [{"component_id": "worker", "base_path": "/api/v1/jobs"}],
+            "event_contracts": [
+                {
+                    "event_name": "job.done",
+                    "payload_schema": {"type": "object"},
+                    "published_by": "worker",
+                    "consumed_by": ["ingest"],
+                }
+            ],
+        }
+
+    def test_closed_reference_graph_yields_no_findings(self):
+        design = design_from_dict(self._payload())
+        assert design_integrity_findings(design) == []
+
+    def test_dangling_target_is_a_finding_not_an_exception(self):
+        """The soft contract: caller designs keep their transport path; the
+        violation is reported, never raised."""
+        payload = self._payload()
+        payload["relationships"][0]["target"] = "ghost"
+        design = design_from_dict(payload)
+
+        findings = design_integrity_findings(design)
+
+        assert findings == [
+            "DIV-3: relationships[0].target: unresolved component id 'ghost'"
+        ]

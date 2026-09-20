@@ -37,6 +37,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 SCOPE_FILES: tuple[str, ...] = (
     "src/text_validation.py",
     "src/design_normalization.py",
+    "src/design_validation.py",
 )
 
 DIVERGENCE_BLOCK_THRESHOLD = 0.10

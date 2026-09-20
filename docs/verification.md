@@ -24,12 +24,12 @@ add: cheap layers (types, unit tests) run always; expensive layers
 | L1b | Hypothesis (payload strategies) | MCP tool-call boundary robustness: malformed/nested/oversized payloads — structured errors only, no tracebacks | collected by `make test-oracles` (advisory → blocking Phase 1) | harness active, generators expanding |
 | L2 | Hypothesis | input-space properties: job-lifecycle interleavings vs shadow automaton (J-1..J-4), LLM-boundary timeout/retry discipline (E5), normalization idempotence/dedup (N-1..N-4) | `make test-oracles` | active |
 | L3 | mutmut + planted-bug gardens | tests-the-tests: tautological oracles, vacuous contracts/assertions; the garden is the vacuity authority (Python-side and, since 2026-09-11, `.fizz`-side via `make verify-fizz-garden`) | `make test-mutations` (manual/nightly); `make verify-fizz-garden` (nightly) | garden active; mutmut nightly |
-| L4 | FizzBee (`.fizz` models) | **all interleavings up to bounds**: races, crash windows, guard gaps, deadlock freedom, fault injection; 7 models over the job protocol, the background-task lifecycle + cancel tool, the pipeline stage machine, design-loop triage, reasoning-client deadline/retry/cache, TEI rerank verdicts, retrieval resolution | `make verify-fizz` + `make verify-fizz-garden` (CI-authoritative) | active (7 specs, 32 garden mutants, mechanically revalidated) |
+| L4 | FizzBee (`.fizz` models) | **all interleavings up to bounds**: races, crash windows, guard gaps, deadlock freedom, fault injection; 7 models over the job protocol, the background-task lifecycle + cancel tool, the pipeline stage machine, design-loop triage, reasoning-client deadline/retry/cache, TEI rerank verdicts, retrieval resolution | `make verify-fizz` + `make verify-fizz-garden` (CI-authoritative) | active (7 specs, 33 garden mutants, mechanically revalidated) |
 | L5 | deductive verification (Viper/Z3) | **retired 2026-09** — the decision modules (`text_validation`, `design_normalization`) previously carried Requires/Ensures/Invariant contracts; their properties are now pinned by the L1/L2 behavioral oracles (`tests/unit/test_text_validation.py`, `tests/unit/test_normalization.py`, `tests/verification/test_normalization_idempotence.py`) | — | retired |
 | L6 | deterministic simulation (native now; simloom/frontrun on provisioning) | real asyncio schedules of the **real implementation**: bounded, seeded, replayable proof of J-1/J-2 under all race schedules | `tests/verification/test_jobs_dst.py` (always on) | active (native), proven |
 | L7 | deptry, uv.lock pinning, import-inventory listing | supply chain: hallucinated/unused deps; slopsquatting defence (new package names need human decision) | `make check-depcheck` | active |
 | L8 | ledger checker, NL-Doc cross-consistency | intent drift: code ≠ docstring ≠ contract ≠ model; property-ID mapping mechanically checked | `make verify-ledger`, `make verify-cross-consistency` (advisory) | active (mechanical subset) |
-| L9 | in-repo corpus + structural invariants (`tests/eval/`) | well-formedness and internal consistency of LLM output: section completeness, reference closure, producer+consumer pairs, catalogue existence, score ranges | `llm` marker + `ARCH_BENCH_LLM=1` (live); offline vacuity guard always on | active |
+| L9 | in-repo corpus + structural invariants (`tests/eval/`) | well-formedness and internal consistency of LLM output: section completeness, reference closure, producer+consumer pairs, catalogue existence, score ranges. **Since 2026-09-20** the reference-closure family (INV-2..5) is also enforced at runtime: `src/design_validation.py` (DIV-2..5) gates the GENERATE wire schemas via self-healing retry and reports soft findings on the external evaluate path | `llm` marker + `ARCH_BENCH_LLM=1` (live); offline vacuity guard always on | active |
 | L10 | human review, perf smoke, nightly canaries | T2 (design quality), vacuity triage, bound/fairness justification, verified-core latency budgets, TCB regressions | PR review (required paths) + `.github/workflows/verification.yml` | active |
 
 ## Layer details
@@ -110,7 +110,9 @@ protocol-level view no other layer can produce. Artifacts:
   FP-2..FP-7 including the FP-5 liveness row (every run eventually ends).
 - `verify/fizz/design_loop.fizz` — `design_loop` triage decisions: guarded
   best-score update, early stop, cancel checkpoint, malformed-continue
-  (DL-2..DL-5).
+  (DL-2..DL-5), and the wire-schema escalation abort (DL-6 — a DIV-2..5
+  integrity rejection that survives the internal generate retries escapes
+  the loop instead of scoring).
 - `verify/fizz/reasoning_retry.fizz` — the reasoning client's `wait_for`
   deadline (E5F-1/2) and the trace cache's LRU + single-flight discipline
   (E5F-3/4).
@@ -121,8 +123,8 @@ protocol-level view no other layer can produce. Artifacts:
   are tagged (FUS-3).
 - `verify/fizz/README.md` — the property-ID ledger coupling every assertion
   to its Hypothesis oracle and conformance test, plus the
-  spec garden (FG-01..FG-33, each re-validated on the toolchain
-  2026-09-10) and run-stats table.
+  spec garden (FG-01..FG-34; full-suite revalidation on the toolchain
+  2026-09-11, FG-34 added and validated 2026-09-20) and run-stats table.
 - `verify/fizz/garden.toml` + `scripts/fizz_garden.py` (added 2026-09-11) —
   the machine-executable encoding of the garden: 1:1 ID agreement with the
   README table, the AGENTS.md assertion-coverage rule (every `always`

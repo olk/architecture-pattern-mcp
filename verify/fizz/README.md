@@ -14,7 +14,7 @@
 | `jobs_protocol.fizz` | caller view of the job store protocol (`src/tools/jobs.py`: create/submit, set_running, guarded terminal UPDATEs) with symmetric crashing clients | J-1, J-2 (guard structure), J-3, J-4, FC-1, FC-2 |
 | `jobs_runner.fizz` | the background task lifecycle + cancel tool (`src/tools/submit_architecture_design.py::_run_job`, `src/tools/cancel_architecture_design.py`): W0-1 checkpoints, terminal-write races, task-map bookkeeping | J-1 (kill authority), RUN-1, RUN-3, RUN-4, C-1 |
 | `pipeline_control.fizz` | pipeline stage machine (`src/pipeline.py` stage order + design_loop attempts) vs an unreliable LLM environment | P-1, FP-2, FP-3, FP-4, FP-5, FP-6, FP-7 |
-| `design_loop.fizz` | `ArchitecturePipeline.design_loop` triage decisions (`src/pipeline.py:1015`): best-score guard, early stop, cancel checkpoint, malformed-continue | DL-2, DL-3, DL-4, DL-5 |
+| `design_loop.fizz` | `ArchitecturePipeline.design_loop` triage decisions (`src/pipeline.py:1015`): best-score guard, early stop, cancel checkpoint, malformed-continue, wire-schema escalation abort (the DIV-2..5 gate's consequence) | DL-2, DL-3, DL-4, DL-5, DL-6 |
 | `reasoning_retry.fizz` | reasoning-client timeout/retry discipline (`src/reasoning/client.py`: wait_for budget deadline, silent degradation; `_run_cached`: LRU + single-flight) | E5F-1, E5F-2, E5F-3, E5F-4 |
 | `tei_fallback.fizz` | TEI reranker verdict discipline (`src/patterns/safe_tei_rerank.py`) + the retrieval rerank-error path (`src/patterns/retriever.py`) | TEI-1, RET-1 |
 | `retrieval_fusion.fizz` | retrieval resolution + fallback decision (`src/patterns/retriever.py` resolve/floor/tag tail) | FUS-1, FUS-2, FUS-3 |
@@ -53,6 +53,7 @@
 | `DL-3` | Once cancellation is observed no further attempt starts | `always` | `design_loop.fizz::DL3_CancelFreezesAttempts` (FG-29 must violate) | n/a | `test_pipeline_properties.py::TestDL3CancelFreezes` *(2026-09-12)* | planned |
 | `DL-4` | A malformed attempt retries, never ends the loop early | `always` | `design_loop.fizz::DL4_MalformedContinues` (FG-30 must violate) | n/a | `test_pipeline_properties.py::TestDL4MalformedContinues` *(2026-09-12)* | planned |
 | `DL-5` | Early stop only fires at/above the quality threshold | `always` | `design_loop.fizz::DL5_EarlyStopThreshold` (FG-31 must violate) | n/a | `test_pipeline_properties.py::TestDL5EarlyStopThreshold` *(2026-09-12)* | planned |
+| `DL-6` | A wire-schema integrity rejection (DIV-2..5 gate) that survives the internal generate retries aborts the loop — never scored, never retried | `always` | `design_loop.fizz::DL6_ValidationEscalationAborts` (FG-34 must violate) | n/a | n/a — recovery (rejection at the wire schema + correction-prompt retry) is pinned by L1 `tests/unit/test_design_validation_internals.py`, `tests/schemas/test_schemas.py::TestArchitectureDesignResponseIntegrity`, `test_validation.py` | planned |
 | `J-1..J-4 (stateful)` | Shadow-automaton agreement over generated RULE sequences (superset sample of the J-oracle list replay) | n/a | n/a | n/a | `test_jobs_stateful.py` *(2026-09-12; RuleBasedStateMachine, one loop per machine run)* | `test_fizz_conformance.py` |
 | `N-1..N-4` | normalization idempotence (N-1) and dedup/coverage/subset (N-2..N-4) | n/a | n/a — pure decision logic, no interleavings; pinned by the L2 Hypothesis oracle, not a `.fizz` model | n/a (no static contract) | `test_normalization_idempotence.py` | `tests/unit/test_normalization.py` |
 
@@ -71,7 +72,10 @@ revalidation is mechanical: every row has an executable encoding in
 (scripts/fizz_garden.py) re-runs the full garden in hermetic temp copies —
 all 30 executable rows behaved as documented on the 2026-09-11 run
 (28 expect-fail killed on their documented assertion, FG-11 correctly
-inert, FG-32/FG-33 added by the coverage audit, see their rows).
+inert, FG-32/FG-33 added by the coverage audit, see their rows). FG-34
+was added on 2026-09-20 with the design-integrity gate (DL-6 — the
+escalation path's kill rule) and validated on the toolchain in the same
+change.
 
 | Garden ID | Mutated element | Assertion that must fire |
 |---|---|---|
@@ -107,6 +111,7 @@ inert, FG-32/FG-33 added by the coverage audit, see their rows).
 | FG-31 | `design_loop`: early stop below the threshold | `DL5_EarlyStopThreshold` |
 | FG-32 | `pipeline_control`: drop the `FailAttempt` bound (`attempts < MAX_ATTEMPTS`) | `P1_AttemptBound` *(added 2026-09-11 — audit finding: P-1 had no kill mutant; the AGENTS.md coverage rule was unmet)* |
 | FG-33 | `pipeline_control`: `Finish` writes a non-terminal outcome | `FP4_TotalOutcome` *(added 2026-09-11 — audit finding: FP-4 had no kill mutant)* |
+| FG-34 | `design_loop`: `AttemptEscalated` leaves the loop alive (sets the witness, drops the `outcome = "RAISED"` write) | `DL6_ValidationEscalationAborts` *(added 2026-09-20 with the design-integrity gate — the escalation path entered the model, DL-6 had no kill mutant)* |
 
 Every row above has a machine-executable encoding in `verify/fizz/garden.toml`
 (same ID set, same expected assertion — `scripts/fizz_garden.py` enforces 1:1
@@ -155,7 +160,7 @@ HEAD behaviour):
 | `jobs_protocol.fizz` | PASSED (F1: RUNNING status + StartRun; globally unique jids — per-client counters collided across symmetric clients and broke FC-2's ack bookkeeping; submit budget 1; fair Cancel/Complete/Fail; FC-1/FC-2 + exists coverage. **2026-09-11 guard tightening:** Complete/Fail now require RUNNING, mirroring `set_completed`/`set_failed` — the L4 conformance harness caught the model accepting PENDING→COMPLETED/FAILED, which the real guards reject; 487 → 307 states) | 307 | 1.1 s |
 | `pipeline_control.fizz` | PASSED (F1: FP-5 liveness; fair LlmCall/RunFinish; RetryTick bounded by MAX_TICKS) | 196 | 0.3 s |
 | `jobs_runner.fizz` | PASSED (F2+F3: W0-1 races with crash_on_yield off for the runner, idempotent done-callback finish, phase gate, bounded fair StoreTick). **2026-09-17 fix:** `RunStart`'s in-`any` requires hoisted to action-level guards — the seeded simulator read the no-op picks as stutter and failed ~5% of nightly seeds with a false "Deadlock/stuttering"; reachable graph unchanged (458 states before and after) | 458 | 2.0 s |
-| `design_loop.fizz` | PASSED (F6b: DL-2..DL-5) | 154 | 0.2 s |
+| `design_loop.fizz` | PASSED (F6b: DL-2..DL-5; **2026-09-20:** AttemptEscalated + DL-6 added with the design-integrity gate — 154 → 166 states) | 166 | 0.2 s |
 | `reasoning_retry.fizz` | PASSED (F4: E5F-1..E5F-4) | 4 213 | 6.7 s |
 | `tei_fallback.fizz` | PASSED (F5: TEI-1, RET-1) | 19 | <0.1 s |
 | `retrieval_fusion.fizz` | PASSED (F6a: FUS-1..FUS-3) | 4 | <0.1 s |

@@ -32,14 +32,24 @@ model emits its design rationale before committing to components (reason-before-
 commit). The base ``design.ArchitectureOverview`` keeps ``reasoning`` optional
 for external tool callers.
 
+Both response schemas additionally run the DIV-2..5 cross-reference integrity
+gate (``src/design_validation.py``) in a ``model_validator(mode="after")``: a
+design with duplicate component ids or dangling relationship/event/contract
+references is rejected with the violating path (``relationships[3].target``),
+and the self-healing retry in ``src/validation.py`` feeds that back to the
+model. The lean wire schema carries no contract lists, so DIV-4/DIV-5 are
+vacuous there; DIV-2/DIV-3 still gate. External designs (``evaluate_architecture``)
+are checked softly instead — see ``src/tools/_adapters.py::design_integrity_findings``.
+
 For the fully-typed spec schema used at FastMCP tool I/O boundaries,
 see design.ArchitectureDesign and design.ArchitectureOverview.
 """
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
+from src.design_validation import evaluate_design_integrity, format_integrity_error
 from src.schemas.contracts import (
     ApiContract,
     DataModel,
@@ -47,6 +57,25 @@ from src.schemas.contracts import (
 )
 from src.schemas.design import ArchitectureOverview
 from src.schemas.components import Component, Relationship
+
+
+def _require_closed_references(
+    components: list[Component],
+    relationships: list[Relationship],
+    api_contracts: list[ApiContract],
+    event_contracts: list[EventContract],
+) -> None:
+    """Reject a generated design whose cross-references do not close (DIV-2..5).
+
+    Raises ValueError rendering every violation with its path-level locator, so
+    the self-healing retry prompt in src/validation.py names the exact field to
+    fix. Empty contract lists (lean wire schema) make DIV-4/DIV-5 vacuous.
+    """
+    verdict = evaluate_design_integrity(
+        components, relationships, api_contracts, event_contracts
+    )
+    if verdict.violations:
+        raise ValueError(format_integrity_error(verdict))
 
 
 class ArchitectureOverviewWire(ArchitectureOverview):
@@ -110,6 +139,18 @@ class ArchitectureDesignResponse(BaseModel):
         description="Event contract definitions"
     )
 
+    @model_validator(mode="after")
+    def _check_reference_integrity(self) -> ArchitectureDesignResponse:
+        """DIV-2..5 gate: dangling source/target/consumer/contract refs are rejected
+        here so the self-healing retry re-generates with the violation named."""
+        _require_closed_references(
+            self.components,
+            self.relationships,
+            self.api_contracts,
+            self.event_contracts,
+        )
+        return self
+
 
 class ArchitectureDesignResponseWire(BaseModel):
     """
@@ -138,3 +179,15 @@ class ArchitectureDesignResponseWire(BaseModel):
     # Note: api_contracts, shared_data_models, event_contracts omitted;
     # pipeline defaults to [] when constructing ArchitectureDesign.
     # patterns omitted; pipeline injects selected_patterns instead.
+
+    @model_validator(mode="after")
+    def _check_reference_integrity(self) -> ArchitectureDesignResponseWire:
+        """DIV-2/DIV-3 gate (DIV-4/DIV-5 are vacuous here — the contract lists
+        this schema omits default to empty at the pipeline boundary)."""
+        _require_closed_references(
+            self.components,
+            self.relationships,
+            [],
+            [],
+        )
+        return self

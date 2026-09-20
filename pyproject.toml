@@ -334,6 +334,7 @@ do_not_mutate = [
 pytest_add_cli_args_test_selection = [
     "tests/unit/test_text_validation.py",
     "tests/unit/test_text_validation_internals.py",
+    "tests/unit/test_design_validation_internals.py",
     "tests/unit/test_normalization.py",
     "tests/unit/test_design_normalization_internals.py",
     "tests/unit/test_validation.py",

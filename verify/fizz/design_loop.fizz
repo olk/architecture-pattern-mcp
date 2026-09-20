@@ -13,6 +13,14 @@ options:
 #     (current_score >= min_quality_score) → break; malformed → continue.
 #     The attempts counter itself is P-1's charter (pipeline_control.fizz);
 #     this spec covers the loop's triage decisions.
+#
+#   The generate step can also raise a wire-schema ValidationError once the
+#   internal self-healing retries (validation.max_retries) are exhausted —
+#   since 2026-09-20 the DIV-2..5 cross-reference gate (src/design_validation.py,
+#   wired in src/schemas/architecture.py) is one of its triggers. Unlike
+#   MalformedArchitectureOverviewError that error is NOT in the loop's except
+#   set: the attempt aborts the loop without scoring or retrying
+#   (AttemptEscalated — DL-6).
 
 MAX_TRIES = 3
 MIN_QUALITY = 10       # early-stop threshold (implementation default 100.0
@@ -30,6 +38,7 @@ role Loop:
         self.early_stopped = False
         self.raised = False
         self.malformed = 0
+        self.escalated = False     # DL6 witness: wire-schema rejection escaped
 
     atomic action StartAttempt:
         # loop-top cancellation checkpoint + attempt bookkeeping; the
@@ -66,6 +75,18 @@ role Loop:
         require self.inflight == True and self.outcome == "NONE"
         self.malformed = self.malformed + 1
         self.inflight = False
+
+    atomic action AttemptEscalated:
+        # wire-schema ValidationError survives the internal generate retries
+        # (validation.max_retries) — e.g. the DIV-2..5 integrity gate rejects a
+        # dangling reference on every try. The error is not in design_loop's
+        # except set, so the attempt aborts the loop: no score update, no
+        # further attempt (DL-6; FG-34: leaving the loop alive must violate).
+        require self.inflight == True and self.outcome == "NONE"
+        self.escalated = True
+        self.inflight = False
+        self.raised = True
+        self.outcome = "RAISED"
 
     atomic action Exhausted:
         # all tries burned, a best design exists → return it
@@ -136,4 +157,16 @@ always assertion DL5_EarlyStopThreshold:
     # (FG-31: early stop below the threshold must violate).
     if loop.early_stopped == True:
         return loop.best_score >= MIN_QUALITY
+    return True
+
+always assertion DL6_ValidationEscalationAborts:
+    # a wire-schema integrity rejection (DIV-2..5 gate) that survives the
+    # internal generate retries aborts the loop: the rejected attempt is never
+    # scored and no further attempt starts (escalated is the witness).
+    # FG-34: an escalation that leaves the loop alive (outcome still NONE)
+    # must violate. The repair half of the gate — rejection at the wire
+    # schema and the correction-prompt retry — is pinned by the L1 oracles
+    # (tests/unit/test_design_validation_internals.py, test_validation.py).
+    if loop.escalated == True:
+        return loop.outcome == "RAISED"
     return True

@@ -193,6 +193,60 @@
       "survivor_keys": [],
       "total": 20
     },
+    "src/design_validation.py::_api_contract_violations": {
+      "classified": 10,
+      "kill_ratio": 1.0,
+      "killed": 10,
+      "other": 0,
+      "survived": 0,
+      "survivor_keys": [],
+      "total": 10
+    },
+    "src/design_validation.py::_duplicate_id_violations": {
+      "classified": 12,
+      "kill_ratio": 1.0,
+      "killed": 12,
+      "other": 0,
+      "survived": 0,
+      "survivor_keys": [],
+      "total": 12
+    },
+    "src/design_validation.py::_event_violations": {
+      "classified": 27,
+      "kill_ratio": 1.0,
+      "killed": 27,
+      "other": 0,
+      "survived": 0,
+      "survivor_keys": [],
+      "total": 27
+    },
+    "src/design_validation.py::_relationship_violations": {
+      "classified": 18,
+      "kill_ratio": 1.0,
+      "killed": 18,
+      "other": 0,
+      "survived": 0,
+      "survivor_keys": [],
+      "total": 18
+    },
+    "src/design_validation.py::evaluate_design_integrity": {
+      "classified": 21,
+      "kill_ratio": 1.0,
+      "killed": 21,
+      "other": 0,
+      "survived": 0,
+      "survivor_keys": [],
+      "total": 21
+    },
+    "src/design_validation.py::format_integrity_error": {
+      "classified": 6,
+      "kill_ratio": 1.0,
+      "killed": 6,
+      "other": 0,
+      "survived": 0,
+      "survivor_keys": [],
+      "total": 6
+    },
     "src/errors.py::__init__": {
       "classified": 9,
       "kill_ratio": 0.5556,
@@ -1108,10 +1162,10 @@
       "total": 12
     },
     "src/reasoning/client.py::run_pre_llm": {
-      "classified": 14,
+      "classified": 13,
       "kill_ratio": 1.0,
-      "killed": 14,
-      "other": 2,
+      "killed": 13,
+      "other": 3,
       "survived": 0,
       "survivor_keys": [],
       "total": 16
@@ -1357,10 +1411,10 @@
       "total": 1
     },
     "src/tools/_adapters.py::_parse_api_contract": {
-      "classified": 0,
-      "kill_ratio": null,
-      "killed": 0,
-      "other": 81,
+      "classified": 81,
+      "kill_ratio": 1.0,
+      "killed": 81,
+      "other": 0,
       "survived": 0,
       "survivor_keys": [],
       "total": 81
@@ -1604,10 +1658,10 @@
       "total": 273
     },
     "src/tools/_adapters.py::_parse_event_contract": {
-      "classified": 0,
-      "kill_ratio": null,
-      "killed": 0,
-      "other": 44,
+      "classified": 44,
+      "kill_ratio": 1.0,
+      "killed": 44,
+      "other": 0,
       "survived": 0,
       "survivor_keys": [],
       "total": 44
@@ -1631,10 +1685,10 @@
       "total": 21
     },
     "src/tools/_adapters.py::_parse_relationship": {
-      "classified": 0,
-      "kill_ratio": null,
-      "killed": 0,
-      "other": 36,
+      "classified": 36,
+      "kill_ratio": 1.0,
+      "killed": 36,
+      "other": 0,
       "survived": 0,
       "survivor_keys": [],
       "total": 36
@@ -1709,10 +1763,10 @@
     },
     "src/tools/_adapters.py::design_from_dict": {
       "classified": 90,
-      "kill_ratio": 0.5,
-      "killed": 45,
+      "kill_ratio": 0.5778,
+      "killed": 52,
       "other": 0,
-      "survived": 45,
+      "survived": 38,
       "survivor_keys": [
         "src.tools._adapters.x_design_from_dict__mutmut_10",
         "src.tools._adapters.x_design_from_dict__mutmut_11",
@@ -1728,15 +1782,9 @@
         "src.tools._adapters.x_design_from_dict__mutmut_20",
         "src.tools._adapters.x_design_from_dict__mutmut_21",
         "src.tools._adapters.x_design_from_dict__mutmut_3",
-        "src.tools._adapters.x_design_from_dict__mutmut_31",
-        "src.tools._adapters.x_design_from_dict__mutmut_32",
-        "src.tools._adapters.x_design_from_dict__mutmut_36",
-        "src.tools._adapters.x_design_from_dict__mutmut_37",
-        "src.tools._adapters.x_design_from_dict__mutmut_39",
         "src.tools._adapters.x_design_from_dict__mutmut_40",
         "src.tools._adapters.x_design_from_dict__mutmut_44",
         "src.tools._adapters.x_design_from_dict__mutmut_45",
-        "src.tools._adapters.x_design_from_dict__mutmut_55",
         "src.tools._adapters.x_design_from_dict__mutmut_56",
         "src.tools._adapters.x_design_from_dict__mutmut_57",
         "src.tools._adapters.x_design_from_dict__mutmut_58",
@@ -1746,7 +1794,6 @@
         "src.tools._adapters.x_design_from_dict__mutmut_7",
         "src.tools._adapters.x_design_from_dict__mutmut_72",
         "src.tools._adapters.x_design_from_dict__mutmut_73",
-        "src.tools._adapters.x_design_from_dict__mutmut_74",
         "src.tools._adapters.x_design_from_dict__mutmut_75",
         "src.tools._adapters.x_design_from_dict__mutmut_79",
         "src.tools._adapters.x_design_from_dict__mutmut_8",
@@ -1761,6 +1808,17 @@
         "src.tools._adapters.x_design_from_dict__mutmut_90"
       ],
       "total": 90
+    },
+    "src/tools/_adapters.py::design_integrity_findings": {
+      "classified": 10,
+      "kill_ratio": 0.9,
+      "killed": 9,
+      "other": 0,
+      "survived": 1,
+      "survivor_keys": [
+        "src.tools._adapters.x_design_integrity_findings__mutmut_9"
+      ],
+      "total": 10
     },
     "src/tools/_adapters.py::design_to_pydantic": {
       "classified": 2,
@@ -2250,6 +2308,13 @@
       "survived": 3,
       "total": 121
     },
+    "src/design_validation.py": {
+      "classified": 94,
+      "kill_ratio": 1.0,
+      "killed": 94,
+      "survived": 0,
+      "total": 94
+    },
     "src/errors.py": {
       "classified": 9,
       "kill_ratio": 0.5556,
@@ -2286,9 +2351,9 @@
       "total": 65
     },
     "src/reasoning/client.py": {
-      "classified": 485,
-      "kill_ratio": 0.6041,
-      "killed": 293,
+      "classified": 484,
+      "kill_ratio": 0.6033,
+      "killed": 292,
       "survived": 192,
       "total": 502
     },
@@ -2314,11 +2379,11 @@
       "total": 154
     },
     "src/tools/_adapters.py": {
-      "classified": 453,
-      "kill_ratio": 0.2693,
-      "killed": 122,
-      "survived": 331,
-      "total": 615
+      "classified": 624,
+      "kill_ratio": 0.4792,
+      "killed": 299,
+      "survived": 325,
+      "total": 625
     },
     "src/tools/cancel_architecture_design.py": {
       "classified": 24,
@@ -2352,19 +2417,19 @@
   "run": {
     "config_fingerprint": {
       "test_execution": "7229183f5cf8",
-      "test_selection": "5c6020c3c32d",
+      "test_selection": "12a2e360efc0",
       "timeout": "938eb71709f6",
       "type_check": "2e38e77b22c3"
     },
-    "git_commit": "276fe96dfd73c82f85d83643ce44f20913c62b7c",
+    "git_commit": "d5daad4f79435b0aa334a03c27ee249db66b63f7",
     "scratch_dir": "/home/graemer/Projekte/Python/architecture-pattern-mcp/mutants",
-    "stats_time": 24.782663833
+    "stats_time": 40.821900012
   },
   "schema": 1,
   "totals": {
-    "classified": 2695,
-    "killed": 1537,
-    "survived": 1158,
-    "total": 2959
+    "classified": 2959,
+    "killed": 1807,
+    "survived": 1152,
+    "total": 3063
   }
 }

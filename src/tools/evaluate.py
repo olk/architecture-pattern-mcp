@@ -47,6 +47,7 @@ Architecture:
 import asyncio
 import contextlib
 import logging
+from collections.abc import Sequence
 from typing import Annotated, Any
 
 from pydantic import BaseModel, Field
@@ -81,6 +82,10 @@ class EvaluateArchitectureOutput(BaseModel):
         summary: Evaluation summary text
         metrics: Quality metrics dictionary (e.g., maintainability, scalability, reliability, security, performance)
         recommendations: List of architecture recommendations
+        integrity_findings: Advisory DIV-2..5 cross-reference violations found in
+            the caller-supplied design (empty when the reference graph is closed).
+            Findings never block the evaluation — caller-authored designs keep
+            their transport contract.
     """
 
     # ENT-13: ArchitectureEvaluation summary attribute
@@ -99,6 +104,16 @@ class EvaluateArchitectureOutput(BaseModel):
     recommendations: list[str] = Field(
         default_factory=list,
         description="Architecture recommendations"
+    )
+
+    integrity_findings: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Advisory cross-reference integrity violations of the supplied design "
+            "(dangling relationship endpoints, duplicate component ids, "
+            "producer/consumer or api_contract references to undeclared "
+            "components), rendered as 'DIV-N: path: message'"
+        )
     )
 
 
@@ -220,6 +235,17 @@ class EvaluateArchitectureTool:
 
             architecture_design = self._convert_to_architecture_design(architecture)
 
+            from src.tools._adapters import design_integrity_findings
+
+            integrity_findings = design_integrity_findings(architecture_design)
+            if integrity_findings:
+                logger.warning(
+                    "evaluate_architecture: caller-supplied design has %d "
+                    "cross-reference violation(s): %s",
+                    len(integrity_findings),
+                    "; ".join(integrity_findings),
+                )
+
             if not self._check_minimum_requirements(architecture_design):
                 if ctx is not None:
                     await ctx.error("Architecture does not meet minimum requirements")
@@ -238,12 +264,13 @@ class EvaluateArchitectureTool:
                 if hb is not None:
                     hb.cancel()
 
-            output = self._map_to_output(evaluation)
+            output = self._map_to_output(evaluation, integrity_findings=integrity_findings)
 
             if ctx is not None:
                 await ctx.info(
                     f"evaluate_architecture completed: summary_len={len(output.summary)}, "
-                    f"metrics={len(output.metrics)}"
+                    f"metrics={len(output.metrics)}, "
+                    f"integrity_findings={len(output.integrity_findings)}"
                 )
 
             return output.model_dump()
@@ -334,12 +361,19 @@ class EvaluateArchitectureTool:
 
         return True
 
-    def _map_to_output(self, evaluation: ArchitectureEvaluation) -> EvaluateArchitectureOutput:
+    def _map_to_output(
+        self,
+        evaluation: ArchitectureEvaluation,
+        *,
+        integrity_findings: Sequence[str] = (),
+    ) -> EvaluateArchitectureOutput:
         """
         Map ArchitectureEvaluation from pipeline to EvaluateArchitectureOutput.
         
         Args:
             evaluation: ArchitectureEvaluation from ArchitecturePipeline.evaluate()
+            integrity_findings: Advisory DIV-2..5 violations of the supplied design
+                (see design_integrity_findings); forwarded verbatim.
             
         Returns:
             EvaluateArchitectureOutput mapped from evaluation
@@ -352,7 +386,8 @@ class EvaluateArchitectureTool:
         return EvaluateArchitectureOutput(
             summary=f"Overall score: {evaluation.summary.overall_score:.1f}/100",
             metrics=metrics_dict,
-            recommendations=recommendations_list
+            recommendations=recommendations_list,
+            integrity_findings=list(integrity_findings),
         )
 
 

@@ -92,6 +92,30 @@ class MockSoftwareArchitectAgent:
                         "data_models": [],
                         
                         "config_requirements": []
+                    },
+                    {
+                        "id": "user-service",
+                        "name": "User Service",
+                        "type": "service",
+                        "description": "User management service",
+                        "responsibilities": ["user management"],
+                        "interfaces": [],
+                        "technology_stack": [],
+                        "api_contract": None,
+                        "data_models": [],
+                        "config_requirements": []
+                    },
+                    {
+                        "id": "order-service",
+                        "name": "Order Service",
+                        "type": "service",
+                        "description": "Order management service",
+                        "responsibilities": ["order management"],
+                        "interfaces": [],
+                        "technology_stack": [],
+                        "api_contract": None,
+                        "data_models": [],
+                        "config_requirements": []
                     }
                 ],
                 relationships=[

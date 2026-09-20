@@ -46,6 +46,7 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, ValidationError
 
+from src.design_validation import evaluate_design_integrity, render_integrity_violation
 from src.errors import MalformedArchitectureOverviewError
 
 if TYPE_CHECKING:
@@ -325,4 +326,28 @@ def design_to_pydantic(dc: ArchitectureDesign | dict[str, Any]) -> ArchitectureD
     if isinstance(dc, dict):
         dc = ArchitectureDesign.model_validate(dc)
     return dc
+
+
+def design_integrity_findings(design: ArchitectureDesign) -> list[str]:
+    """
+    Soft cross-reference check (DIV-2..5) for caller-authored designs.
+
+    External callers keep their transport contract: a design with dangling
+    references is still accepted and evaluated — the violations are returned
+    as advisory findings (``RULE: path: message``), never raised. The LLM
+    generation path is gated hard instead (src/schemas/architecture.py
+    model validators), because there the self-healing retry can repair the
+    payload; a caller cannot be re-prompted.
+
+    Returns:
+        One rendered finding per violation, deterministically ordered
+        (empty list for a closed reference graph).
+    """
+    verdict = evaluate_design_integrity(
+        design.components,
+        design.relationships,
+        design.api_contracts,
+        design.event_contracts,
+    )
+    return [render_integrity_violation(v) for v in verdict.violations]
 

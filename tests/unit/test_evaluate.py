@@ -603,3 +603,53 @@ class TestEvaluateArchitectureMapToOutput:
         for recs in sample_architecture_evaluation.recommendations.values():
             expected_recs.extend(recs)
         assert output.recommendations == expected_recs
+
+
+class TestEvaluateArchitectureIntegrityFindings:
+    """Caller-authored designs keep their transport contract (soft DIV findings)."""
+
+    @pytest.mark.asyncio
+    async def test_dangling_reference_succeeds_and_is_reported_as_finding(
+        self, mock_agent, mock_pipeline, sample_architecture_evaluation
+    ):
+        # Given: a caller-supplied design whose relationship target is undeclared
+        mock_pipeline.evaluate.return_value = sample_architecture_evaluation
+        tool = EvaluateArchitectureTool(agent=mock_agent, pipeline=mock_pipeline)
+        architecture = {
+            "overview": {
+                "style": "actor-based",
+                "category": "structural",
+                "principles": ["p1"],
+                "constraints": [],
+            },
+            "components": [
+                {
+                    "id": "api-gateway",
+                    "name": "API Gateway",
+                    "type": "gateway",
+                    "description": "Gateway component",
+                    "responsibilities": ["routing"],
+                }
+            ],
+            "relationships": [
+                {
+                    "source": "api-gateway",
+                    "target": "ghost",
+                    "type": "http",
+                    "description": "calls",
+                }
+            ],
+        }
+
+        # When: evaluating (must not raise at the transport level)
+        output = await tool.evaluate(
+            architecture=architecture,
+            criteria="quality",
+            domain="microservices",
+        )
+
+        # Then: the evaluation ran and the violation is reported as a finding
+        mock_pipeline.evaluate.assert_called_once()
+        assert output["integrity_findings"] == [
+            "DIV-3: relationships[0].target: unresolved component id 'ghost'"
+        ]

@@ -57,7 +57,7 @@ def _mutant(**overrides: object) -> Mutant:
 class TestGardenTable:
     def test_loads_all_rows(self) -> None:
         mutants = load_garden(GARDEN)
-        assert len(mutants) == 32
+        assert len(mutants) == 33
         assert [m.id for m in mutants][:3] == ["FG-01", "FG-02", "FG-03"]
 
     def test_readme_and_garden_agree_1to1(self) -> None:

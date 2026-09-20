@@ -33,6 +33,14 @@ The boundary sentence (part of the layer's claim template): this layer
 certifies WELL-FORMEDNESS and INTERNAL CONSISTENCY — never whether the
 design is good. It is the cheap mechanical precursor to the FizzBee
 design_meta experiment, not a substitute for T2 rubrics or human review.
+
+Deliberate non-delegation: since 2026-09-20 the INV-2..5 reference-closure
+family is ALSO enforced at runtime (src/design_validation.py, wired into the
+GENERATE wire schemas and the external evaluate path). This module keeps its
+own dict-based implementation on purpose — an independent oracle for the
+product must not consume the product's runtime gate. A divergence between
+the two shows up as a corpus failure on one side, which is the intended
+alarm, not a bug.
 """
 
 import json

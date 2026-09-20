@@ -403,3 +403,24 @@ ops = [
 ]
 timeout_s = 300
 note = "Finish writes a non-terminal outcome; FP4's terminal-value domain fires (audit finding: FP-4 had no kill mutant)"
+
+# --- added 2026-09-20 with the design-integrity gate (DIV-2..5): the
+# generate step's escalation path (wire-schema ValidationError escaping the
+# internal retries) entered design_loop.fizz as AttemptEscalated — DL-6 is
+# its kill rule.
+
+[[mutant]]
+id = "FG-34"
+spec = "design_loop"
+status = "expect-fail"
+assertion = "DL6_ValidationEscalationAborts"
+ops = [
+  { kind = "replace", find = '''        self.escalated = True
+        self.inflight = False
+        self.raised = True
+        self.outcome = "RAISED"''', replace = '''        self.escalated = True
+        self.inflight = False
+        self.raised = True''' },
+]
+timeout_s = 300
+note = "escalation leaves the loop alive (outcome stays NONE) instead of aborting — DL6 must fire"
