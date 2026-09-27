@@ -26,12 +26,12 @@ for tool_kind in strategy.tools:                              # every configured
 The `tools` list is per-phase in `ReasoningConfig.per_phase.<phase>.tools`
 (`src/reasoning/config.py`, defaults in `_default_per_phase()`):
 
-| Phase   | `tools`              | Calls per step | Submissions per phase run |
-|---------|----------------------|----------------|----------------------------|
-| analyze | `["code", "shannon"]`| 2              | 2 × `pre_ll_thoughts`     |
-| generate| `["code"]`           | 1              | 1 × `pre_ll_thoughts`     |
-| evaluate| `["shannon"]`        | 1              | 1 × `pre_ll_thoughts`     |
-| retry   | `["code", "shannon"]`| 2              | 2 × `pre_ll_thoughts`     |
+| Phase   | `tools`              | Thoughts (`pre_llm_thoughts`) | Calls per step | Submissions per phase run |
+|---------|----------------------|------------------------------|----------------|----------------------------|
+| analyze | `["code", "shannon"]`| 4                            | 2              | 2 × `pre_llm_thoughts`     |
+| generate| `["code"]`           | 3                            | 1              | 1 × `pre_llm_thoughts`     |
+| evaluate| `["shannon"]`        | 3                            | 1              | 1 × `pre_llm_thoughts`     |
+| retry   | `["code", "shannon"]`| 2                            | 2              | 2 × `pre_llm_thoughts`     |
 
 The analyze phase uses both tools per step by deliberate design (Plan v5
 §8.2): `shannonthinking` provides Shannon-style validation state
@@ -39,6 +39,75 @@ The analyze phase uses both tools per step by deliberate design (Plan v5
 provides branch-aware state. Running them in parallel is a
 cross-validation pattern — both must accept the same authored thought
 for it to be considered validated.
+
+## `code-reasoning` Is the Only Tool Behind the Generated Components
+
+The answer's components, relationships, and deployment strategy are
+produced in the **generate** phase, and the generate strategy routes
+**`code-reasoning` only** — `shannonthinking` is never called there.
+The chain, end to end:
+
+```
+src/pipeline.py:844   reasoning_context = await self._reasoning_block(
+                          "generate", {"requirements": requirements})
+                      → _reasoning_block builds a ReasoningTrace whose
+                        tools_called == {"code-reasoning": N}
+src/pipeline.py:849   user_prompt = self._build_generate_user_prompt(..., reasoning_context=…)
+src/pipeline.py:856   design_response = await self._agent.generate_structured(...)
+src/pipeline.py:880   ArchitectureDesign(components=wire.components,
+                                            relationships=wire.relationships, …)
+```
+
+The generate step agenda states the scope explicitly
+(`src/reasoning/config.py:151-170`): *"Map every stated requirement to
+concrete component candidates"* → *"Sketch two or three alternative
+component decompositions with their key trade-offs"* → *"Commit to one
+decomposition and justify the trade-offs against the requirement
+priorities."* Every component in the returned design is therefore
+grounded in a thought that `code-reasoning` numbered and recorded;
+`shannonthinking`'s validation state (uncertainty, recheckStep,
+experimentalValidation) plays no part in it.
+
+`shannonthinking` is reserved for **evaluate** (the rubric audit, where
+its validation state is the useful part) and pairs with
+`code-reasoning` in **analyze** and **retry**.
+
+Verify the routing at runtime instead of trusting the table above:
+
+```bash
+uv run python -c "
+from src.reasoning.config import ReasoningConfig
+from src.reasoning.tools import TOOL_CONTRACTS
+for phase, s in ReasoningConfig().per_phase.items():
+    print(phase, s.pre_llm_thoughts, [TOOL_CONTRACTS[t].name for t in s.tools])"
+```
+
+```
+analyze 4 ['code-reasoning', 'shannonthinking']
+generate 3 ['code-reasoning']
+evaluate 3 ['shannonthinking']
+retry 2 ['code-reasoning', 'shannonthinking']
+```
+
+`config/config.json` sets `reasoning.enabled` plus the command and
+timeout knobs but never `per_phase`, so these defaults are what ships.
+
+### When Generate Skips the Reasoning MCPs Entirely
+
+Two paths in `generate()` produce a design with no `code-reasoning`
+trace, and neither is a routing bug:
+
+- `generate(override_user_prompt=…)` (`src/pipeline.py:840-843`)
+  bypasses `_reasoning_block` altogether and prompts the agent directly.
+- `reasoning.enabled=false`, a missing `ReasoningClient`, a client
+  exception, or an empty trace all fall through to
+  `render_degraded_context(phase)` (`src/pipeline.py:602-613`): the
+  prompt still gets the in-prompt thinking scaffold, but no MCP call is
+  made. In `docker logs` the tell is the absence of a `"Reasoning trace
+  ready"` INFO record for `phase="generate"`.
+
+Either way the degradation is silent by design — check `tools_called`
+before concluding a tool ran.
 
 ## Wire Shape Differs, Content Does Not
 
