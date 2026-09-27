@@ -92,6 +92,183 @@ retry 2 ['code-reasoning', 'shannonthinking']
 `config/config.json` sets `reasoning.enabled` plus the command and
 timeout knobs but never `per_phase`, so these defaults are what ships.
 
+### Scope of the Claim: Answer Components vs. Pattern `component_types`
+
+Two different things in this pipeline are named "components" — only one
+of them involves the reasoning MCPs:
+
+| Thing | Producer | Reasoning-MCP calls |
+|-------|----------|---------------------|
+| `ArchitectureDesign.components` in the answer | LLM call at `src/pipeline.py:856` (generate), grounded by the `code-reasoning` trace | yes — `code-reasoning` only |
+| Pattern `component_types` → `Component Types:` prompt section | deterministic dedup/render in `_build_pattern_context` (`src/pipeline.py:1402-1494`) | **none** |
+| `component://{type}` blueprints | `build_component_blueprints` (`src/resources/components.py:77`), built once at startup (`src/server.py:594-595`) | **none** |
+
+Measured, not inferred (2026-09-27 probe: stub LLM, real stdio servers
+via `REASONING_*_CMD` overrides): building the pattern context recorded
+0 reasoning completions, while the `generate()` call whose prompt carries
+that context recorded exactly the `code-reasoning` trace:
+
+```
+_build_pattern_context reasoning calls (must be 0): 0
+deterministic 'Component Types:' section present:    True
+design.components (from the stubbed answer):         ['api-gateway']
+prompt carries <reasoning_context>:                  True
+trace lines in prompt: ['[1|code|model|u=0.1] …', '[2|code|model|u=0.1] …', '[3|code|model|u=0.1] …']
+shannonthinking anywhere in the design prompt:       False
+'Reasoning trace ready': {'phase': 'generate', 'steps': 3, 'tools_called': {'code-reasoning': 3}, 'cached': False}
+```
+
+Consequences worth keeping straight:
+
+- A reasoning-MCP outage degrades only the *grounding* of the
+  LLM-authored components; the pattern→component-type mapping and the
+  `component://` resources are deterministic and unaffected.
+- "Why does this component exist?" is answered by the `code-reasoning`
+  trace for the answer's components; the `Component Types:` prompt
+  section traces to pattern JSON instead, with no MCP involvement on
+  that path — do not conflate the two when reading a design.
+
+### Executed Proof: Intent vs. What Actually Ran
+
+The one-liner above prints **intent** — the strategy table. Only an
+executed trace proves **wiring**: which MCP servers were actually
+spawned, with which payload, and what reached the component-design
+call. This probe stubs the generator LLM (so the thoughts are fixed)
+but spawns both real stdio servers, then runs the pipeline's own
+`generate()`. Save the snippet below as `probe_reasoning_routing.py`
+outside the repo (`/tmp`) — it is a throwaway, not a committed tool:
+
+```bash
+CONFIG_PATH=config/config.json PYTHONPATH=. uv run python probe_reasoning_routing.py
+```
+
+```python
+import asyncio
+from typing import Any
+
+from src.config import ConfigManager, EmbedderConfig
+from src.patterns.loader import PatternLoader
+from src.pipeline import ArchitecturePipeline
+from src.reasoning.client import ReasoningClient
+from src.reasoning.config import ReasoningConfig
+from src.reasoning.schemas import ThoughtDraft
+from src.schemas.architecture import (
+    ArchitectureDesignResponse,
+    ArchitectureDesignResponseWire,
+    ArchitectureOverviewWire,
+)
+from src.schemas.components import Component, Relationship
+
+DRAFT = ThoughtDraft(
+    thought="Map the SLO requirement onto an API gateway component.",
+    phase_tag="model",
+    uncertainty=0.2,
+    next_needed=True,
+    assumptions=["p95 latency budget applies to the edge"],
+)
+
+
+class StubAgent:
+    """Stands in for SoftwareArchitectAgent: authors thoughts, returns a design."""
+
+    def __init__(self) -> None:
+        self.prompts: list[str] = []
+        self.schemas: list[str] = []
+
+    async def generate_structured(self, **kwargs: Any) -> Any:
+        schema = kwargs["response_schema"]
+        if schema is ThoughtDraft:
+            return DRAFT
+        self.prompts.append(kwargs["user_prompt"])
+        self.schemas.append(schema.__name__)
+        return schema(
+            overview=ArchitectureOverviewWire(
+                reasoning="Gateway fronts the backend.",
+                style="layered-monolith",
+                category="structural",
+                principles=["explicit contracts"],
+            ),
+            components=[
+                Component(id="api_gateway", name="API Gateway", type="gateway",
+                          description="Terminates TLS.", responsibilities=["routing"]),
+                Component(id="backend", name="Backend", type="service",
+                          description="Domain logic.", responsibilities=["domain logic"]),
+            ],
+            relationships=[Relationship(source="api_gateway", target="backend",
+                                        type="sync", description="proxied call")],
+            quality_attributes={"performance": "p95 < 200ms"},
+        )
+
+
+async def main() -> None:
+    cfg = ReasoningConfig(**ConfigManager.load_config()["reasoning"])
+    agent = StubAgent()
+    client = ReasoningClient(cfg, agent)
+    for phase in ("analyze", "generate", "evaluate", "retry"):
+        trace = await client.run_pre_llm(phase, {"requirements": "p95 < 200ms"})
+        print(f"{phase:9s} {trace.tool_call_counts}")
+    pipeline = ArchitecturePipeline(
+        agent=agent,
+        pattern_loader=PatternLoader(),
+        embedder_config=EmbedderConfig(provider="none", config={}),
+        reasoning_client=client,
+    )
+    design = await pipeline.generate(
+        requirements="Serve 10k rps with p95 < 200ms",
+        domain="web",
+        style="layered-monolith",
+        selected_patterns=[],
+    )
+    prompt = agent.prompts[-1]
+    block = prompt.split("<reasoning_context>")[1].split("</reasoning_context>")[0]
+    print("design call schema:", agent.schemas[-1])
+    print("design prompt header:", block.strip().splitlines()[0].strip())
+    print("shannonthinking in design prompt:", "shannonthinking" in prompt)
+    print("components:", [c.id for c in design.components])
+
+
+asyncio.run(main())
+```
+
+```
+analyze   {'code-reasoning': 4, 'shannonthinking': 4}
+generate  {'code-reasoning': 3}
+evaluate  {'shannonthinking': 3}
+retry     {'code-reasoning': 2, 'shannonthinking': 2}
+design call schema: ArchitectureDesignResponse
+design prompt header: PHASE: generate | TOOLS: code | STEPS: 3
+shannonthinking in design prompt: False
+components: ['api_gateway', 'backend']
+```
+
+Reading the transcript:
+
+- Per-tool counts equal `pre_llm_thoughts × len(tools)` (8 = 4 × 2 for
+  analyze, 3 = 3 × 1 for generate, …), so every configured tool ran
+  on every step — the analyze row carrying both keys is the dual
+  submission, not a retry.
+- The generate row has **no** `shannonthinking` key, and the design
+  prompt's `<reasoning_context>` header reads `TOOLS: code` — the
+  positive proof that the call producing `components` /
+  `relationships` is grounded in a `code-reasoning` trace.
+- `shannonthinking in design prompt: False` is the negative proof: no
+  Shannon validation state leaks into the component design.
+- `design call schema` echoes `retrieval.use_lean_wire_schema`
+  (`ArchitectureDesignResponse` here, the full schema; the wire schema
+  when the knob is on) — printed so a transcript can't be silently
+  attributed to the wrong prompt path.
+
+Two host caveats, neither a defect: the embedded entry point
+`/usr/local/lib/node_modules/…` only exists in the image, so on a host
+the client logs `embedded binary not found; falling back to npx` and
+uses the npx command; and `CONFIG_PATH=config/config.json` is required
+because the default `~/.config/architecture-pattern-mcp/config.json`
+may hold a legacy retrieval schema. A globally `npm i -g`-installed
+pair can be forced via `REASONING_SHANNONTHINKING_CMD` /
+`REASONING_CODE_REASONING_CMD` (JSON lists) — a configured command
+that differs from the embedded default is used as-is
+(`src/reasoning/client.py:198-231`).
+
 ### When Generate Skips the Reasoning MCPs Entirely
 
 Two paths in `generate()` produce a design with no `code-reasoning`
@@ -211,10 +388,33 @@ cross-validation pattern — keep the trade-off in mind.
 
 A clean analyze run produces `tools_called={"code-reasoning": N,
 "shannonthinking": N}` in the `"Reasoning trace ready"` INFO record
-(`src/pipeline.py:_reasoning_block`). For the captured run: N=2 for
-analyze (4 total calls = 2 steps × 2 tools), N=3 for evaluate (3 ×
-shannon), N=3 for generate (3 × code). The counts match the strategy's
-`tools` lists above, multiplied by the number of thoughts in the
-phase. If `tools_called` ever shows a tool that isn't in the
-strategy's `tools` list (or omits one that is), the configuration is
-out of sync.
+(`src/pipeline.py:_reasoning_block`). With the defaults above: analyze
+N=4 (8 total calls = 4 steps × 2 tools), generate N=3 (3 × code),
+evaluate N=3 (3 × shannon), retry N=2 (4 total = 2 × 2). The counts
+match the strategy's `tools` lists above, multiplied by the number of
+thoughts in the phase. Three legitimate reasons for a lower count
+(`src/reasoning/client.py:319-420`), all distinguishable from the same
+record plus the WARN lines around it:
+
+- the model ended the trace early (`next_needed=false`): fewer `steps`,
+  empty `aborted_reason`;
+- thought generation failed: `aborted_reason="thought generation failed
+  at step N: …"` plus a `"Thought generation failed; trace ends here"`
+  WARNING;
+- a single tool call failed: the loop continues and the step is still
+  recorded (empty `tool_response`), so only `tools_called` drops — the
+  tell is a `"Reasoning tool call failed; continuing without its
+  feedback"` WARNING.
+
+If `tools_called` ever shows a tool that isn't in the strategy's
+`tools` list (or omits one that is), the configuration is out of sync.
+
+Traces for `analyze` and `generate` are cached by content key
+(`_CACHEABLE_PHASES`, `src/reasoning/client.py:75`): a repeated phase
+call with identical inputs logs the same record with `cached: true`,
+carrying the *originating* run's counts while making zero new MCP calls
+and zero new thought completions (verified: a second identical
+`generate` → `cached=True`, total subprocess spawns still 3, LLM calls
+still 3). Check `cached` before attributing counts to fresh spawns —
+and a phase that skips the block entirely (see above) logs no record at
+all.
