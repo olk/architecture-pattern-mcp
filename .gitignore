@@ -177,3 +177,8 @@ mutants/
 # fizz run artifacts (compiled spec ASTs + out/ graphs; regenerable per run)
 verify/fizz/*.json
 verify/fizz/out/
+
+# benchmark harness run artifacts (regenerable; only scenarios/ and the harness are committed)
+data/benchmark-runs/
+# named run dirs from `make benchmark-* OUT=benchmarks/<arm>` (same artifacts, same rule)
+benchmarks/

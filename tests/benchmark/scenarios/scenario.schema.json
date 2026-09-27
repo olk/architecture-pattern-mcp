@@ -1,0 +1,117 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/olkowa/architecture-pattern-mcp/tests/benchmark/scenarios/scenario.schema.json",
+  "title": "Stage-0 selection benchmark scenario",
+  "description": "One selection scenario: a requirement description whose expert-labelled primary architecture pattern is known. The family is the PatternCategory of the primary label; the train/holdout split is category-disjoint.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "scenario_id",
+    "family",
+    "category",
+    "domain",
+    "split",
+    "description",
+    "expected"
+  ],
+  "properties": {
+    "scenario_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+      "minLength": 3,
+      "maxLength": 80
+    },
+    "domain": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+      "minLength": 3,
+      "maxLength": 80,
+      "description": "Target architecture domain fed to analyze() verbatim. Live retrieval is domain-keyed (the two legs index catalogue domain slugs), so this value decides the candidate pool: it MUST be one of the primary label's suitable_domains (loader-enforced), and SHOULD be shared with an acceptable sibling so the near miss competes."
+    },
+    "family": {
+      "type": "string",
+      "pattern": "^[a-z0-9_]+(-[a-z0-9_]+)*$",
+      "minLength": 3,
+      "maxLength": 40,
+      "description": "PatternCategory of the primary label; the split is disjoint over this value."
+    },
+    "category": {
+      "type": "string",
+      "enum": [
+        "messaging",
+        "structural",
+        "cloud",
+        "data",
+        "ai_cognitive",
+        "specialized",
+        "api_gateway",
+        "coordination",
+        "dataflow",
+        "presentation"
+      ],
+      "description": "PatternCategory enum (src/schemas/enums.py) — must equal the primary label's catalogue category."
+    },
+    "split": {
+      "type": "string",
+      "enum": ["train", "holdout"]
+    },
+    "description": {
+      "type": "string",
+      "minLength": 40,
+      "maxLength": 10000,
+      "description": "Requirement text fed to the pipeline verbatim (analyze.requirements)."
+    },
+    "weights": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scalability",
+        "maintainability",
+        "reliability",
+        "security",
+        "performance",
+        "simplicity"
+      ],
+      "properties": {
+        "scalability": { "type": "number", "minimum": 0, "maximum": 1 },
+        "maintainability": { "type": "number", "minimum": 0, "maximum": 1 },
+        "reliability": { "type": "number", "minimum": 0, "maximum": 1 },
+        "security": { "type": "number", "minimum": 0, "maximum": 1 },
+        "performance": { "type": "number", "minimum": 0, "maximum": 1 },
+        "simplicity": { "type": "number", "minimum": 0, "maximum": 1 }
+      },
+      "description": "Requirement weights the scripted Stage-B agent returns verbatim in offline mode (QUALITY_ATTRIBUTE_KEYS)."
+    },
+    "style": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "description": "Optional pinned ArchitectureStyle; when absent the analyze phase selects it."
+    },
+    "expected": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["primary", "acceptable_primary"],
+      "properties": {
+        "primary": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "description": "Pattern name (pattern/<name>-architecture.json) the pipeline should rank first."
+        },
+        "acceptable_primary": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1, "maxLength": 64 },
+          "minItems": 2,
+          "maxItems": 8,
+          "uniqueItems": true,
+          "description": "Near-miss label set (same PatternCategory); hit/recall/F1 are computed over it."
+        }
+      }
+    },
+    "notes": {
+      "type": "string",
+      "maxLength": 2000
+    }
+  }
+}

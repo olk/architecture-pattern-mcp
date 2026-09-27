@@ -2160,6 +2160,114 @@ class TestPromptExamples:
         assert "selected_patterns" in ANALYSIS_RESULT_EXAMPLE
 
 
+class TestStructuredOutputContract:
+    """Every structured prompt must demand the response-schema function call.
+
+    llama-index delivers structured output through function calling
+    (``as_structured_llm`` → ``FunctionCallingProgram``, tool named after the schema),
+    so a prompt that asks for "a JSON object" as the reply text invites an answer the
+    transport throws away. Measured 2026-09-27 on the live Stage-0 benchmark arm
+    (DeepSeek V4.1 Flash): half of the EVALUATE calls replied with plain-text JSON and
+    no tool call, burning self-healing retries at ~20 s each.
+    """
+
+    #: Delivery clause shared by every structured-output contract.
+    _FUNCTION_CALL_CLAUSE = "ARE the response schema"
+
+    #: Text-JSON wording that regressed once — it must not come back.
+    _TEXT_JSON_INSTRUCTIONS = (
+        "Emit ONLY a single JSON object",
+        "Emit a single JSON object",
+        "Output ONLY the JSON object",
+        "Return a single JSON object",
+    )
+
+    def _make_pattern(self):
+        from src.schemas.patterns import Pattern
+
+        return Pattern(
+            name="microservices",
+            context="Independently deployable services",
+            category="structural",
+            quality_attributes={"scalability": 9.0},
+            anti_patterns=["Shared database between services"],
+            design_principles=["Single responsibility per service"],
+            best_practices=["Database per service"],
+            tradeoffs=["Operational complexity"],
+            component_types=["service"],
+            technology_stack=["Kafka"],
+        )
+
+    def _make_design(self):
+        return ArchitectureDesign(
+            overview={
+                "style": "microservices",
+                "category": "structural",
+                "principles": ["single responsibility"],
+                "constraints": [],
+            },
+            components=[
+                {"id": "svc", "name": "Service", "type": "service",
+                 "description": "Core service", "responsibilities": ["process"]},
+            ],
+        )
+
+    def _make_evaluation(self):
+        return ArchitectureEvaluation(
+            summary=EvaluationSummary(
+                overall_score=65.0,
+                strengths=[],
+                weaknesses=["payment-service lacks DLQ"],
+                critical_findings=["payment-service has no manual ack"],
+            ),
+            metrics=[
+                MetricResult(
+                    name="reliability", score=65.0, description="r",
+                    findings=[], recommendations=[], reasoning="checked ack handling",
+                ),
+            ],
+            recommendations={},
+        )
+
+    def _prompts(self) -> dict[str, str]:
+        """Every prompt the pipeline sends together with a ``response_schema``."""
+        pipeline = create_test_pipeline()
+        pattern = self._make_pattern()
+        design = self._make_design()
+        evaluation = self._make_evaluation()
+        return {
+            "analyze-system": pipeline._build_analyze_system_prompt(),
+            "analyze-user": pipeline._build_analyze_user_prompt("Support 1M users", "cloud-native"),
+            "generate-system": pipeline._build_generate_system_prompt(style="microservices"),
+            "generate-user": pipeline._build_generate_user_prompt(
+                "Support 1M users", "cloud-native", "microservices",
+                ("(anti)", "(best)", "(details)"), None,
+            ),
+            "evaluate-system": pipeline._build_evaluate_system_prompt([pattern]),
+            "evaluate-user": pipeline._build_evaluate_user_prompt(
+                design, "quality", "cloud-native", [pattern], requirements="Support 1M users",
+            ),
+            "retry-user": pipeline._retry_prompt(
+                design=design, evaluation=evaluation, requirements="Support 1M users",
+                style="microservices", domain="cloud-native", selected_pattern=pattern,
+            ),
+        }
+
+    def test_all_structured_prompts_demand_the_function_call(self):
+        prompts = self._prompts()
+        assert set(prompts) == {
+            "analyze-system", "analyze-user", "generate-system", "generate-user",
+            "evaluate-system", "evaluate-user", "retry-user",
+        }
+        for label, prompt in prompts.items():
+            assert self._FUNCTION_CALL_CLAUSE in prompt, f"{label} lost the function-call contract"
+
+    def test_no_structured_prompt_asks_for_json_as_the_reply_text(self):
+        for label, prompt in self._prompts().items():
+            for instruction in self._TEXT_JSON_INSTRUCTIONS:
+                assert instruction not in prompt, f"{label} asks for text JSON: {instruction!r}"
+
+
 class TestTimedPhaseLogging:
     """Verify _timed_phase emits INFO log with duration."""
 

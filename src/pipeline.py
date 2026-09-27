@@ -303,7 +303,7 @@ ANTI-HALLUCINATION:
 </hard_constraints>
 
 <output>
-Write overview.reasoning first, then the rest of the design. Output ONLY the JSON object — no prose, no markdown fences, no commentary. Every relationship source/target must reference an existing component ID. quality_attributes values MUST be 10-scale strings like "8/10".
+Write overview.reasoning first, then the rest of the design. Deliver the design by calling the response-schema function — its parameters ARE the response schema. Populate every field and do not print the JSON as text; no prose, no markdown fences. Every relationship source/target must reference an existing component ID. quality_attributes values MUST be 10-scale strings like "8/10".
 </output>
 """
 
@@ -374,9 +374,9 @@ industry priors, common practice, or invented requirements.
 <task>
 Read the requirements inside <requirements> tags in the user prompt and
 decide how strongly they emphasise each of the six quality attributes
-below. Return a single JSON object with one float in [0.0, 1.0] per
-attribute, normalised so the highest attribute(s) reach 1.0 and the rest
-scale down proportionally.
+below. Deliver one float in [0.0, 1.0] per attribute through the
+RequirementWeights function call, normalised so the highest attribute(s)
+reach 1.0 and the rest scale down proportionally.
 </task>
 
 <quality_attributes>
@@ -451,10 +451,11 @@ ordering is what the scoring step uses, not the absolute magnitudes.
 </example>
 
 <output>
-Emit ONLY a single JSON object with exactly six keys (scalability,
-maintainability, reliability, security, performance, simplicity) and
-float values. No prose, no markdown fences, no commentary, no explanation
-of your reasoning.
+Deliver the weights by calling the RequirementWeights function: its
+parameters ARE the response schema — exactly six keys (scalability,
+maintainability, reliability, security, performance, simplicity) with float
+values. Do not print the JSON in your reply text: no prose, no markdown
+fences, no commentary, no explanation of your reasoning.
 </output>
 """
 
@@ -1568,7 +1569,9 @@ If any check fails, fix the design before emitting. Violations trigger automatic
 </reasoning_gate>
 
 <output>
-Emit a single JSON object matching the response schema.
+Deliver the design by calling the provided response-schema function: its
+parameters ARE the response schema, so populate every field there. Do not print the
+JSON in your reply text; no prose, no markdown fences, no commentary.
 </output>
 """
 
@@ -1865,8 +1868,10 @@ Before emitting, verify (do not output this gate):
 </reasoning_gate>
 
 <output>
-Return a single JSON object with the six quality-attribute keys, matching
-the RequirementWeights schema. No prose, no markdown fences.
+Deliver the weights by calling the RequirementWeights function: its
+parameters ARE the response schema, with the six quality-attribute keys and
+float values. Do not print the JSON in your reply text; no prose, no
+markdown fences.
 </output>
 """
 
@@ -2047,8 +2052,10 @@ ANTI-HALLUCINATION:
 </hard_constraints>
 
 <output>
-Emit ONLY a single JSON object matching ArchitectureEvaluation. No prose,
-no markdown fences, no commentary.
+Deliver the result by calling the ArchitectureEvaluation function: its
+parameters ARE the response schema, so populate every field there. Do not
+print the JSON in your reply text — no prose, no markdown fences, no
+commentary. A reply that does not call the function is rejected and retried.
 
 For EACH metric, populate metric.reasoning FIRST — enumerate which
 requirements, components, and pattern expectations you checked, what you
@@ -2184,8 +2191,9 @@ Before emitting (do NOT output this gate), verify:
 </reasoning_gate>
 
 <output>
-Emit ONLY a single JSON object matching ArchitectureEvaluation. No
-prose, no markdown fences, no commentary.
+Deliver the result by calling the ArchitectureEvaluation function: its
+parameters ARE the response schema. Populate every field there — no prose,
+no markdown fences, no commentary; do not print the JSON in your reply text.
 
 Schema reminder:
   summary: {{ overall_score: float [0,100], strengths: [str],
@@ -2347,8 +2355,10 @@ Before emitting (do NOT output this gate), verify:
 </reasoning_gate>
 
 <output>
-Emit ONLY a single JSON object matching the ArchitectureDesign schema.
-No prose, no markdown fences, no commentary.
+Deliver the refined design by calling the provided response-schema function:
+its parameters ARE the response schema (ArchitectureDesign), so populate every
+field there. Do not print the JSON in your reply text; no prose, no markdown
+fences, no commentary.
 </output>
 
 {ARCHITECTURE_DESIGN_EXAMPLE}

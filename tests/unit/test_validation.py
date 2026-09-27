@@ -172,6 +172,69 @@ class TestValidateWithRetries:
         assert result.name == "repaired"
 
     @pytest.mark.asyncio
+    async def test_validation_repair_prompt_demands_the_schema_function_call(self):
+        """Repairs keep the function-calling transport the agent uses.
+
+        A repair prompt that asks for a "response conforming to the schema" invites the
+        plain-text JSON answer the transport discards, so the healing loop would spend its
+        attempts on the same fault it is repairing.
+        """
+        prompts: list[str] = []
+
+        async def initial_caller() -> SimpleSchema:
+            raise ValidationError.from_exception_data(
+                "SimpleSchema",
+                [{"type": "missing", "loc": ("name",), "msg": "Field required", "input": {}}],
+            )
+
+        async def repair_caller(sp: str, up: str) -> SimpleSchema:
+            prompts.append(up)
+            raise LLMError(provider="deepseek", error="ERR_009", provider_message="no tool call")
+
+        with pytest.raises(ValidationError):
+            await validate_with_retries(
+                initial_caller,
+                repair_caller,
+                SimpleSchema,
+                max_retries=2,
+                system_prompt="system prompt",
+                user_prompt="original user prompt",
+            )
+
+        assert prompts
+        for prompt in prompts:
+            assert prompt.startswith("original user prompt")
+            assert "SimpleSchema function" in prompt
+            assert "ARE the response schema" in prompt
+
+    @pytest.mark.asyncio
+    async def test_llm_error_repair_prompt_demands_the_schema_function_call(self):
+        """The provider-error branch carries the same delivery contract."""
+        prompts: list[str] = []
+
+        async def initial_caller() -> SimpleSchema:
+            raise LLMError(provider="deepseek", error="ERR_009", provider_message="empty tool call")
+
+        async def repair_caller(sp: str, up: str) -> SimpleSchema:
+            prompts.append(up)
+            raise LLMError(provider="deepseek", error="ERR_009", provider_message="empty tool call")
+
+        with pytest.raises(LLMError):
+            await validate_with_retries(
+                initial_caller,
+                repair_caller,
+                SimpleSchema,
+                max_retries=2,
+                system_prompt="system prompt",
+                user_prompt="original user prompt",
+            )
+
+        assert prompts
+        for prompt in prompts:
+            assert "SimpleSchema function" in prompt
+            assert "ARE the response schema" in prompt
+
+    @pytest.mark.asyncio
     async def test_raises_last_error_after_exhausted_retries(self):
         """After max_retries exhausted, raises the last ValidationError."""
         initial_called = False

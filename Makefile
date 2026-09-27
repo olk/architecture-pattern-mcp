@@ -17,6 +17,8 @@
 	test-unit test-oracles test-mutations regen-mutmut-baseline test-all \
 	verify-fizz verify-fizz-simulation verify-fizz-garden regen-fizz-traces \
 	verify-ledger verify-cross-consistency verify-all \
+	benchmark-selfcheck benchmark-offline benchmark-sidecars-up benchmark-live \
+	benchmark-e2e benchmark-draft benchmark-compare \
 	client docker-build docker-build-tei \
 	docker-build-all docker-publish docker-publish-tei \
 	docker-publish-all \
@@ -305,6 +307,86 @@ docker-logs-follow: ## Show and follow docker compose logs
 
 docker-rm: ## Remove Docker image
 	docker rmi $(DOCKER_IMAGE):$(DOCKER_TAG)
+
+##@ Benchmark (Stage-0 selection instrument)
+# The harness lives in tests/benchmark/ (no pytest collection) and never edits src/: the pipeline
+# is constructor-injected, so the runners wrap the seams they hand in. See tests/benchmark/README.md
+# for the mode matrix, the metric definitions and the pre-registered A/B decision rule.
+BENCH_RUNS         ?= data/benchmark-runs
+BENCH_SCENARIOS    ?= tests/benchmark/scenarios/seed.json
+BENCH_COMPOSE      := docker compose -f docker/docker-compose.yml -f docker/docker-compose.benchmark.yml
+BENCH_EMBED_URL    ?= http://127.0.0.1:18081/v1
+BENCH_RERANK_URL   ?= http://127.0.0.1:18082
+BENCH_RUN_ARGS     := $(if $(OUT),--out $(OUT),) $(if $(RUN_ID),--run-id $(RUN_ID),) \
+	$(if $(LIMIT),--limit $(LIMIT),) $(if $(SPLIT),--split $(SPLIT),) $(if $(REPEAT),--repeat $(REPEAT),) \
+	$(if $(NO_WARMUP),--no-warmup,) $(if $(FAIL_FAST),--fail-fast,) $(if $(FORCE),--force,) \
+	$(if $(LOG_LEVEL),--log-level $(LOG_LEVEL),)
+
+benchmark-selfcheck: ## Benchmark: hand-computed anchors for every metric formula (no network)
+	$(UV) run python -m tests.benchmark.harness.selfcheck
+
+benchmark-offline: ## Benchmark: deterministic offline plumbing run (FLIP=<scenario_id> = flip arm)
+	$(UV) run python -m tests.benchmark.harness.main --mode offline \
+		--scenarios $(BENCH_SCENARIOS) $(if $(FLIP),--flip $(FLIP),) $(BENCH_RUN_ARGS)
+
+# Needs the TEI sidecars reachable on loopback (benchmark-sidecars-up) plus a warm dense cache and
+# the generator key (DEEPSEEK_API_KEY in the environment); the runner refuses to start against a
+# cold cache.
+benchmark-sidecars-up: ## Benchmark: publish the TEI sidecars on loopback (additive compose override)
+	$(BENCH_COMPOSE) up -d pattern-tei-embed pattern-tei-rerank
+
+# Provider defaults: DeepSeek V4.1 Flash via its OpenAI-compatible endpoint (key from
+# DEEPSEEK_API_KEY). MiniMax suffered repeated malformed-JSON generation faults during live
+# Stage-0 arms (2026-09-27: three ArchitectureDesignResponse faults inside one 6-scenario
+# window); DeepSeek is the replacement default. Structured output runs through llama-index
+# function calling, so the prompts ask for the response-schema function call by name — the
+# earlier JSON-as-reply-text wording made DeepSeek answer with plain-text JSON and no tool
+# call on half the EVALUATE calls (self-healing retries, ~20-30 s each). docker/docker-compose.yml
+# still wires the dev stack to MiniMax — align it separately if desired; any GENERATOR_* value
+# already in the environment wins. CONFIG_PATH pins the repo config.
+#
+# Reasoning servers: the config default points at the Docker-embedded entry points, which do not
+# exist on a workstation, so the recipe points REASONING_*_CMD at the globally installed npm
+# packages when they are present. Without them the pipeline degrades per call (visible as
+# reasoning_health in the run manifest). The discovery runs inside the recipe's shell, so no
+# other make invocation pays for `npm root -g`.
+benchmark-live: ## Benchmark: in-process live run with full stage attribution
+	@sh -c 'root=$$(npm root -g 2>/dev/null); \
+		if [ -n "$$root" ] && [ -f "$$root/shannon-thinking/dist/index.js" ]; then \
+			export REASONING_SHANNONTHINKING_CMD="[\"node\", \"$$root/shannon-thinking/dist/index.js\"]"; \
+		fi; \
+		if [ -n "$$root" ] && [ -f "$$root/@mettamatt/code-reasoning/dist/index.js" ]; then \
+			export REASONING_CODE_REASONING_CMD="[\"node\", \"$$root/@mettamatt/code-reasoning/dist/index.js\"]"; \
+		fi; \
+		export CONFIG_PATH="$(CURDIR)/config/config.json"; \
+		export GENERATOR_PROVIDER="$${GENERATOR_PROVIDER:-deepseek}"; \
+		export GENERATOR_MODEL="$${GENERATOR_MODEL:-deepseek-flash}"; \
+		export GENERATOR_BASE_URL="$${GENERATOR_BASE_URL:-https://api.deepseek.com/v1}"; \
+		export GENERATOR_API_KEY="$${GENERATOR_API_KEY:-$${DEEPSEEK_API_KEY:-}}"; \
+		export EMBEDDER_BASE_URL="$(BENCH_EMBED_URL)"; \
+		export EMBEDDER_API_KEY="$${EMBEDDER_API_KEY:-tei-noauth}"; \
+		export RERANKER_BASE_URL="$(BENCH_RERANK_URL)"; \
+		exec $(UV) run python -m tests.benchmark.harness.main --mode live \
+			--scenarios $(BENCH_SCENARIOS) $(BENCH_RUN_ARGS)'
+
+benchmark-e2e: ## Benchmark: black-box run against the running compose stack
+	$(UV) run python -m tests.benchmark.harness.e2e \
+		--scenarios $(BENCH_SCENARIOS) $(BENCH_RUN_ARGS) \
+		$(if $(CLIENT_URL),--url $(CLIENT_URL),) \
+		$(if $(CALL_TIMEOUT),--call-timeout-seconds $(CALL_TIMEOUT),)
+
+# User-gated corpus expansion: drafts scenario candidates from the catalog records and writes
+# data/benchmark-runs/drafts/full.draft.json for review — never committed, and the reviewed
+# scenarios are hand-copied into tests/benchmark/scenarios/full.json. DRY_RUN=1 prints the prompt.
+benchmark-draft: ## Benchmark: draft full.json scenario candidates from the catalog (user review gate)
+	$(UV) run python -m tests.benchmark.harness.draft $(if $(DRY_RUN),--dry-run,) \
+		$(if $(PER_FAMILY),--per-family $(PER_FAMILY),) $(if $(FAMILIES),--families '$(FAMILIES)',) \
+		$(if $(DRAFT_OUT),--out $(DRAFT_OUT),)
+
+# Exits 1 on a candidate-loss verdict (pre-registered rule in tests/benchmark/README.md).
+benchmark-compare: ## Benchmark: compare two run dirs (A=<baseline> B=<candidate>)
+	@[ -n "$(A)" ] && [ -n "$(B)" ] || { echo "usage: make benchmark-compare A=<baseline-dir> B=<candidate-dir>"; exit 2; }
+	$(UV) run python -m tests.benchmark.harness.compare $(A) $(B) $(if $(ALLOW_MISMATCH),--allow-mismatch,)
 
 ##@ Maintenance
 clean: ## Remove caches and build artifacts

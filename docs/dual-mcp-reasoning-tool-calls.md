@@ -271,20 +271,41 @@ that differs from the embedded default is used as-is
 
 ### When Generate Skips the Reasoning MCPs Entirely
 
-Two paths in `generate()` produce a design with no `code-reasoning`
-trace, and neither is a routing bug:
+`generate(override_user_prompt=…)` (`src/pipeline.py:840-842`) bypasses
+the *generate-phase* `_reasoning_block` call and prompts the agent with
+the override string verbatim: one `run_pre_llm("generate", …)`
+invocation fewer and no `code-reasoning` spawn from the generate
+strategy. In its only production caller this does **not** mean "no
+reasoning" — `design_loop` attempt ≥2 (`src/pipeline.py:1063-1080`)
+builds the override with `_build_retry_attempt_prompt`, which runs the
+**retry**-phase loop (`code` + `shannon`, `src/pipeline.py:984-1003`)
+and embeds that trace in the refinement prompt
+(`_retry_prompt`, `src/pipeline.py:2331`). Measured over a 2-attempt
+`design_loop` (stub LLM, real stdio servers):
 
-- `generate(override_user_prompt=…)` (`src/pipeline.py:840-843`)
-  bypasses `_reasoning_block` altogether and prompts the agent directly.
-- `reasoning.enabled=false`, a missing `ReasoningClient`, a client
-  exception, or an empty trace all fall through to
-  `render_degraded_context(phase)` (`src/pipeline.py:602-613`): the
-  prompt still gets the in-prompt thinking scaffold, but no MCP call is
-  made. In `docker logs` the tell is the absence of a `"Reasoning trace
-  ready"` INFO record for `phase="generate"`.
+```
+run_pre_llm calls:    [('generate', {'code-reasoning': 3}),
+                       ('evaluate', {'shannonthinking': 3}),
+                       ('retry', {'code-reasoning': 2, 'shannonthinking': 2}),
+                       ('evaluate', {'shannonthinking': 3})]
+design call 1 (generate, no override): [1|code|…] [2|code|…] [3|code|…]
+design call 2 (override = retry prompt): [1|code|…] [1|shannon|…] [2|code|…] [2|shannon|…]
+```
 
-Either way the degradation is silent by design — check `tools_called`
-before concluding a tool ran.
+So a retried design is still reasoning-grounded — by the retry
+strategy, not the generate strategy. Only a caller handing `generate()`
+a raw override string with no `<reasoning_context>` block produces a
+fully ungrounded design; no in-repo caller does that.
+
+The other path: `reasoning.enabled=false`, a missing `ReasoningClient`,
+a client exception, or an empty trace all fall through to
+`render_degraded_context(phase)` (`src/pipeline.py:602-613`): the prompt
+still gets the in-prompt thinking scaffold, but no MCP call is made. In
+`docker logs` the tell is the absence of a `"Reasoning trace ready"`
+INFO record for `phase="generate"`.
+
+Every case is silent by design — check `tools_called` before concluding
+a tool ran.
 
 ## Wire Shape Differs, Content Does Not
 

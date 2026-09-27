@@ -119,16 +119,17 @@ async def validate_with_retries(  # noqa: UP047
                 f"{user_prompt}\n\n"
                 "IMPORTANT: Your previous response failed validation.\n"
                 f"{errors_str}\n\n"
-                f"Please produce a new response that conforms exactly to the schema "
-                f"for {response_schema.__name__}. "
-                "Double-check every field before responding."
+                f"Deliver the corrected response by calling the {response_schema.__name__} "
+                "function: its parameters ARE the response schema. Populate every field "
+                "and double-check the values named above — do not print the JSON as text."
             )
         elif isinstance(original_error, LLMError):
             errors_str = f"LLM provider error: {original_error.provider_message}"
             repair_user_prompt = (
                 f"{user_prompt}\n\n"
                 f"IMPORTANT: previous LLM call failed with: {original_error.provider_message}\n"
-                f"Please produce a new response conforming to {response_schema.__name__}."
+                f"Deliver a new response by calling the {response_schema.__name__} function: "
+                "its parameters ARE the response schema. Populate every field."
             )
         else:
             raise original_error from None

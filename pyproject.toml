@@ -194,6 +194,13 @@ no_implicit_optional = true
 warn_redundant_casts = true
 warn_unused_ignores = true
 
+# jsonschema ships no typing (checked: no py.typed in 4.26.0 wheel, no types-jsonschema
+# in the lockfile); harness-only import (tests/benchmark), structurally typed via
+# tests/benchmark/harness/config.py::_SchemaValidator.
+[[tool.mypy.overrides]]
+module = "jsonschema"
+ignore_missing_imports = true
+
 [tool.zuban]
 mode = "mypy"
 strict = true

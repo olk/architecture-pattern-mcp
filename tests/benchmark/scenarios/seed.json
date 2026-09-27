@@ -1,0 +1,188 @@
+{
+  "_meta": {
+    "version": 1,
+    "description": "Stage-0 pattern-selection benchmark corpus: 2 scenarios per category over 8 PatternCategory values (16 total). The family is the PatternCategory of the primary label, so the train/holdout split is category-disjoint: holdout = {api_gateway, cloud, dataflow} (3 categories, 6 scenarios), train = the remaining 10. Every scenario's weights are tuned so the primary clears the shipped style_score_threshold (analysis score >= 50.0 with w' = 0.7w + 0.05) AND wins the blended score (0.7*analysis + 0.3*fusion_norm) against its near-miss sibling when the recall set is exactly the acceptable pair. Weights are returned verbatim by the offline scripted agent; in live mode they are the requirement-text intent the scenario description is written to elicit.",
+    "holdout_categories": ["api_gateway", "cloud", "dataflow"],
+    "primary_pattern_suffix": "-architecture.json under pattern/",
+    "near_miss_convention": "acceptable_primary = [primary, same-category sibling]; traps chosen so single-attribute scalings (e.g. reliability for event-sourcing vs lambda-architecture) would flip the winner.",
+    "domain_convention": "domain = a suitable_domains value of the primary label (loader-enforced; live retrieval is keyed on this string, so it decides the candidate pool). Chosen shared with the near-miss sibling wherever one exists, so both labels compete in the live pool; otherwise the primary's most scenario-fitting domain (the sibling is then unreachable live)."
+  },
+  "scenarios": [
+    {
+      "scenario_id": "messaging-async-integration",
+      "family": "messaging",
+      "category": "messaging",
+      "domain": "real-time-processing",
+      "split": "train",
+      "description": "An order-management platform must publish domain events to many downstream consumers (billing, analytics, fulfilment) with loose coupling between producers and consumers. The team wants to add new consumer applications without touching publisher code, absorb traffic bursts through durable queuing, and keep services independently deployable. Guaranteed at-least-once delivery and replayable event logs matter more than sub-millisecond latency; the integration fabric should scale horizontally as consumer count grows.",
+      "weights": { "scalability": 0.6, "maintainability": 0.5, "reliability": 0.0, "security": 0.0, "performance": 0.0, "simplicity": 0.0 },
+      "expected": { "primary": "event-driven", "acceptable_primary": ["event-driven", "reactive-architecture"] },
+      "notes": "Publish/subscribe decoupling with durable queues points at event-driven; reactive-architecture (backpressure-first streaming) is the near miss."
+    },
+    {
+      "scenario_id": "messaging-broker-integration",
+      "family": "messaging",
+      "category": "messaging",
+      "domain": "heterogeneous-systems",
+      "split": "train",
+      "description": "A bank must integrate 40+ legacy and modern applications across asynchronous message channels. Routing, transformation, and delivery guarantees should be centralized in a smart intermediary so endpoint applications stay dumb and unchanged. The hub must scale to thousands of messages per second across geographically distributed sites, support multiple transport protocols and message formats, and provide centralized monitoring of every channel.",
+      "weights": { "scalability": 0.7, "maintainability": 0.0, "reliability": 0.0, "security": 0.0, "performance": 0.0, "simplicity": 0.0 },
+      "expected": { "primary": "broker", "acceptable_primary": ["broker", "enterprise-service-bus"] },
+      "notes": "Point-to-point message broker at scale; ESB (heavy orchestration/adapter stack) is the near miss."
+    },
+    {
+      "scenario_id": "structural-plugin-boundary",
+      "family": "structural",
+      "category": "structural",
+      "domain": "financial-systems",
+      "split": "train",
+      "description": "A trading platform's core pricing engine must remain isolated from volatile external integrations: exchanges, data vendors, and payment gateways change monthly. Domain logic must depend on stable inward-facing ports, with adapters for every external system plugged in at runtime. New exchange adapters are added weekly without regression risk to the core; the integration surface must scale to dozens of heterogeneous external systems.",
+      "weights": { "scalability": 0.7, "maintainability": 0.0, "reliability": 0.0, "security": 0.0, "performance": 0.0, "simplicity": 0.0 },
+      "expected": { "primary": "hexagonal", "acceptable_primary": ["hexagonal", "clean-architecture"] },
+      "notes": "Ports-and-adapters boundary against external systems; clean-architecture (screaming-domain layering without the explicit port/adapter contract) is the near miss."
+    },
+    {
+      "scenario_id": "structural-team-autonomy",
+      "family": "structural",
+      "category": "structural",
+      "domain": "multi-team-organizations",
+      "split": "train",
+      "description": "A retailer with 25 product squads ships to production independently; a shared deployable monolith forces lock-step releases and cross-team coordination on every change. The target platform decomposes into business-capability services, each independently deployed, scaled, and owned by one squad. Deployment pipelines and infrastructure must scale to hundreds of services across multiple regions and CI/CD environments.",
+      "weights": { "scalability": 0.7, "maintainability": 0.0, "reliability": 0.0, "security": 0.0, "performance": 0.0, "simplicity": 0.0 },
+      "expected": { "primary": "microservices", "acceptable_primary": ["microservices", "modular-monolith"] },
+      "notes": "Independent deployability and team autonomy at scale; modular-monolith (single deployable with module boundaries) is the near miss."
+    },
+    {
+      "scenario_id": "coordination-payment-saga",
+      "family": "coordination",
+      "category": "coordination",
+      "domain": "financial-services",
+      "split": "train",
+      "description": "An e-commerce checkout must coordinate payment authorization, inventory reservation, and shipment booking across separate services. A distributed transaction is required: either every step commits or compensating actions roll back completed steps when a later step fails. Flow must scale to thousands of concurrent checkout transactions across service boundaries without distributed locks, and partial failures must never leave inconsistent balances.",
+      "weights": { "scalability": 0.7, "maintainability": 0.0, "reliability": 0.0, "security": 0.0, "performance": 0.0, "simplicity": 0.0 },
+      "expected": { "primary": "saga", "acceptable_primary": ["saga", "blockchain-based"] },
+      "notes": "Compensating transactions across services; blockchain-based consensus (distributed ledger trust) is the decoy near miss."
+    },
+    {
+      "scenario_id": "coordination-robot-orchestration",
+      "family": "coordination",
+      "category": "coordination",
+      "domain": "robotic-systems",
+      "split": "train",
+      "description": "A warehouse robot fleet must execute missions reliably around the clock: a supervisor decomposes goals into tasks, assigns them to robot controllers, and monitors execution state, retrying or reassigning on failure. Sensor and actuator streams run continuously; a controller crash must not lose mission state. Task scheduling and state recovery must scale to hundreds of robots per site with no single point of failure in the control loop.",
+      "weights": { "scalability": 0.0, "maintainability": 0.5, "reliability": 0.6, "security": 0.0, "performance": 0.0, "simplicity": 0.0 },
+      "expected": { "primary": "task-control-architecture", "acceptable_primary": ["task-control-architecture", "master-slave"] },
+      "notes": "Hierarchical task decomposition with control feedback; master-slave (static delegation without task/control separation) is the near miss."
+    },
+    {
+      "scenario_id": "data-cqrs-dashboards",
+      "family": "data",
+      "category": "data",
+      "domain": "e-commerce",
+      "split": "train",
+      "description": "An operations console serves thousands of concurrent dashboard readers while a separate ingest path processes tens of thousands of writes per minute. Read and write workloads must scale independently: read models tuned for queries, write models for transactional consistency, synchronized via events. Analytics queries must never contend with ingest transactions, and read latency must stay low under peak dashboard refresh load.",
+      "weights": { "scalability": 0.0, "maintainability": 0.0, "reliability": 0.0, "security": 0.0, "performance": 0.7, "simplicity": 0.0 },
+      "expected": { "primary": "command-query-responsibility-segregation", "acceptable_primary": ["command-query-responsibility-segregation", "data-mesh"] },
+      "notes": "Read/write path separation for scale; data-mesh (organizational data-product federation) is the decoy near miss."
+    },
+    {
+      "scenario_id": "data-event-ledger",
+      "family": "data",
+      "category": "data",
+      "domain": "finance-banking",
+      "split": "train",
+      "description": "A core banking ledger must record every balance change as an immutable, append-only event so auditors can reconstruct account state at any past point in time. Regulatory auditors require a complete, verifiable history of every state transition; corrections append reversing entries rather than mutating records. The ledger's event log must stay maintainable as compliance rules evolve, with event schemas versioned independently of consuming applications.",
+      "weights": { "scalability": 0.0, "maintainability": 0.8, "reliability": 0.0, "security": 0.4, "performance": 0.0, "simplicity": 0.0 },
+      "expected": { "primary": "event-sourcing", "acceptable_primary": ["event-sourcing", "lambda-architecture"] },
+      "notes": "Immutable event log with point-in-time replay; lambda-architecture (batch+speed layering) is the near miss. Reliability-weighted variants flip this pair — maintainability/security weighting is load-bearing."
+    },
+    {
+      "scenario_id": "cloud-burst-scaling",
+      "family": "cloud",
+      "category": "cloud",
+      "domain": "regulated-industries",
+      "split": "holdout",
+      "description": "A retail group runs its compliance-sensitive core workloads on a private cloud but faces seasonal traffic peaks that exceed private capacity eight-fold. The platform must burst selected stateless tiers onto public providers during peak, keep data-residency workloads at home, and fail back gracefully when the peak subsides. Peak-tier throughput must scale elastically across both environments with a consistent deployment model.",
+      "weights": { "scalability": 0.5, "maintainability": 0.0, "reliability": 0.0, "security": 0.0, "performance": 0.8, "simplicity": 0.0 },
+      "expected": { "primary": "hybrid-cloud", "acceptable_primary": ["hybrid-cloud", "multi-cloud"] },
+      "notes": "Private core + public burst; multi-cloud (portability across several public providers) is the near miss."
+    },
+    {
+      "scenario_id": "cloud-elastic-functions",
+      "family": "cloud",
+      "category": "cloud",
+      "domain": "event-driven-workloads",
+      "split": "holdout",
+      "description": "A startup's document pipeline handles wildly spiky, event-driven workloads: uploads arrive in bursts, each triggering short stateless transforms and thumbnail generation. The team has no capacity to operate servers and wants per-invocation billing so idle hours cost nothing. Cold-start tolerance is acceptable; the platform itself must be the provider's operational responsibility end to end, keeping the architecture maximally simple to run.",
+      "weights": { "scalability": 0.4, "maintainability": 0.0, "reliability": 0.0, "security": 0.0, "performance": 0.0, "simplicity": 0.8 },
+      "expected": { "primary": "serverless", "acceptable_primary": ["serverless", "hybrid-cloud"] },
+      "notes": "Function-per-event with zero server operations; hybrid-cloud (own the runtime, burst capacity) is the near miss."
+    },
+    {
+      "scenario_id": "ai-blackboard-fusion",
+      "family": "ai_cognitive",
+      "category": "ai_cognitive",
+      "domain": "expert-systems",
+      "split": "train",
+      "description": "A sensor-fusion system combines heterogeneous expert modules (radar trackers, vision classifiers, signal analyzers) that incrementally refine a shared hypothesis space. Each specialist contributes partial interpretations to a common workspace as evidence arrives; no single module controls the flow, and partial results must remain queryable while processing continues. The shared workspace must scale as additional recognition modules are added over time.",
+      "weights": { "scalability": 0.7, "maintainability": 0.1, "reliability": 0.0, "security": 0.0, "performance": 0.0, "simplicity": 0.0 },
+      "expected": { "primary": "blackboard", "acceptable_primary": ["blackboard", "rule-based-system"] },
+      "notes": "Opportunistic specialists over a shared workspace; rule-based-system (deterministic forward-chaining) is the near miss."
+    },
+    {
+      "scenario_id": "ai-rules-advisor",
+      "family": "ai_cognitive",
+      "category": "ai_cognitive",
+      "domain": "expert-systems",
+      "split": "train",
+      "description": "A loan-eligibility advisor must apply a constantly evolving regulatory rulebook: credit policy officers edit rules weekly, and every decision must be explainable as the chain of fired rules against the applicant's facts. Inference must be inspectable and deterministic, with rulebase edits deployable by non-developers. The rulebase must stay maintainable as regulations churn across jurisdictions.",
+      "weights": { "scalability": 0.1, "maintainability": 0.7, "reliability": 0.0, "security": 0.0, "performance": 0.0, "simplicity": 0.0 },
+      "expected": { "primary": "rule-based-system", "acceptable_primary": ["rule-based-system", "blackboard"] },
+      "notes": "Editable forward-chaining rulebase with explainability; blackboard (opportunistic hypothesis fusion) is the near miss."
+    },
+    {
+      "scenario_id": "gateway-central-edge",
+      "family": "api_gateway",
+      "category": "api_gateway",
+      "domain": "microservices-architectures-with-multiple-backend-services",
+      "split": "holdout",
+      "description": "A streaming platform exposes 60 backend microservices to mobile, web, and partner clients. Cross-cutting concerns — authentication, rate limiting, response shaping, and protocol translation — must be enforced once at a single entry tier instead of per service. The gateway tier must scale horizontally to absorb millions of client requests per minute and let backend services scale independently behind it.",
+      "weights": { "scalability": 0.7, "maintainability": 0.0, "reliability": 0.0, "security": 0.0, "performance": 0.0, "simplicity": 0.0 },
+      "expected": { "primary": "api-gateway", "acceptable_primary": ["api-gateway", "backend-for-frontend"] },
+      "notes": "Single central edge enforcing cross-cutting policy; BFF (client-shaped gateways) is the near miss."
+    },
+    {
+      "scenario_id": "gateway-bff-clients",
+      "family": "api_gateway",
+      "category": "api_gateway",
+      "domain": "mobile-first-applications",
+      "split": "holdout",
+      "description": "A SaaS suite serves three very different clients: a mobile app on flaky networks, a data-hungry web SPA, and partner systems. Each client needs its own response shape, aggregation, and payload budget; a one-size edge forces mobile to over-fetch and web to under-fetch. Client-specific gateway tiers must scale independently — mobile bursts on commute hours, web on business hours — without coupling one client's changes to another's.",
+      "weights": { "scalability": 0.0, "maintainability": 0.0, "reliability": 0.5, "security": 0.0, "performance": 0.6, "simplicity": 0.0 },
+      "expected": { "primary": "backend-for-frontend", "acceptable_primary": ["backend-for-frontend", "api-gateway"] },
+      "notes": "Per-client gateway aggregation; a single central api-gateway is the near miss. Maintainability-weighted variants flip this pair — performance/reliability weighting is load-bearing."
+    },
+    {
+      "scenario_id": "dataflow-stream-kappa",
+      "family": "dataflow",
+      "category": "dataflow",
+      "domain": "fraud-detection",
+      "split": "holdout",
+      "description": "A fraud-detection platform must score every payment event as it arrives, deriving all views — dashboards, alerts, and features — from a single immutable event stream. Batch and serving layers must not diverge: whenever logic changes, views are recomputed by replaying the log, not by maintaining a parallel batch pipeline. Stream throughput must scale elastically with event volume across partitioned processors.",
+      "weights": { "scalability": 0.7, "maintainability": 0.0, "reliability": 0.0, "security": 0.0, "performance": 0.0, "simplicity": 0.0 },
+      "expected": { "primary": "kappa-architecture", "acceptable_primary": ["kappa-architecture", "pipe-and-filter"] },
+      "notes": "Stream-only with log replay; pipe-and-filter (stateless stage chain without the replay log) is the near miss."
+    },
+    {
+      "scenario_id": "dataflow-etl-pipeline",
+      "family": "dataflow",
+      "category": "dataflow",
+      "domain": "etl",
+      "split": "holdout",
+      "description": "A nightly data platform ingests raw exports, then applies a fixed sequence of transformations — cleanse, normalize, enrich, aggregate — feeding a warehouse. Each stage reads its predecessor's output, is independently testable, and can be swapped without touching upstream stages. Batch throughput must scale by parallelizing stage execution across records, and new transformations slot in as additional stages.",
+      "weights": { "scalability": 0.0, "maintainability": 0.7, "reliability": 0.0, "security": 0.0, "performance": 0.0, "simplicity": 0.0 },
+      "expected": { "primary": "pipe-and-filter", "acceptable_primary": ["pipe-and-filter", "kappa-architecture"] },
+      "notes": "Batch transformation chain; kappa (always-on stream with replay log) is the near miss."
+    }
+  ]
+}
