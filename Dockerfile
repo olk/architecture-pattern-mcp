@@ -105,7 +105,8 @@ ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONPATH="/app/src" \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    CONFIG_PATH=/app/config/config.json
+    CONFIG_PATH=/app/config/config.json \
+    PIPELINE_TIMEOUT_SECONDS=1200
 
 USER 1000:1000
 

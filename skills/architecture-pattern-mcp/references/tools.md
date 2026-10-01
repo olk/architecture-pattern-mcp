@@ -327,5 +327,6 @@ Config lives in the server's `config/config.json` (env-overridable) — useful w
 | `retrieval.style_score_threshold` | `RETRIEVAL_STYLE_SCORE_THRESHOLD` | 50 | below this, `layered-monolith` + `is_fallback: true` |
 | `retrieval.top_k_patterns` | `RETRIEVAL_TOP_K_PATTERNS` | 5 | patterns carried into generation |
 | `tasks.heartbeat_interval_seconds` | `TASKS_HEARTBEAT_INTERVAL_SECONDS` | 30 | progress notifications (other clients only; OMP's deadline ignores them) |
+| `pipeline.timeout_seconds` | `PIPELINE_TIMEOUT_SECONDS` | 1200 | wall-clock budget for one complete design run (all phases, all retries); expiry cancels the run and the call fails with `WorkflowTimeoutError` |
 | `validation.max_retries` | `VALIDATION_MAX_RETRIES` | 2 | LLM-output repair retries on schema violations |
 | `pattern_directory` | `PATTERN_DIRECTORY` | `~/.config/architecture-pattern-mcp/pattern` | where the 40 pattern JSON files live |

@@ -40,6 +40,11 @@ services:
 
       - PATTERN_DIRECTORY=./pattern
 
+      # Wall-clock budget for one complete design run (all phases, all retry
+      # attempts). Expiry cancels the run and fails the call with
+      # WorkflowTimeoutError. Raise it when reasoning is enabled.
+      - PIPELINE_TIMEOUT_SECONDS=${PIPELINE_TIMEOUT_SECONDS:-1200}
+
       - RETRIEVAL_BM25_TOP_K=20
       - RETRIEVAL_DENSE_TOP_K=20
       # Stage-1 fusion leg weights (dense + BM25 must sum to 1.0; a startup

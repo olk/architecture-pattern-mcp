@@ -64,6 +64,7 @@ _SECRET_KEY_RE = re.compile(r"(KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL)", re.IGNORE
 _ENV_PREFIXES: tuple[str, ...] = (
     "GENERATOR_",
     "EMBEDDER_",
+    "PIPELINE_",
     "RERANKER_",
     "RETRIEVAL_",
     "REASONING_",

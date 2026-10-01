@@ -59,7 +59,12 @@ from workflows import Context, Workflow, step
 from workflows.events import StartEvent, StopEvent
 
 from src.agent import SoftwareArchitectAgent
-from src.config import EmbedderConfig, RetrievalConfig, RerankerConfig
+from src.config import (
+    EmbedderConfig,
+    PipelineConfig,
+    RetrievalConfig,
+    RerankerConfig,
+)
 from src.design_normalization import denormalize_contracts
 from src.errors import MalformedArchitectureOverviewError
 from src.patterns.loader import PatternLoader
@@ -544,6 +549,7 @@ class ArchitecturePipeline(Workflow):
         embedder_config: EmbedderConfig,
         retrieval_config: RetrievalConfig | None = None,
         reranker_config: RerankerConfig | None = None,
+        pipeline_config: PipelineConfig | None = None,
         reasoning_client: ReasoningClient | None = None,
     ) -> None:
         """
@@ -563,8 +569,12 @@ class ArchitecturePipeline(Workflow):
                 shannonthinking / code-reasoning pre-LLM traces (Plan v5).
                 When None or disabled, phase prompts receive the degraded
                 in-prompt thinking scaffold instead of an external trace.
+            pipeline_config: Workflow budget for one complete run (all phases,
+                all retry attempts). Defaults to
+                ``DEFAULT_PIPELINE_TIMEOUT_SECONDS`` when omitted.
         """
-        super().__init__(timeout=1200)
+        self._pipeline_config = pipeline_config or PipelineConfig()
+        super().__init__(timeout=self._pipeline_config.timeout_seconds)
         self._agent = agent
         self._pattern_loader = pattern_loader
         self._embedder_config = embedder_config
@@ -585,6 +595,7 @@ class ArchitecturePipeline(Workflow):
                 "agent_type": type(agent).__name__,
                 "pattern_loader_loaded": pattern_loader.is_loaded,
                 "retrieval_config": self._retrieval_config.model_dump(),
+                "pipeline_config": self._pipeline_config.model_dump(),
                 "reranker_config": self._reranker_config.model_dump(),
                 "reasoning_enabled": reasoning_client.enabled if reasoning_client else False,
             }

@@ -55,6 +55,9 @@
     }
   },
   "pattern_directory": "{env:PATTERN_DIRECTORY:-~/.config/architecture-pattern-mcp/pattern}",
+  "pipeline": {
+    "timeout_seconds": "{env:PIPELINE_TIMEOUT_SECONDS:-1200}"
+  },
   "validation": {
     "max_retries": "{env:VALIDATION_MAX_RETRIES:-2}",
     "retry_on_fail": "{env:VALIDATION_RETRY_ON_FAIL:-true}"

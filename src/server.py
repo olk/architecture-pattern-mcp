@@ -390,6 +390,7 @@ class MCPArchitectServer:
                 embedder_config=self._config.embedder,
                 retrieval_config=self._config.retrieval,
                 reranker_config=self._config.reranker,
+                pipeline_config=self._config.pipeline,
                 reasoning_client=self._reasoning_client,
             )
 

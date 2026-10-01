@@ -513,6 +513,7 @@ If the configured model already contains a provider prefix (e.g. `openai/gpt-4o-
 | `RETRIEVAL_ANALYSIS_BLEND_WEIGHT` | `0.7` | Weight on analysis score in blend |
 | `RETRIEVAL_FUSION_BLEND_WEIGHT` | `0.3` | Weight on fusion score in blend |
 | `RETRIEVAL_WEIGHT_SMOOTHING_ALPHA` | `0.7` | Weight smoothing alpha |
+| `PIPELINE_TIMEOUT_SECONDS` | `1200` | Wall-clock budget (seconds) for one complete design run — all phases (analyze → generate → evaluate → refine) and every retry attempt. On expiry the run is cancelled and the tool call fails with `WorkflowTimeoutError`; the partial design is discarded. Raise it when `REASONING_ENABLED=true` on a slow provider, lower it to fail fast. Config key: `pipeline.timeout_seconds`. |
 | `RETRIEVAL_VERBOSE_TIMING` | `false` | Log phase timings at INFO level |
 | `RETRIEVAL_MAX_TRIES` | `3` | Max design loop attempts |
 | `RETRIEVAL_MIN_QUALITY_SCORE` | `50.0` | Early-stop quality threshold |

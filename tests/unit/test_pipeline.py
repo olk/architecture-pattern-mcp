@@ -40,8 +40,10 @@ Design Patterns Tested:
 - DP-6: Observer Pattern REPLACED by WorkflowHandler.stream_events()
 """
 
+import asyncio
 import pytest
 from unittest.mock import MagicMock, patch
+from workflows.errors import WorkflowTimeoutError
 
 from src.pipeline import (
     AnalysisResult,
@@ -52,7 +54,7 @@ from src.schemas.architecture import ArchitectureDesignResponse
 from src.schemas.design import ArchitectureDesign, ArchitectureOverview
 from src.schemas.enums import ArchitectureStyle
 from src.schemas.evaluation import EvaluationSummary, MetricResult, PipelineResult
-from src.config import RetrievalConfig
+from src.config import PipelineConfig, RetrievalConfig
 from src.schemas.quality import QualityMetrics
 
 
@@ -367,7 +369,7 @@ class MockBM25Retriever:
         return nodes[:self._top_k]
 
 
-def create_test_pipeline(retrieval_config=None):
+def create_test_pipeline(retrieval_config=None, pipeline_config=None):
     """Create a test pipeline with mock dependencies.
 
     Defaults to min_fusion_score=0.0: the mock reranker does not stamp
@@ -382,10 +384,68 @@ def create_test_pipeline(retrieval_config=None):
         pattern_loader=pattern_loader,
         embedder_config=MagicMock(),
         retrieval_config=retrieval_config or RetrievalConfig(min_fusion_score=0.0),
+        pipeline_config=pipeline_config,
     )
     pipeline._dense_retriever = MockDenseRetriever()
     pipeline._bm25_retriever = MockBM25Retriever()
     return pipeline
+
+
+class TestRunBudget:
+    """The workflow wall-clock budget comes from PipelineConfig (config.json)."""
+
+    @pytest.mark.asyncio
+    async def test_expired_budget_aborts_the_run(self):
+        """A run that outlives `pipeline.timeout_seconds` fails with WorkflowTimeoutError."""
+        pipeline = create_test_pipeline(
+            pipeline_config=PipelineConfig(timeout_seconds=0.05),
+        )
+        agent = pipeline._agent
+        inner_generate = agent.generate_structured
+
+        async def _slow_generate(system_prompt, user_prompt, response_schema):
+            await asyncio.sleep(5.0)
+            return await inner_generate(system_prompt, user_prompt, response_schema)
+
+        agent.generate_structured = _slow_generate
+
+        class _DummyReranker:
+            top_n = 1
+
+            def postprocess_nodes(self, nodes, query_bundle=None):
+                return nodes
+
+        with (
+            patch("src.patterns.retriever.SafeTEIReranker", return_value=_DummyReranker()),
+            pytest.raises(WorkflowTimeoutError),
+        ):
+            await pipeline.run_design(
+                requirements="Need scalable distributed system",
+                domain="microservices",
+            )
+
+    @pytest.mark.asyncio
+    async def test_generous_budget_completes_the_run(self):
+        """The same run finishes when the budget exceeds its wall time."""
+        pipeline = create_test_pipeline(
+            pipeline_config=PipelineConfig(timeout_seconds=300.0),
+        )
+
+        class _DummyReranker:
+            top_n = 1
+
+            def postprocess_nodes(self, nodes, query_bundle=None):
+                return nodes
+
+        with patch("src.patterns.retriever.SafeTEIReranker", return_value=_DummyReranker()):
+            refined = await pipeline.run_design(
+                requirements="Need scalable distributed system",
+                domain="microservices",
+            )
+
+        assert isinstance(refined, PipelineResult)
+
+
 
 
 class TestArchitecturePipelineInit:
