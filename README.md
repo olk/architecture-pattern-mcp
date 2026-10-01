@@ -502,7 +502,7 @@ If the configured model already contains a provider prefix (e.g. `openai/gpt-4o-
 | `RETRIEVAL_RERANK_TOP_N` | `10` | Rerank top N (slug-cut after CE) |
 | `RETRIEVAL_USE_LEAN_WIRE_SCHEMA` | `false` | Use lean response schema |
 | `RETRIEVAL_STYLE_SCORE_THRESHOLD` | `50.0` | Min analysis score for style recommendation |
-| `REASONING_ENABLED` | `true` | Server-side reasoning MCP integration (see [Structured Reasoning](#structured-reasoning-shannonthinking--code-reasoning)) |
+| `REASONING_ENABLED` | `false` | Server-side reasoning MCP integration — **opt-in**, off by default (see [Structured Reasoning](#structured-reasoning-shannonthinking--code-reasoning)) |
 | `REASONING_SPAWN_TIMEOUT_SECONDS` | `10` | Subprocess spawn timeout per reasoning tool |
 | `REASONING_STEP_TIMEOUT_SECONDS` | `20` | Per-thought tool-call timeout |
 | `REASONING_MAX_TOTAL_STEPS` | `8` | Hard cap on reasoning steps per phase |
@@ -558,10 +558,16 @@ Key properties:
 - **Trace caching** — ANALYZE and GENERATE traces are computed once per
   design request and reused across design-loop attempts.
 
-### Opting out / tuning
+### Opting in / tuning
+
+Reasoning is **disabled by default**: it measured at ~55% of end-to-end design
+latency (median 286 s of 517 s per run, plus ~77 s of extra generator time when
+the traces are absent) for no selection-quality gain in the Stage-0 benchmark —
+identical hit rate and acceptable-primary F1 across 16 scenarios. Enable it with
+`REASONING_ENABLED=true`.
 
 ```bash
-export REASONING_ENABLED=false          # disable entirely
+export REASONING_ENABLED=true           # enable the reasoning MCP integration
 export REASONING_FAIL_FAST=true         # refuse to start with broken MCPs
 ```
 
@@ -569,9 +575,11 @@ Local (non-Docker) development needs Node.js; either install the packages
 globally (`npm install -g server-shannon-thinking @mettamatt/code-reasoning`)
 or let the npx fallback download them on first use.
 
-Latency note: expect roughly +1–6 s per reasoning step. Worst case adds a
-couple of minutes per design run; the trace cache keeps typical overhead
-well below that.
+Latency note: a design run issues 14 reasoning tool calls (analyze 8, generate
+3, evaluate 3) as serial subprocesses. Measured on the Stage-0 benchmark
+(MiniMax-M2.7 generator): 14–30 s per call, median 286 s of reasoning per run —
+minutes, not seconds. The trace cache removes repeated ANALYZE/GENERATE work
+across design-loop attempts but not the first pass.
 
 Set `LOGGING_LEVEL=DEBUG` to capture the authored `thought` and tool response
 for every per-step reasoning call. Docker/systemd stacks default to INFO;

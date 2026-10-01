@@ -63,7 +63,7 @@
     "retry_on_fail": "{env:VALIDATION_RETRY_ON_FAIL:-true}"
   },
   "reasoning": {
-    "enabled": "{env:REASONING_ENABLED:-true}",
+    "enabled": "{env:REASONING_ENABLED:-false}",
     "shannonthinking_cmd": "{env:REASONING_SHANNONTHINKING_CMD:-}",
     "code_reasoning_cmd": "{env:REASONING_CODE_REASONING_CMD:-}",
     "spawn_timeout_seconds": "{env:REASONING_SPAWN_TIMEOUT_SECONDS:-10.0}",

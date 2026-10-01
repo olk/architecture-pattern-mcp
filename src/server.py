@@ -366,9 +366,10 @@ class MCPArchitectServer:
 
             # Server-side reasoning integration (Plan v5): the pipeline
             # authors each reasoning thought with an LLM and submits it to
-            # the shannonthinking / code-reasoning MCP scratchpads. Enabled
-            # by default (Docker images embed both packages); process-per-
-            # call isolation means no persistent subprocesses to manage.
+            # the shannonthinking / code-reasoning MCP scratchpads. Off by
+            # default (it measured at ~55% of end-to-end design latency for no
+            # selection-quality gain); opt in with REASONING_ENABLED=true.
+            # Process-per-call isolation means no persistent subprocesses.
             self._reasoning_client = self._build_reasoning_client()
 
             if self._reasoning_client is not None and self._reasoning_client.enabled:
