@@ -359,10 +359,10 @@ benchmark-live: ## Benchmark: in-process live run with full stage attribution
 			export REASONING_CODE_REASONING_CMD="[\"node\", \"$$root/@mettamatt/code-reasoning/dist/index.js\"]"; \
 		fi; \
 		export CONFIG_PATH="$(CURDIR)/config/config.json"; \
-		export GENERATOR_PROVIDER="$${GENERATOR_PROVIDER:-deepseek}"; \
-		export GENERATOR_MODEL="$${GENERATOR_MODEL:-deepseek-flash}"; \
-		export GENERATOR_BASE_URL="$${GENERATOR_BASE_URL:-https://api.deepseek.com/v1}"; \
-		export GENERATOR_API_KEY="$${GENERATOR_API_KEY:-$${DEEPSEEK_API_KEY:-}}"; \
+		export GENERATOR_PROVIDER="$${GENERATOR_PROVIDER:-minimax}"; \
+		export GENERATOR_MODEL="$${GENERATOR_MODEL:-MiniMax-M2.7}"; \
+		export GENERATOR_BASE_URL="$${GENERATOR_BASE_URL:-https://api.minimax.io/v1}"; \
+		export GENERATOR_API_KEY="$${GENERATOR_API_KEY:-$${MINIMAXAI_API_KEY:-}}"; \
 		export EMBEDDER_BASE_URL="$(BENCH_EMBED_URL)"; \
 		export EMBEDDER_API_KEY="$${EMBEDDER_API_KEY:-tei-noauth}"; \
 		export RERANKER_BASE_URL="$(BENCH_RERANK_URL)"; \
