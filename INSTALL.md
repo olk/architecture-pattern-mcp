@@ -18,9 +18,11 @@ deep-dive, troubleshooting).
 | TEI embedder | `olkowa/pattern-tei-embed` | Qwen3-Embedding-0.6B sidecar; required for retrieval |
 | TEI reranker | `olkowa/pattern-tei-rerank` | Reranker sidecar; required for retrieval |
 
-Tags: `latest` and the release version (currently `1.1.2`). GHCR mirrors of
-these images are not anonymously pullable — use Docker Hub. Images are
-**linux/amd64 only**; on arm64 hosts build locally instead: `make docker-build-all`.
+Tags: `latest` plus a pinned release tag per image — the MCP server releases
+independently of the TEI sidecars (TEI images change rarely), so the pins
+differ: MCP `1.1.3`, TEI embed/rerank `1.1.1`. GHCR mirrors of these images
+are not anonymously pullable — use Docker Hub. Images are **linux/amd64
+only**; on arm64 hosts build locally instead: `make docker-build-all`.
 
 Pick exactly ONE path:
 
@@ -61,20 +63,22 @@ the install steps below stay the same.
 `${MCP_HOST_PORT}`) and resolved from an env file.
 
 ```bash
-# A1. Resolve the release version and pull the images.
+# A1. Resolve the MCP release version and pull the images. TEI pins differ
+#     from the MCP version (TEI images release rarely); check the tags table
+#     at the top of this file for the current TEI pin.
 VERSION=$(grep -m 1 '^version' pyproject.toml | sed -E 's/.*"([^"]+)".*/\1/')
+TEI_VERSION=1.1.1
 docker pull "olkowa/architecture-pattern-mcp:${VERSION}"
-docker pull "olkowa/pattern-tei-embed:${VERSION}"
-docker pull "olkowa/pattern-tei-rerank:${VERSION}"
-# If a VERSION pull fails (version not yet published), check available tags and
-# fall back to latest:
+docker pull "olkowa/pattern-tei-embed:${TEI_VERSION}"
+docker pull "olkowa/pattern-tei-rerank:${TEI_VERSION}"
+# If a pull fails (tag not published), list available tags and use latest:
 #   curl -fsS 'https://hub.docker.com/v2/repositories/olkowa/architecture-pattern-mcp/tags'
 
 # A2. Write the env file next to the compose file (compose interpolation source).
 cat > docker/.env <<EOF
 MCP_IMAGE=olkowa/architecture-pattern-mcp:${VERSION}
-TEI_IMAGE=olkowa/pattern-tei-embed:${VERSION}
-TEI_RERANK_IMAGE=olkowa/pattern-tei-rerank:${VERSION}
+TEI_IMAGE=olkowa/pattern-tei-embed:${TEI_VERSION}
+TEI_RERANK_IMAGE=olkowa/pattern-tei-rerank:${TEI_VERSION}
 MINIMAXAI_API_KEY=sk-REPLACE-ME
 MCP_HOST_PORT=8060
 EOF
@@ -131,15 +135,15 @@ the `sed` below substitutes the invoking user.
 ### B0 — shared TEI infra (prerequisite, once)
 
 ```bash
-VERSION=$(grep -m 1 '^version' pyproject.toml | sed -E 's/.*"([^"]+)".*/\1/')
+TEI_VERSION=1.1.1   # TEI pins differ from the MCP version; see the tags table
 git clone https://github.com/olk/pattern-tei-infra /tmp/pattern-tei-infra
 
 # Pull Hub images and retag to the local names the infra compose expects
 # (pattern-tei-embed:latest / pattern-tei-rerank:latest).
-docker pull "olkowa/pattern-tei-embed:${VERSION}"
-docker pull "olkowa/pattern-tei-rerank:${VERSION}"
-docker tag "olkowa/pattern-tei-embed:${VERSION}" pattern-tei-embed:latest
-docker tag "olkowa/pattern-tei-rerank:${VERSION}" pattern-tei-rerank:latest
+docker pull "olkowa/pattern-tei-embed:${TEI_VERSION}"
+docker pull "olkowa/pattern-tei-rerank:${TEI_VERSION}"
+docker tag "olkowa/pattern-tei-embed:${TEI_VERSION}" pattern-tei-embed:latest
+docker tag "olkowa/pattern-tei-rerank:${TEI_VERSION}" pattern-tei-rerank:latest
 
 sudo install -d /etc/pattern-tei-infra
 sudo install -m 644 /tmp/pattern-tei-infra/docker-compose.yml /etc/pattern-tei-infra/
@@ -159,6 +163,7 @@ is already installed and running on the host, skip B0 entirely.
 ### B1 — MCP image under the local name the unit checks
 
 ```bash
+VERSION=$(grep -m 1 '^version' pyproject.toml | sed -E 's/.*"([^"]+)".*/\1/')
 docker pull "olkowa/architecture-pattern-mcp:${VERSION}"
 docker tag "olkowa/architecture-pattern-mcp:${VERSION}" architecture-pattern-mcp:latest
 ```
@@ -255,7 +260,7 @@ B: `sudo systemctl restart architecture-pattern-mcp`). Full provider list:
 | Container healthy but design tool calls fail with 401/502 | Generator API key wrong/missing in the env file, or provider env block mismatched — see generator section. |
 | Unit fails reading environment file | `/etc/architecture-pattern-mcp/.env` missing or unreadable: recreate per B2 (`root:docker 640`, user in `docker` group). |
 | `start request repeated too quickly` | Earlier start failed; inspect `journalctl -u architecture-pattern-mcp -n 50`, fix, then `systemctl reset-failed architecture-pattern-mcp` and start again. |
-| Image pull fails for `${VERSION}` | Version not yet published; check tags endpoint (A1 comment) and use `latest`. |
+| Image pull fails for `${VERSION}`/`${TEI_VERSION}` | Tag not published; check tags endpoints (A1 comment) and use `latest`. |
 
 ## Uninstall
 
