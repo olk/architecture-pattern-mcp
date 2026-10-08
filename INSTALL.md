@@ -211,7 +211,7 @@ curl -s -o /dev/null -w '%{http_code}\n' -X POST "http://localhost:8050/mcp" \
   -H 'Content-Type: application/json' \
   -H 'Accept: application/json, text/event-stream' \
   -d '{"jsonrpc":"2.0","method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"probe","version":"0.0.0"}},"id":1}'   # 200
-docker exec architecture-pattern-mcp curl -fsS http://pattern-tei-embed:8080/health   # TEI reachable, no output = OK
+docker exec architecture-pattern-mcp python -c "import urllib.request; print(urllib.request.urlopen('http://pattern-tei-embed:8080/health').status)"  # 200 = TEI reachable
 ```
 
 Installed endpoint: `http://localhost:8050/mcp` (streamable-http).
