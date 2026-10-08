@@ -824,19 +824,19 @@
       "total": 41
     },
     "src/reasoning/client.py::__init__": {
-      "classified": 2,
+      "classified": 5,
       "kill_ratio": 1.0,
-      "killed": 2,
-      "other": 3,
+      "killed": 5,
+      "other": 0,
       "survived": 0,
       "survivor_keys": [],
       "total": 5
     },
     "src/reasoning/client.py::_cache_key": {
-      "classified": 8,
-      "kill_ratio": 0.125,
-      "killed": 1,
-      "other": 5,
+      "classified": 13,
+      "kill_ratio": 0.4615,
+      "killed": 6,
+      "other": 0,
       "survived": 7,
       "survivor_keys": [
         "src.reasoning.client.x__cache_key__mutmut_13",
@@ -1080,10 +1080,10 @@
       "total": 28
     },
     "src/reasoning/client.py::_run_cached": {
-      "classified": 48,
-      "kill_ratio": 0.7292,
-      "killed": 35,
-      "other": 6,
+      "classified": 54,
+      "kill_ratio": 0.7593,
+      "killed": 41,
+      "other": 0,
       "survived": 13,
       "survivor_keys": [
         "src.reasoning.client.x\u01c1ReasoningClient\u01c1_run_cached__mutmut_11",
@@ -1162,10 +1162,10 @@
       "total": 12
     },
     "src/reasoning/client.py::run_pre_llm": {
-      "classified": 13,
+      "classified": 16,
       "kill_ratio": 1.0,
-      "killed": 13,
-      "other": 3,
+      "killed": 16,
+      "other": 0,
       "survived": 0,
       "survivor_keys": [],
       "total": 16
@@ -2171,9 +2171,9 @@
       "total": 21
     },
     "src/validation.py::validate_with_retries": {
-      "classified": 59,
-      "kill_ratio": 0.2542,
-      "killed": 15,
+      "classified": 65,
+      "kill_ratio": 0.3231,
+      "killed": 21,
       "other": 0,
       "survived": 44,
       "survivor_keys": [
@@ -2184,17 +2184,11 @@
         "src.validation.x_validate_with_retries__mutmut_16",
         "src.validation.x_validate_with_retries__mutmut_17",
         "src.validation.x_validate_with_retries__mutmut_18",
-        "src.validation.x_validate_with_retries__mutmut_19",
         "src.validation.x_validate_with_retries__mutmut_2",
-        "src.validation.x_validate_with_retries__mutmut_20",
-        "src.validation.x_validate_with_retries__mutmut_21",
+        "src.validation.x_validate_with_retries__mutmut_22",
         "src.validation.x_validate_with_retries__mutmut_23",
         "src.validation.x_validate_with_retries__mutmut_24",
-        "src.validation.x_validate_with_retries__mutmut_25",
-        "src.validation.x_validate_with_retries__mutmut_26",
         "src.validation.x_validate_with_retries__mutmut_27",
-        "src.validation.x_validate_with_retries__mutmut_28",
-        "src.validation.x_validate_with_retries__mutmut_29",
         "src.validation.x_validate_with_retries__mutmut_3",
         "src.validation.x_validate_with_retries__mutmut_30",
         "src.validation.x_validate_with_retries__mutmut_31",
@@ -2204,25 +2198,31 @@
         "src.validation.x_validate_with_retries__mutmut_35",
         "src.validation.x_validate_with_retries__mutmut_36",
         "src.validation.x_validate_with_retries__mutmut_37",
+        "src.validation.x_validate_with_retries__mutmut_38",
+        "src.validation.x_validate_with_retries__mutmut_39",
         "src.validation.x_validate_with_retries__mutmut_4",
+        "src.validation.x_validate_with_retries__mutmut_40",
+        "src.validation.x_validate_with_retries__mutmut_41",
+        "src.validation.x_validate_with_retries__mutmut_42",
         "src.validation.x_validate_with_retries__mutmut_43",
-        "src.validation.x_validate_with_retries__mutmut_44",
-        "src.validation.x_validate_with_retries__mutmut_45",
-        "src.validation.x_validate_with_retries__mutmut_46",
-        "src.validation.x_validate_with_retries__mutmut_47",
         "src.validation.x_validate_with_retries__mutmut_49",
         "src.validation.x_validate_with_retries__mutmut_50",
         "src.validation.x_validate_with_retries__mutmut_51",
         "src.validation.x_validate_with_retries__mutmut_52",
         "src.validation.x_validate_with_retries__mutmut_53",
-        "src.validation.x_validate_with_retries__mutmut_54",
         "src.validation.x_validate_with_retries__mutmut_55",
+        "src.validation.x_validate_with_retries__mutmut_56",
         "src.validation.x_validate_with_retries__mutmut_57",
         "src.validation.x_validate_with_retries__mutmut_58",
         "src.validation.x_validate_with_retries__mutmut_59",
+        "src.validation.x_validate_with_retries__mutmut_60",
+        "src.validation.x_validate_with_retries__mutmut_61",
+        "src.validation.x_validate_with_retries__mutmut_63",
+        "src.validation.x_validate_with_retries__mutmut_64",
+        "src.validation.x_validate_with_retries__mutmut_65",
         "src.validation.x_validate_with_retries__mutmut_9"
       ],
-      "total": 59
+      "total": 65
     }
   },
   "garden_attestation": {
@@ -2272,8 +2272,8 @@
         "src/validation.py::validate_with_retries"
       ],
       "detail": "",
-      "killed": 22,
-      "mutants": 68,
+      "killed": 28,
+      "mutants": 74,
       "ok": true
     },
     "unbounded-loop": {
@@ -2351,9 +2351,9 @@
       "total": 65
     },
     "src/reasoning/client.py": {
-      "classified": 484,
-      "kill_ratio": 0.6033,
-      "killed": 292,
+      "classified": 501,
+      "kill_ratio": 0.6168,
+      "killed": 309,
       "survived": 192,
       "total": 502
     },
@@ -2407,11 +2407,11 @@
       "total": 77
     },
     "src/validation.py": {
-      "classified": 80,
-      "kill_ratio": 0.375,
-      "killed": 30,
+      "classified": 86,
+      "kill_ratio": 0.4186,
+      "killed": 36,
       "survived": 50,
-      "total": 80
+      "total": 86
     }
   },
   "run": {
@@ -2421,15 +2421,15 @@
       "timeout": "938eb71709f6",
       "type_check": "2e38e77b22c3"
     },
-    "git_commit": "d5daad4f79435b0aa334a03c27ee249db66b63f7",
+    "git_commit": "6e2368558946f48d956d08c570e80e287f12cea7",
     "scratch_dir": "/home/graemer/Projekte/Python/architecture-pattern-mcp/mutants",
-    "stats_time": 40.821900012
+    "stats_time": 25.487682604
   },
   "schema": 1,
   "totals": {
-    "classified": 2959,
-    "killed": 1807,
+    "classified": 2982,
+    "killed": 1830,
     "survived": 1152,
-    "total": 3063
+    "total": 3069
   }
 }
