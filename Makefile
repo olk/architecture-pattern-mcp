@@ -270,6 +270,7 @@ docker-publish: docker-build ## Push MCP server image to Docker Hub + GHCR + git
 		echo "ERROR: uncommitted changes - commit before publishing:"; \
 		git status --short; exit 1; \
 	fi
+	docker login -u olkowa
 	docker login ghcr.io -u olk
 	$(call publish-image,$(DOCKER_IMAGE),$(DOCKER_HUB_REPO),$(GHCR_REPO))
 	@echo "MCP image published. Logging out of ghcr.io."
@@ -286,6 +287,7 @@ docker-publish: docker-build ## Push MCP server image to Docker Hub + GHCR + git
 	mcp-publisher publish
 
 docker-publish-tei: docker-build-tei ## Push both TEI images to Docker Hub + GHCR
+	docker login -u olkowa
 	docker login ghcr.io -u olk
 	$(call publish-image,$(TEI_EMBED_IMAGE),$(TEI_EMBED_HUB_REPO),$(TEI_EMBED_GHCR_REPO))
 	$(call publish-image,$(TEI_RERANK_IMAGE),$(TEI_RERANK_HUB_REPO),$(TEI_RERANK_GHCR_REPO))
