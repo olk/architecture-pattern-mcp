@@ -23,6 +23,7 @@ An MCP (Model Context Protocol) server that provides architecture design experti
   - [Explore the pattern catalog](#explore-the-pattern-catalog)
 - [🛠️ Tools at a Glance](#️-tools-at-a-glance)
 - [📖 Pattern Catalog](#-pattern-catalog)
+- [Working Together with design-pattern-mcp-local](#-working-together-with-design-pattern-mcp-local)
 - [Install Alternatives](#install-alternatives)
   - [Docker (manual)](#docker-manual)
   - [Local Development (uv)](#local-development-uv)
@@ -394,6 +395,31 @@ Each pattern includes: `name`, `category`, `context`, `benefits`, `tradeoffs`, `
 
 ---
 
+## Working Together with design-pattern-mcp-local
+
+This server answers *which system shape to build* (architecture); the sibling [design-pattern-mcp-local](https://git.odvlh.xyz/olli/design-pattern-mcp-local) answers *how each unit inside it is coded* (design patterns). An **architecture pattern** structures the whole system — its components, their relationships, and its API/data/event contracts (e.g. `event-driven`, `pipe-and-filter`, `microservices`, chosen from the 40-pattern catalog above). A **design pattern** solves one recurring implementation problem inside a single component — its participants, interactions, and language-bound code (e.g. `observer`, `process-manager`, `circuit-breaker`, chosen from the sibling's 438-pattern catalog with 13 language bindings each).
+
+Recommended order — macro first, micro second:
+
+```
+1. Call design_architecture with:
+     requirements: "ETL pipeline for IoT: Kafka → JSON → Redis geo-enrich → InfluxDB + S3"
+     domain: "data-processing"
+   # → components (Kafka source, parser filter, enricher, sinks),
+   #   relationships, API contracts, data models, event contracts
+
+2. For each component with non-trivial internal logic, call the sibling's
+   select_design_patterns with:
+     description: "<component name + responsibilities + constraints from step 1>"
+     language: "python"
+   # → primary + supporting patterns, participants, implementation_steps,
+   #   code_sketch with the bound language variant
+```
+
+Concrete handoff on the IoT example: this server emits the `pipe-and-filter` architecture (Kafka source → JSON parser filter → geolocation enricher → InfluxDB/S3 sinks, with at-least-once delivery and backpressure in the contracts). The geolocation enricher's cache-miss path then goes to `select_design_patterns` ("cache-aside enrichment with Redis fallback, Python") — e.g. a `circuit-breaker` + `retry` design with participants, `implementation_steps`, and a Python `code_sketch` — which the architecture-level component contract references but never implements.
+
+Run both servers side by side (dev host ports `:8060` architecture, `:8062` design-pattern; systemd `:8050` / `:8062`). They are independent — either order works for exploration — but architecture-first keeps component boundaries stable while the design server fills in the internals.
+
 ## Install Alternatives
 
 ### Docker (manual)
@@ -433,7 +459,11 @@ The TEI embedder (Qwen3-Embedding-0.6B) is required for domain-scoped pattern re
 
 The retrieval indexes (FAISS + BM25) are built at server startup so a misconfigured or unreachable TEI sidecar prevents startup (fail-fast) rather than breaking the user's first design request. Docker compose's `service_healthy` dependency ordering guarantees TEI is ready before the app starts.
 
-> **TEI startup:** both sidecar images (`docker/Dockerfile.tei-embed`, `docker/Dockerfile.tei-rerank`) ship a self-built TEI router (v1.9.4 + unmerged [PR #884](https://github.com/huggingface/text-embeddings-inference/pull/884)) with `WARMUP_TOKENS=0` by default — this skips the synthetic warmup pass (measured ~131 s embed / ~78 s rerank) so containers become ready after weight load only. Override per sidecar via `TEI_WARMUP_TOKENS` / `TEI_RERANK_WARMUP_TOKENS`.
+> **TEI startup:** both sidecar images (`docker/Dockerfile.tei-embed`, `docker/Dockerfile.tei-rerank`) ship a self-built TEI router (v1.9.4 + unmerged [PR #884](https://github.com/huggingface/text-embeddings-inference/pull/884)) with `WARMUP_TOKENS=0` by default — this skips the synthetic warmup pass (measured ~131 s embed / ~78 s rerank) so containers become ready after weight load only. Override per sidecar via `TEI_WARMUP_TOKENS` / `TEI_RERANK_WARMUP_TOKENS` (positive N warms with N tokens instead; values > `MAX_BATCH_TOKENS` are rejected at startup).
+
+**GPU TEI:** the shipped sidecars are CPU images (`FROM ghcr.io/huggingface/text-embeddings-inference:cpu-1.9`, ORT backend — batch cap 8 for this model) and the Stage-0 router is built CPU-only (`--features ort,http`). This repo ships **no GPU build path** — running on CUDA would require changing the runtime base image to `:cuda-1.9` *and* rebuilding the router with the CUDA feature set, which is not a supported recipe here (only `design-pattern-mcp-local` ships one: `make docker-build-tei-embed-gpu`). A stock upstream TEI image without [PR #884](https://github.com/huggingface/text-embeddings-inference/pull/884) silently ignores `WARMUP_TOKENS`.
+
+**Already-running embedder/reranker:** when embedding and reranking endpoints already run on other servers, point the MCP server at them and skip the sidecars (`docker/docker-compose.hub.yml` starts the MCP server only and wires exactly this). The remote embedder must be TEI serving the same model — keep `EMBEDDER_PROVIDER=tei` and set `EMBEDDER_BASE_URL` to its OpenAI-compatible route (dev-compose convention: `http://<host>:8080/v1`; the `config.json` default is the bare `http://pattern-tei-embed:8080`). This server's embedder config has **no `model` field** (`src/patterns/embedder.py::build_embedder` sends an empty model name for the non-`tei` providers), so `openai` / `ollama` / `vllm` / `hosted_vllm` cannot address an arbitrary remote model without a code change. The reranker is **not** a LiteLLM client — it POSTs `{RERANKER_BASE_URL}/rerank` directly (default `http://pattern-tei-rerank:8080`, no `/v1`); provider/model syntax in the [LiteLLM embedding docs](https://docs.litellm.ai/docs/embedding/supported_embedding) applies to the embedder only. `EMBEDDER_API_KEY` is forwarded as the LiteLLM `api_key` (any non-empty string satisfies a no-auth TEI).
 
 ---
 
