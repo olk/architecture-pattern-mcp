@@ -433,6 +433,8 @@ The TEI embedder (Qwen3-Embedding-0.6B) is required for domain-scoped pattern re
 
 The retrieval indexes (FAISS + BM25) are built at server startup so a misconfigured or unreachable TEI sidecar prevents startup (fail-fast) rather than breaking the user's first design request. Docker compose's `service_healthy` dependency ordering guarantees TEI is ready before the app starts.
 
+> **TEI startup:** both sidecar images (`docker/Dockerfile.tei-embed`, `docker/Dockerfile.tei-rerank`) ship a self-built TEI router (v1.9.4 + unmerged [PR #884](https://github.com/huggingface/text-embeddings-inference/pull/884)) with `WARMUP_TOKENS=0` by default — this skips the synthetic warmup pass (measured ~131 s embed / ~78 s rerank) so containers become ready after weight load only. Override per sidecar via `TEI_WARMUP_TOKENS` / `TEI_RERANK_WARMUP_TOKENS`.
+
 ---
 
 ## Configuration

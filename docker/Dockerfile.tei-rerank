@@ -53,12 +53,55 @@
 #   PORT                   (default 8080; TEI's port.  NOTE: if you change this,
 #                          update the healthcheck curl URL in docker-compose.yml
 #                          and any RERANKER_BASE_URL that hard-codes :8080.)
+#   WARMUP_TOKENS          (default in upstream TEI: unset = warm
+#                          min(max_input_length, max_batch_tokens) on CPU;
+#                          we set 0 to skip the synthetic warmup pass —
+#                          the 78s measured startup cost — via PR #884.
+#                          Positive N warms with N tokens instead; values
+#                          > MAX_BATCH_TOKENS are rejected at startup.)
+#
+# NOTE: the runtime binary is a self-built v1.9.4+PR#884 router (Stage 0),
+# not the stock cpu-1.9 binary. See the Stage 0 comment for rebase rules.
 #
 # Clap precedence: CLI flag > env var > built-in default.
 # We keep --model-id and --dtype pinned in CMD to protect invariants
 # (ORT requires float32; sequence-classification models don't use --pooling
-# so it is correctly absent).  All seven tunables above are configurable via
+# so it is correctly absent).  All eight tunables above are configurable via
 # environment variables.
+
+# Stage 0: Build the TEI router from source (v1.9.4 + unmerged PR #884).
+#
+# PR #884 (huggingface/text-embeddings-inference#884, head 5806bdc) adds
+# --warmup-tokens / WARMUP_TOKENS so the synthetic startup warmup pass can
+# be skipped (0) or shrunk (N) without lowering MAX_BATCH_TOKENS. The PR is
+# OPEN/UNMERGED as of 2026-10-09; both ARGs must be bumped together when
+# rebasing onto a newer tag or when the PR merges (then drop the cherry-pick).
+# Feature set matches the PR author's validated x86 ONNX build:
+#   cargo build -p text-embeddings-router --no-default-features --features ort,http
+# (TEI README's recommended x86 ONNX path is `cargo install --path router -F ort`.)
+FROM rust:1.92-bookworm AS router-builder
+# rust:1.92 matches upstream rust-toolchain.toml channel 1.92.0; bookworm
+# matches the cpu-1.9 runtime base (Debian 12) so glibc ABI lines up.
+ARG TEI_SOURCE_VERSION=v1.9.4
+ARG TEI_PR884_SHA=5806bdc99f11ad490cd7e38c1f4dd757034c0adb
+RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+RUN git clone --depth 1 --branch ${TEI_SOURCE_VERSION} \
+        https://github.com/huggingface/text-embeddings-inference.git /usr/src/tei \
+    && cd /usr/src/tei \
+    && git fetch --depth 2 origin ${TEI_PR884_SHA} \
+    && git diff FETCH_HEAD^ FETCH_HEAD -- backends/src/lib.rs router/src/lib.rs router/src/main.rs \
+        | git apply --3way
+# NOTE: not `git cherry-pick` — the shallow tag clone shares no history with
+# the PR commit, so cherry-pick degrades to add/add conflicts on every file.
+# Diffing the PR commit against its own parent (^) applies exactly the PR's
+# changes to the three code files; docs/README drift on main is skipped.
+# FETCH_HEAD^ is present because the fetch uses depth 2; the fetch targets
+# the pinned SHA (not pull/884/head) so a PR update cannot move the build.
+RUN cd /usr/src/tei \
+    && cargo build --release -p text-embeddings-router \
+        --no-default-features --features ort,http
+# Binary lands at /usr/src/tei/target/release/text-embeddings-router
 
 # Stage 1: download weights into a local directory.
 FROM python:3.10-slim AS model-downloader
@@ -96,6 +139,12 @@ FROM ghcr.io/huggingface/text-embeddings-inference:cpu-1.9
 
 COPY --from=model-downloader /data /data
 
+# Overwrite the stock router with the v1.9.4+PR#884 build (same feature
+# family: ORT backend, HTTP router). The cpu-1.9 base provides the shared
+# libs (glibc, onnxruntime dylib) the binary was linked against.
+COPY --from=router-builder /usr/src/tei/target/release/text-embeddings-router \
+     /usr/local/bin/text-embeddings-router
+
 ENV HF_HUB_OFFLINE=1
 
 # Safe tunables as image-level defaults.  These are overridable at runtime via
@@ -106,10 +155,11 @@ ENV MAX_CONCURRENT_REQUESTS=64 \
     AUTO_TRUNCATE=true \
     PROMETHEUS_PORT=0 \
     HOSTNAME=0.0.0.0 \
-    PORT=8080
+    PORT=8080 \
+    WARMUP_TOKENS=0
 
 # Pinned invariants only.  Runtime tunables (MAX_CONCURRENT_REQUESTS,
 # MAX_BATCH_TOKENS, MAX_CLIENT_BATCH_SIZE, AUTO_TRUNCATE, PROMETHEUS_PORT,
-# HOSTNAME, PORT) are controlled via environment variables — see header comment.
+# HOSTNAME, PORT, WARMUP_TOKENS) are controlled via environment variables — see header comment.
 CMD ["--model-id", "/data/reranker-model", \
      "--dtype", "float32"]
