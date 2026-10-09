@@ -12,6 +12,7 @@ An MCP (Model Context Protocol) server that provides architecture design experti
 ## Table of Contents
 
 - [⚡ Quickstart](#-quickstart)
+- [Install via AI Agent](#install-via-ai-agent)
 - [🔌 Connect Your Agent](#-connect-your-agent)
   - [Claude Code](#claude-code)
   - [OpenCode](#opencode)
@@ -54,6 +55,24 @@ make client
 ```
 
 Server starts on **streamable-http** at `http://localhost:8060/mcp` (dev compose host port; systemd uses 8050). Then connect your agent below.
+
+---
+
+## Install via AI Agent
+
+To have an AI coding agent install the Docker stack from prebuilt images (no local build), point it at **[INSTALL.md](INSTALL.md)** — the non-interactive agent runbook (copy-paste commands, expected outputs, verification probes).
+
+```text
+Clone this repo, then follow INSTALL.md Path A (compose stack, port 8060).
+My generator API key is: sk-...
+```
+
+Pick one path in `INSTALL.md`:
+
+- **Path A — Compose stack** (`:8060`): evaluating / developing, no sudo needed. Own TEI sidecar copies.
+- **Path B — systemd stack** (`:8050`): persistent host service, starts at boot, needs `sudo`. Uses the shared `pattern-tei-infra` TEI stack.
+
+The agent needs a repo clone, Docker ≥ v2.20 with group membership, ~5 GB free, a `MINIMAXAI_API_KEY` (or another provider per `INSTALL.md#switching-the-generator-llm`), and linux/amd64 (on arm64 it builds locally via `make docker-build-all`). After install, continue with [Connect Your Agent](#-connect-your-agent) below.
 
 ---
 
