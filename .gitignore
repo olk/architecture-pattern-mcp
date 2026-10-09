@@ -169,7 +169,7 @@ cython_debug/
 #.idea/
 
 .worktrees/
-.opencode/
+.omp/
 
 # mutmut generated scratch tree (mutation-test output, regenerable)
 mutants/
