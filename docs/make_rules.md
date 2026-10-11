@@ -183,6 +183,13 @@ the decision modules (`SCOPE_FILES`: `src/text_validation.py`,
 comparison activates via `ARCH_CONSISTENCY_MODEL`, checker identity pinned
 per run). Advisory; findings are leads to triage, not failures.
 
+### `verify-patterns`
+`scripts/verify-patterns.sh` — validates every `pattern/*.json` against
+`docs/pattern-schema.json` via ajv-cli (`ajv validate -s <schema> -d
+"pattern/*.json" --all-errors`; the glob stays quoted so ajv expands it).
+Requires the npm toolchain (`npm install -g ajv-cli`); exits non-zero on
+the first schema violation.
+
 ### `verify-all`
 Aggregator over the four `verify-*` targets. Nightly entry point — safe on
 toolchain-less boxes because the gated members self-skip (see Conventions).
