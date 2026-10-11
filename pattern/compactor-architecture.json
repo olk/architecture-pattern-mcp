@@ -1,0 +1,164 @@
+{
+  "name": "compactor",
+  "category": "data",
+  "context": "Two shapes of the same problem. The first is the object-count problem: a lake or warehouse table accumulates an unbounded number of tiny files — every micro-batch writes one, every CDC checkpoint writes one — and per-object overhead (a LIST of the prefix, an open/close, a per-file row-group index, a split per file in the query plan) starts to dominate the bytes actually read. Query planning time grows with file count, not data volume, so a table can get slower while it gets no bigger. The second is the supersession problem: an event log keeps every historical value of every key, when consumers only ever want the latest one, so the log grows without the information content growing. The compactor is the background maintenance activity that periodically rewrites many small artifacts into fewer larger ones (bin packing), and/or collapses superseded records down to the last surviving value per key. Both operations are semantically no-ops on the data: Delta's OPTIMIZE 'makes no data related changes to the table, so a read before and after an OPTIMIZE has the same results', and readers under snapshot isolation 'are not interrupted when OPTIMIZE removes unnecessary files from the transaction log'. What changes is the physical layout. In Kafka the cleaner does the second shape: a record with key K at offset O is obsolete if a later record with the same key exists, and a null-payload tombstone deletes the value and is itself removed after delete.retention.ms so the log does not accumulate deletions either. The essential design constraint is that compaction must never block or lie to readers — Kafka's cleaner works on a background thread pool, reads see every message that was written, and the guarantees are stated as 'any consumer progressing from the start of the log will see at least the final state of records', not 'the consumer sees only the final state'.",
+  "benefits": [
+    "Removes per-object overhead that dominates read cost: planning cost scales with file count, so merging thousands of small files into a few hundred target-sized files cuts planning time, metadata listing, and open/close syscalls far more than proportionally",
+    "Bounds state growth in log-structured stores — compaction retains the latest value per key and garbage-collects tombstones, so a topic tracking per-entity state stays proportional to the number of entities, not to total events ever published",
+    "Preserves reader-visible semantics while changing physical layout: OPTIMIZE is explicitly non-mutating and snapshot isolation keeps concurrent readers uninterrupted, so compaction needs no coordination window with readers",
+    "Idempotent by construction — bin-packing run twice on the same dataset has no effect the second time, which makes it safe to schedule aggressively and retry freely",
+    "Reclaims space from superseded versions and from accumulated deletion markers rather than waiting for a coarse time-based retention sweep",
+    "Prerequisite for other data-layout gains: sorting and clustering rewrites are extensions of the bin-packing interface, so the compaction job is the existing machinery they reuse",
+    "Partial progress is available for large tables — Iceberg can split a compaction into multiple commits so a failure costs one file group rather than the whole rewrite",
+    "Enables destructive removal of the merge-on-read delete files, which otherwise accumulate as their own set of small objects and degrade every reader that must apply them",
+    "Reclaims space in the LSM layer too — merging sorted runs reduces read amplification and restores the key-range locality that a burst of writes destroys"
+  ],
+  "tradeoffs": [
+    "It costs I/O and compute that produces no new information — compaction reads and rewrites the same data, so it competes with foreground queries for the same cluster",
+    "Compaction is asynchronous and throttled, so it never finishes instantly: Kafka's max.compaction.lag.ms is explicitly 'not a hard guarantee since it is still subjected to the availability of log cleaner threads and the actual compaction time'",
+    "The obsolete-record rule is weaker than it sounds — compaction 'does not guarantee there is only one record with the same key at any one time', so code must tolerate seeing multiple versions of a key",
+    "The dirty-ratio threshold trades space against write amplification: min.cleanable.dirty.ratio bounds wasted space (default 0.5 means at most ~50% of the log can be duplicates) but a higher value means fewer, more efficient cleanings and more wasted space",
+    "Target file size is workload-dependent and autotuned by some engines, which means compaction output size changes as the table grows; a large table can always contain files below the current target",
+    "Concurrent writers create collisions: if a data file is updated while compaction is running, a non-partial-progress rewrite may have to recompact everything rather than just the conflicting commit",
+    "Compacting cold partitions while writers are active risks data conflicts, which is why the recommended strategy is to exclude actively written partitions and rewrite only cold ones",
+    "Sorting and Z-order clustering are much more expensive than plain bin packing and usually spill to disk — compaction's cheap variant is not a substitute for its expensive one",
+    "Tombstone retention is a correctness parameter, not a space parameter: delete.retention.ms bounds how long a consumer starting from offset 0 may take to complete a read before it can miss a delete marker entirely"
+  ],
+  "quality_attributes": {
+    "scalability": 8,
+    "maintainability": 8,
+    "reliability": 8,
+    "security": 5,
+    "performance": 9,
+    "simplicity": 6
+  },
+  "suitable_domains": [
+    "data-pipelines",
+    "data-processing",
+    "big-data-analytics",
+    "data-intensive-workloads",
+    "distributed-data-pipelines",
+    "etl",
+    "stream-processing",
+    "messaging-systems",
+    "cloud-native-applications",
+    "batch-processing",
+    "file-processing",
+    "iot-data-ingestion"
+  ],
+  "unsuitable_domains": [
+    "real-time-interactive-systems",
+    "ultra-low-latency-requirements",
+    "sub-millisecond-response-requirements",
+    "low-latency-required",
+    "audit-regulatory",
+    "systems-requiring-audit-trails",
+    "early-stage-startups",
+    "prototypes",
+    "small-applications"
+  ],
+  "use_cases": [
+    "Delta Lake / Iceberg / Hudi lakehouse tables rewritten every few hours with OPTIMIZE or the rewrite_data_files procedure after each day's micro-batches have landed as small files",
+    "Kafka topics holding per-entity state (a compacted topic of customer or device state) where only the latest value per key is meaningful and the full history is dead weight",
+    "RocksDB / LevelDB-style state stores where a write burst creates many overlapping sorted runs and read amplification climbs",
+    "Delta Lake auto compaction triggered synchronously after a write succeeds, compacting only files that have not been compacted before, with minNumFiles as the trigger",
+    "Merge-on-read tables accumulating delete files that are folded back into data files once a threshold of delete operations per file is reached",
+    "Rolling a Kafka retention-only topic to a compacted topic once the key space has a clear notion of 'latest value wins'",
+    "Compacting an event log retained for replay by seeding a fresh compacted topic from a snapshot, then letting the cleaner maintain it"
+  ],
+  "avoid_when": [
+    "The dataset is small enough that file count is not the bottleneck — compaction adds a job and a failure mode for no measurable gain",
+    "The log is a genuine append-only audit trail where every historical value must survive deletion, since compaction destroys superseded versions by design",
+    "There is no tombstone discipline on a compacted topic — without tombstones, deleted keys are never removed and the 'compacted' topic grows without bound",
+    "Readers require a strict, immediate latest-value view rather than the documented at-least-final-state guarantee",
+    "The workload is dominated by write latency with no read benefit in sight; compaction spends foreground cluster capacity for a future read improvement",
+    "Partitions are still being written by other jobs and partial progress is disabled, so a collision forces a full recompact",
+    "You need the compaction deadline to be a hard guarantee — it never is, it depends on cleaner thread availability"
+  ],
+  "component_types": [
+    "Compaction trigger: the policy that decides when to compact — a schedule, a small-file count threshold, a dirty-ratio threshold, or a post-write hook",
+    "File group planner: selects the candidate files and groups them into rewrite units, using a target file size and a min/max size ratio to decide what counts as small",
+    "Rewriter / cleaner worker: performs the read-rewrite-write cycle, either merging sorted runs and dropping obsolete versions or bin-packing small data files",
+    "Commit manager: publishes the rewrite atomically, either as one snapshot commit or, with partial progress, as several so a failure costs one commit",
+    "Tombstone (delete marker): a keyed record with null payload that removes the previous value for that key, itself garbage-collected after delete.retention.ms",
+    "Clean / dirty log boundary: the segment boundary separating already-compacted segments from the dirty region eligible for cleaning; the active segment is always uncleanable",
+    "Retention policy: the competing cleanup policy on the same log, since compaction and time/size-based deletion can be combined and interact",
+    "Layout policy: optional sort order or clustering key applied during the rewrite — an extension of bin packing, not a separate job",
+    "Metrics surface: uncleanable.partitions.count, max.compaction.delay.secs, max.clean.time.secs, and per-table added/removed file statistics"
+  ],
+  "technology_stack": [
+    "Apache Kafka log cleaner",
+    "Apache Iceberg RewriteDataFiles",
+    "Delta Lake OPTIMIZE",
+    "Databricks OPTIMIZE and auto compaction",
+    "Apache Spark coalesce and repartition",
+    "Amazon Athena OPTIMIZE",
+    "RocksDB leveled compaction",
+    "Apache Hudi compaction",
+    "Amazon S3 and GCS object stores",
+    "Prometheus and Grafana"
+  ],
+  "anti_patterns": [
+    "Scheduling compaction by calendar only and letting small-file count grow unboundedly between runs — the cost curve is driven by file count, not by elapsed time",
+    "Compacting a whole table when one partition is pathological; the fix is a partition-scoped rewrite with a predicate",
+    "Running a global sort or Z-order rewrite on the same schedule as cheap bin packing, since the expensive variant can spill to disk and dominate cluster time",
+    "Rewriting actively-written partitions, guaranteeing write-write conflicts instead of the harmless metadata conflicts a cold-partition rewrite produces",
+    "Disabling partial progress on a large table, so a single conflict forces a full recompact of every file",
+    "Assuming compaction guarantees exactly one record per key and writing a consumer that breaks when it sees two",
+    "Compacting a topic with no tombstone convention, so deleted keys never leave the log",
+    "Setting delete.retention.ms purely to save space, when it is actually a bound on how long a full-scan consumer may take before it can miss deletes",
+    "Targeting the largest possible files: very large files cap scan parallelism, which is the opposite failure of the small-file problem",
+    "Running compaction on the same resources as latency-sensitive foreground queries with no throttling or separate warehouse"
+  ],
+  "migration_from": [
+    "event-sourcing",
+    "pipe-and-filter",
+    "batch-processing",
+    "monolithic"
+  ],
+  "migration_to": [
+    "data-mesh",
+    "event-driven",
+    "space-based"
+  ],
+  "related_patterns": [
+    "data-mesh",
+    "event-driven",
+    "event-sourcing",
+    "pipe-and-filter",
+    "space-based",
+    "master-slave",
+    "kappa-architecture",
+    "lambda-architecture"
+  ],
+  "design_principles": [
+    "Compaction must be semantically invisible: a read before and a read after return the same rows, so no reader coordination is needed",
+    "Merge to a target size, not a maximum size — overshooting caps query parallelism, undershooting recreates the original problem",
+    "Idempotence is a design requirement, not a happy accident, so the job can be retried and rescheduled without a correctness check",
+    "Tune the dirty ratio as a space-versus-write-amplification dial and read the compaction-delay metrics to confirm the cleaner is keeping up",
+    "Compact cold partitions first; exclude actively written ones and accept that metadata conflicts are resolvable while data conflicts are not",
+    "Tombstone retention is a correctness bound on consumer read duration — size it for the slowest full-scan reader, not for the space savings",
+    "In an LSM or log-structured store, compaction is the mechanism that converts write burst into read locality; skipping it defers the cost to read latency"
+  ],
+  "best_practices": [
+    "Measure file count and plan time before and after; the win should be visible in planning latency and per-file metadata overhead, not just in a lower storage bill",
+    "Start from the table's target file size and use the min/max ratio defaults — 75% of target as the minimum candidate size and 180% as the maximum — before tuning anything",
+    "Set MIN_INPUT_FILES so that partitions smaller than the target size still get compacted when enough small files accumulate (the default is 5)",
+    "Enable partial progress for tables large enough that a failed rewrite is expensive, and cap max_file_group_size_bytes (100 GB by default) for unpartitioned tables",
+    "Use auto compaction or optimized writes so small files never accumulate in the first place, rather than relying on a catch-up job",
+    "Use repartition rather than coalesce when compacting many small files, since coalesce merges them in the narrow dependency and repartition shuffles for real parallelism",
+    "Alert on max.compaction.delay.secs and uncleanable.partitions.count on Kafka topics with a compact cleanup policy",
+    "On compacted Kafka topics, size delete.retention.ms above the longest expected catch-up read from offset 0 and treat min/max compaction lag as SLOs to monitor",
+    "Verify that no query plan regresses after a layout rewrite — a compaction that removes file-level pruning makes things worse, not better"
+  ],
+  "references": [
+    "Confluent, Kafka Log Compaction — Confluent Documentation, https://docs.confluent.io/kafka/design/log_compaction.html",
+    "Apache Kafka, Topic Configs (cleanup.policy, min.cleanable.dirty.ratio, min/max.compaction.lag.ms, delete.retention.ms, segment.bytes) — Apache Kafka 4.3 documentation, https://kafka.apache.org/43/configuration/topic-configs/",
+    "Apache Kafka, LogCleaner source (obsolete-record rule, clean/dirty/uncleanable segmentation, background thread pool) — GitHub, https://github.com/apache/kafka/blob/34fad3d94dc6349634b8cb2d7c61c9d821e339fe/core/src/main/scala/kafka/log/LogCleaner.scala",
+    "Delta Lake, Optimizations (compaction/bin-packing, idempotence, snapshot isolation, auto compaction and optimized writes) — Delta Lake documentation, https://docs.delta.io/optimizations-oss/",
+    "Databricks, Optimize data file layout (OPTIMIZE, bin-packing, auto compaction thresholds, target file size autotuning) — Databricks documentation, https://docs.databricks.com/aws/en/tables/operations/optimize",
+    "AWS Prescriptive Guidance, Maintaining tables by using compaction (bin packing, MIN_FILE_SIZE_BYTES at 75% of target, MIN_INPUT_FILES default 5, MAX_FILE_GROUP_SIZE_BYTES 100 GB, partial progress for late-arriving-data partitions, cold-partition strategy) — Apache Iceberg on AWS, https://docs.aws.amazon.com/prescriptive-guidance/latest/apache-iceberg-on-aws/best-practices-compaction.html",
+    "Apache Iceberg, Writes — merge-on-read deletes, controlling file sizes, why small files arise, https://iceberg.apache.org/docs/latest/spark-writes/",
+    "ThibauldC, Iceberg maintenance examples — rewriting data files (small files are faster to write but slower to query; planning splits from file metadata; large files limit parallelism), https://github.com/ThibauldC/iceberg-maintenance-examples"
+  ]
+}

@@ -1,0 +1,120 @@
+{
+  "category": "dataflow",
+  "name": "pattern-matching-cep",
+  "context": "A business event is only recognizable after several events have occurred, in a specific order, within a bounded time span — 'order created, then payment declined, then customer cancelled, all within 10 minutes'. Complex Event Processing declares that sequence as a pattern over a stream keyed by the correlation key and emits a match when the pattern completes, or a timed-out partial match when it does not. Contiguity between successive elements is explicit: strict ('must immediately follow'), relaxed ('other events may intervene'), or non-deterministic relaxed ('emit every possible match').",
+  "benefits": [
+    "Turns an implicit business condition scattered across many ad-hoc consumers into one declarable, testable pattern definition",
+    "Emits matches rather than state snapshots, so downstream only sees the interesting outcomes",
+    "Partial matches can be surfaced with a timeout handler, making 'started but never completed' observable instead of silent",
+    "Event-time constraints make detection deterministic with respect to data rather than arrival jitter",
+    "Looping constructs (optional, oneOrMore, times) express variable-length sequences without hand-rolled counters"
+  ],
+  "tradeoffs": [
+    "Pattern state grows with the number of distinct in-flight partial matches per key, and is never garbage collected until a match completes or times out",
+    "Non-deterministic relaxed contiguity plus looping patterns can emit a combinatorial number of matches for the same starting event",
+    "Correctness depends on the input being keyed by the correlation key — a pattern can never match across keys, so cross-entity sequences are impossible",
+    "Tuned lateness inflates memory and state churn; tuned tightly it silently drops late-arriving matches",
+    "Detection adds latency: the pattern cannot fire before the last element of the sequence arrives"
+  ],
+  "quality_attributes": {
+    "scalability": 6,
+    "maintainability": 8,
+    "reliability": 7,
+    "security": 5,
+    "performance": 5,
+    "simplicity": 6
+  },
+  "suitable_domains": [
+    "stream-processing",
+    "high-throughput-streaming",
+    "event-driven-systems",
+    "fraud-detection",
+    "anomaly-detection",
+    "real-time-processing",
+    "iot-data-processing",
+    "financial-trading",
+    "telecom-and-real-time-messaging",
+    "clickstream-analytics"
+  ],
+  "unsuitable_domains": [
+    "batch-analytics-only",
+    "simple-crud",
+    "strongly-consistent-single-entity",
+    "low-data-volume-scenarios",
+    "static-requirements"
+  ],
+  "use_cases": [
+    "Fraud scoring on card-not-present sequences (stolen credential followed by high-value order)",
+    "Order lifecycle monitoring: created, then payment failed, then abandoned within the configured timeout",
+    "Network and security telemetry: repeated failed logins followed by a successful login from a new address",
+    "IoT condition monitoring: three consecutive over-temperature readings within five minutes",
+    "Clickstream funnel detection: view -> add to cart -> purchase within a session-like timeout"
+  ],
+  "avoid_when": [
+    "The condition is a single stateless predicate on one record — that is a filter, not a pattern",
+    "A count over a time window expresses the requirement — use windowing instead of contiguity tracking",
+    "The correlation key is not known at design time and cannot be derived from the record",
+    "The sequence is unbounded in length and never terminates — no finite pattern can express it"
+  ],
+  "component_types": [
+    "Pattern: a graph of simple patterns joined by contiguity operators (begin, next, followedBy, followedByAny)",
+    "Condition: per-pattern predicate, optionally iterative so it can reference previously matched events or accumulated state",
+    "Time constraint: 'within' bound bounding the total span of a match in event time or processing time",
+    "Pattern stream: the keyed input stream paired with the pattern and an optional timestamp comparator",
+    "Process function: callback invoked per match, receiving a map from pattern name to the accepted events",
+    "Timeout handler: optional callback for partial sequences discarded by the time constraint"
+  ],
+  "technology_stack": [
+    "Apache Flink CEP",
+    "Kafka Streams",
+    "Drools",
+    "Drools Fusion",
+    "Kafka Streams CEP extension",
+    "ESP (Event Stream Processing) engines"
+  ],
+  "anti_patterns": [
+    "Using relaxed contiguity with an unbounded oneOrMore loop, producing one match per permutation of the sequence",
+    "Matching on a stream that is not keyed by the correlation key, which silently yields zero matches",
+    "Leaving 'within' unset, so partial matches accumulate forever and state never drains",
+    "Building CEP over the hot transactional path instead of over a derived, replayable alert topic",
+    "Assuming a match is delivered once — the same sequence can match again on replay of the same input"
+  ],
+  "migration_from": [
+    "hand-coded-state-machines-over-event-streams",
+    "batch-window-correlation-in-spark",
+    "post-hoc-event-correlators"
+  ],
+  "migration_to": [
+    "stateful-processing",
+    "event-driven",
+    "rule-based-system"
+  ],
+  "related_patterns": [
+    "event-driven",
+    "rule-based-system",
+    "blackboard",
+    "reactive-architecture",
+    "space-based",
+    "kappa-architecture"
+  ],
+  "design_principles": [
+    "Declaration over imperative correlation: the sequence is described, not coded",
+    "Explicit contiguity: every transition states whether intervening events break the match",
+    "Boundedness: every pattern carries a time constraint so partial state is always drainable",
+    "Key locality: detection is per correlation key, so state is bounded by in-flight entities",
+    "Partial visibility: unfinished sequences are observable, not silently discarded"
+  ],
+  "best_practices": [
+    "Start with strict contiguity and relax only when real production traffic proves the relaxed form necessary",
+    "Derive the correlation key explicitly and assert it upstream — a null key means a permanently dead pattern",
+    "Size the time constraint from observed inter-arrival distributions, not from a round number",
+    "Cap match cardinality: use skip-till-next-match semantics where overlapping matches are meaningless",
+    "Emit matches to a dedicated topic so the pattern itself stays replayable and independently testable"
+  ],
+  "references": [
+    "Apache Flink, Event Processing (CEP) — Pattern API and PatternProcessFunction, https://nightlies.apache.org/flink/flink-docs-master/docs/libs/cep/",
+    "Apache Kafka, Streams DSL — stateful transformations and aggregations over keyed streams, https://kafka.apache.org/43/streams/developer-guide/dsl-api/",
+    "fhussonnois, kafkastreams-cep — Complex Event Processing on top of Kafka Streams, https://github.com/fhussonnois/kafkastreams-cep",
+    "Apache Kafka, Core Concepts — Event time, processing time and out-of-order handling, https://kafka.apache.org/43/streams/core-concepts/"
+  ]
+}

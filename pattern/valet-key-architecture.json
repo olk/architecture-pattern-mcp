@@ -1,0 +1,127 @@
+{
+  "name": "valet-key",
+  "category": "api_gateway",
+  "context": "Cloud storage and queues can serve a client upload or download directly, but only if the client holds credentials for the store. Proxying every byte through the application tier makes the app the throughput bottleneck, pays egress twice, and forces the app to hold the store's long-term key - which means it can no longer act as gatekeeper once the client has a direct connection. The valet key pattern resolves this by keeping the application in the control plane only: it authenticates the request, mints a credential scoped to one resource, one operation and one short validity window, and hands that to the client, which then talks to the store directly. The metaphor is literal - a valet key starts the car and opens the door, and does not open the glove compartment. Realisations are S3 pre-signed URLs, Azure Storage SAS (user-delegation SAS signed with Entra ID rather than the account key), GCS signed URLs, and STS temporary credentials.",
+  "benefits": [
+    "Removes the application from the data plane entirely: it issues tokens and stops handling bytes, so capacity scales with storage rather than with web-tier nodes",
+    "Single egress instead of storage-to-app-to-client, which cuts transfer cost and latency for large transfers",
+    "The store's long-term key never leaves the application; the client only ever holds a scoped, expiring credential",
+    "No need to provision, authenticate, grant, and then revoke a real user identity for every anonymous transfer, and no risk of leaving that grant standing",
+    "Location, operation and validity period are constrained independently - a write-only token for an upload, read-only for a download, create-only to prevent overwrite",
+    "Server-stored access policies (Azure stored access policy) allow a live token to be revoked before expiry and the policy to change without reissuing the token"
+  ],
+  "tradeoffs": [
+    "Control is genuinely given away for the duration of the token. It is a bearer instrument: the store cannot distinguish your application from anyone who copied the URL out of a log or a referrer header",
+    "Expiry is a hard constraint in both directions. Too short and legitimate transfers fail mid-flight with no obvious error to the user; too long and the exposure window grows linearly",
+    "You lose end-to-end auditing of the transfer. Unless the client notifies the application on completion and the store emits access events, you cannot count uploads or downloads, which also removes the billing signal",
+    "Quotas are hard to express. Most mechanisms cannot limit bytes or number of uses, so a client bug that retries in a loop produces a large unexpected egress bill even from an authorized caller",
+    "Token issuance becomes a privileged, security-critical service. The valet key API can reach the whole storage account, so it needs strict access policies and a narrow blast radius",
+    "Cross-origin restrictions apply: older browsers and some stores do not support CORS, so a valet key cannot be used to reach a data store in a different domain",
+    "Pre-signed URLs are frequently written to server access logs; centralising logs without delaying them past the token lifetime re-exposes the credential",
+    "Clock skew matters when a start time is set - begin slightly in the past or clients with unsynchronised clocks fail"
+  ],
+  "quality_attributes": {
+    "performance": 9,
+    "scalability": 9,
+    "reliability": 7,
+    "maintainability": 6,
+    "security": 6,
+    "simplicity": 7
+  },
+  "suitable_domains": [
+    "media-processing",
+    "file-processing",
+    "image-processing",
+    "high-traffic",
+    "high-traffic-systems",
+    "high-traffic-portals",
+    "web-applications",
+    "mobile-applications",
+    "global-distribution",
+    "cloud-first-mandate-with-no-regulatory-barriers",
+    "batch-processing",
+    "e-commerce"
+  ],
+  "unsuitable_domains": [
+    "audit-trail-requirements",
+    "audit-regulatory",
+    "compliance",
+    "regulatory-compliance",
+    "strict-data-residency-requirements",
+    "strongly-consistent-single-entity",
+    "strong-transaction"
+  ],
+  "use_cases": [
+    "Large file upload where streaming through the web tier would consume its bandwidth and memory",
+    "Media asset delivery from object storage to browsers without the application in the request path",
+    "Bulk data export for a customer - a scoped, expiring download grant instead of a standing share",
+    "Client-side direct-to-queue publish that keeps the app as issuer but not as a throughput constraint"
+  ],
+  "avoid_when": [
+    "The application must inspect, transform or validate the payload - it cannot, because it never sees the bytes",
+    "Every access must be attributable to a known user and counted individually",
+    "Compliance rules forbid any credential leaving the trust boundary of the issuer",
+    "The operation must complete atomically with a change in the application database",
+    "The resource is a database rather than a store with its own fine-grained, expiring authorization primitive"
+  ],
+  "component_types": [
+    "Valet key service / token issuer API",
+    "Client (browser, mobile app, or partner system)",
+    "Data store with native token validation (object storage, queue)",
+    "Stored access policy",
+    "Upload-complete notification handler",
+    "Audit sink"
+  ],
+  "technology_stack": [
+    "AWS S3 pre-signed URLs",
+    "AWS STS temporary credentials with session tags",
+    "Azure Blob Storage user-delegation SAS",
+    "Google Cloud Storage V4 signed URLs",
+    "IAM / Entra ID as the signing identity"
+  ],
+  "anti_patterns": [
+    "Handing the client the storage account key and calling that access control",
+    "Pre-signed URLs with no expiry. A link that never expires is a permanent leak with extra steps",
+    "Scoping the token to a bucket or container when a single object key would do",
+    "Granting read-write for a one-way upload. Create permission (no overwrite) makes the token effectively single-use and prevents an attacker from replacing content",
+    "Logging full pre-signed URLs at INFO and forwarding logs to a central system that outlives the token",
+    "Issuing the token without a notify-on-complete callback, which forfeits both revocation and audit",
+    "Using one long-lived key for a whole tenant's uploads because per-request signing was judged too expensive - that is the proxy pattern with extra steps"
+  ],
+  "design_principles": [
+    "Narrow the credential to exactly what the next operation needs: one resource, one verb, one time window",
+    "Keep the application in the control plane and out of the data plane",
+    "Prefer create-only permissions so a captured token cannot be replayed to overwrite",
+    "Revoke by policy where the store supports it; otherwise bound the exposure with a short expiry",
+    "Treat the token as a bearer instrument and design every distribution channel accordingly"
+  ],
+  "best_practices": [
+    "Issue download URLs with a much shorter TTL than upload URLs, since nothing needs to be re-fetched",
+    "Allow authorized clients to renew before expiry rather than issuing a long token up front",
+    "Set the start time slightly in the past to tolerate client clock skew",
+    "Force a client notification on completion, then invalidate the key - this closes the audit gap",
+    "Log every issuance with who requested it and for which resource, even though you must not log the token itself",
+    "Enforce HTTPS delivery of the key and server-side encryption at rest independently of the upload credential"
+  ],
+  "related_patterns": [
+    "api-gateway",
+    "backend-for-frontend",
+    "edge-computing",
+    "client-server",
+    "microservices",
+    "serverless"
+  ],
+  "migration_from": [
+    "client-server"
+  ],
+  "migration_to": [
+    "edge-computing",
+    "serverless"
+  ],
+  "references": [
+    "Microsoft Azure Architecture Center, Valet Key pattern - https://learn.microsoft.com/en-us/azure/architecture/patterns/valet-key",
+    "Microsoft Patterns and Practices, Valet Key (Data Management, cloud design patterns) - https://learn.microsoft.com/en-us/previous-versions/msp-n-p/dn568102",
+    "mspnp/cloud-design-patterns, valet-key reference implementation (user-delegation SAS via Azure Function) - https://github.com/mspnp/cloud-design-patterns/tree/main/valet-key",
+    "Wilder, Cloud Architecture Patterns, Ch. 13 'Valet Key Pattern' - https://www.oreilly.com/library/view/cloud-architecture-patterns/9781449357979/ch13.html"
+  ]
+}

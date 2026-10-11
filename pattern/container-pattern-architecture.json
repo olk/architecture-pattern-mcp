@@ -1,0 +1,144 @@
+{
+  "category": "cloud",
+  "name": "container-pattern",
+  "context": "A workload is packaged as an OCI/Docker image and deployed as one or more containers, and the design must exploit what containers make easy — layered images, filesystem and namespace isolation, per-container resource limits — rather than fight them. The named variations that matter are how containers are composed and specialised within one deployment unit: the init container, which runs to completion before the application container starts and exists to keep utilities out of the application image, to give a different filesystem view with access to secrets the app cannot see, and to block startup until preconditions are met; the sidecar container, which runs for the pod's lifetime and is implemented as an init container with restartPolicy: Always so the kubelet starts it before and terminates it after the application; the ambassador container, a sidecar specialisation whose sole job is to give the application a single stable interface to the outside world so the service behind it can be relocated without the consumer changing; and the adapter container, which translates data formats, protocols or APIs to interoperate with external services. Distinct from C4 logical containers, which are an organisational decomposition of a system into applications and data stores.",
+  "benefits": [
+    "Layered images make distribution cheap: unchanged base and dependency layers are shared and cached, so only the application layer is pulled per release",
+    "Init containers let utility and setup code live in separate short-lived images, shrinking the attack surface of the application image without removing the tool",
+    "Different filesystem views per container, including access to secrets the application container cannot read, is a privilege boundary that virtual machines do not offer at this granularity",
+    "Startup ordering as a declarative guarantee: a pod is not Ready until every init container has succeeded, so application start can be gated on preconditions",
+    "Ambassador and adapter containers decouple the application from the location, protocol and shape of its dependencies without touching application code",
+    "Per-container resource requests and limits, plus pod-level QoS class, give precise scheduling and failure-domain control",
+    "One artifact runs identically on a laptop, in CI and in production, removing environment-specific configuration drift"
+  ],
+  "tradeoffs": [
+    "Init containers run to completion and cannot exchange messages with the app container; data flows one way, through files in a shared volume",
+    "Init container code must be idempotent because it may be restarted, retried or re-executed, and because a pod restart can re-run it",
+    "Resource accounting is counter-intuitive: the effective pod request for a resource is the higher of the sum of app containers and the highest init container, so an oversized init container reserves capacity for the pod's whole life",
+    "Init containers do not support lifecycle, livenessProbe, readinessProbe or startupProbe — readiness is implicitly 'exited successfully', which removes observability into what they are doing",
+    "Share-namespace composition couples the trust boundary: a compromised companion container reaches the application's ports and environment",
+    "Sidecar proliferation: a pod running many specialised containers multiplies memory cost and the number of things to operate",
+    "Images that bloat with build tooling and package caches destroy both pull speed and layer-cache efficiency",
+    "Container networking and storage still require separate platform primitives — a container is not a deployment, it is a packaging unit"
+  ],
+  "quality_attributes": {
+    "scalability": 8,
+    "maintainability": 8,
+    "reliability": 7,
+    "security": 8,
+    "performance": 7,
+    "simplicity": 7
+  },
+  "suitable_domains": [
+    "cloud-native-applications",
+    "cloud-native-applications-on-kubernetes",
+    "kubernetes",
+    "microservices-architecture",
+    "iot",
+    "iot-device-management",
+    "batch-processing",
+    "edge-computing-bandwidth"
+  ],
+  "unsuitable_domains": [
+    "single-threaded-environments",
+    "hard-real-time-systems",
+    "low-maturity",
+    "teams-lacking-operational-expertise",
+    "simple-applications",
+    "static-reference-data",
+    "resource-constrained-environments"
+  ],
+  "use_cases": [
+    "An application image that no longer carries sed, awk, dig or a package manager, because schema migration and wait-for-dependency logic moved into init containers",
+    "An OpenTelemetry collector shipped as a sidecar so the application image stays free of the tracing SDK",
+    "An ambassador container giving the application a stable localhost interface to a backing service that was relocated, so no application change was needed",
+    "An adapter container translating a legacy message-broker interface into an HTTP API so a new service can consume it without a client library",
+    "An init container granted access to secrets that the application container deliberately cannot read, then writing only the derived files the app needs",
+    "A gateway pod where init containers run migrations before the gateway container is allowed to start serving"
+  ],
+  "avoid_when": [
+    "The workload cannot tolerate container abstraction — hard real-time targets needing deterministic timing",
+    "The platform has no container runtime and no orchestration providing ordering and isolation semantics",
+    "The image must carry heavy proprietary tooling that cannot be separated into its own container",
+    "Init container resource reservations exceed what the node can schedule, making pods unschedulable for reasons invisible in the pod spec",
+    "A sidecar per instance would cost more than the functionality it offloads"
+  ],
+  "component_types": [
+    "Application container: the main workload image",
+    "Init container: a short-lived container that must exit successfully before the app container starts",
+    "Sidecar container: an init container with restartPolicy: Always that runs for the pod's lifetime alongside the app",
+    "Ambassador container: a sidecar providing a single stable interface to an external service",
+    "Adapter container: translating protocols, formats or APIs for interoperability",
+    "Layered image: ordered filesystem layers, each a cacheable diff, culminating in the application layer",
+    "Resource specification: requests and limits per container, aggregated into the pod's effective request and QoS class",
+    "Shared volume: emptyDir or similar, the only channel for one-way data from init containers to the app"
+  ],
+  "technology_stack": [
+    "Docker",
+    "OCI Image Spec",
+    "Kubernetes Pods",
+    "Kubernetes init containers",
+    "Kubernetes sidecar containers",
+    "Kubernetes ephemeral containers",
+    "containerd",
+    "CRI-O",
+    "OpenShift",
+    "emptyDir volumes",
+    "Red Hat UBI images"
+  ],
+  "anti_patterns": [
+    "Baking utilities into the application image instead of using init containers, growing the attack surface for no benefit",
+    "Non-idempotent init container code that corrupts state when the pod restarts and the init container re-executes",
+    "Sidecar used as a place for domain logic, which recreates the coupling the decomposition was meant to remove",
+    "Unbounded init container resource requests that reserve node capacity for the entire pod lifetime",
+    "Container-per-microservice deployment where containers share a writable layer or assume local state that disappears on reschedule",
+    "latest tags in production, trading reproducibility for convenience",
+    "Ambassador sidecar whose interface mirrors the remote service exactly, defeating the indirection it was introduced for",
+    "No resource limits at all, which turns one misbehaving container into a node-wide incident"
+  ],
+  "migration_from": [
+    "monolithic",
+    "layered-monolith",
+    "serverless"
+  ],
+  "migration_to": [
+    "serverless",
+    "operator-pattern",
+    "microservices"
+  ],
+  "related_patterns": [
+    "sidecar-pattern",
+    "operator-pattern",
+    "microservices",
+    "service-mesh",
+    "serverless",
+    "edge-computing",
+    "auto-scaling",
+    "event-driven"
+  ],
+  "design_principles": [
+    "Package once, run anywhere: the image is the unit of build, test and deployment, identical in every environment",
+    "Compose inside the deployment unit: init, sidecar, ambassador and adapter containers collaborate within one pod because they share a lifecycle and a network namespace",
+    "Separate by privilege and by lifetime: a short-lived setup task and a long-lived proxy have different security needs and belong in different images",
+    "Declare ordering rather than scripting it: pod semantics guarantee init completion and sidecar ordering so no application code coordinates startup",
+    "Keep the application image minimal: every tool left in the base image is attack surface and cache-invalidated weight",
+    "One-way data flow is the init container contract: hand off through files in a shared volume, not through messages"
+  ],
+  "best_practices": [
+    "Move setup, migration and wait-for-dependency logic out of the application image into dedicated init container images",
+    "Write init containers to be idempotent — they will be retried, and pod restarts re-execute them",
+    "Set CPU and memory requests and limits on every container, remembering that the pod's effective request is the higher of the app-container sum and the highest init container",
+    "Use native sidecar semantics (initContainers with restartPolicy: Always) so kubelet handles ordering and shutdown",
+    "Order init containers deliberately and use activeDeadlineSeconds to stop them blocking pod readiness forever",
+    "Build layered, minimal, multi-stage images and pin digests or immutable tags rather than using latest",
+    "Give init containers a filesystem view with access to the secrets they need and without access to anything the application should not read",
+    "Prefer an ambassador or adapter container over embedding a client library when the dependency must be relocatable or protocol-translated"
+  ],
+  "sources": [
+    "Kubernetes, Init Containers, https://kubernetes.io/docs/concepts/workloads/pods/init-containers/",
+    "Kubernetes, Sidecar Containers, https://kubernetes.io/docs/concepts/workloads/pods/sidecar-containers/",
+    "Kubernetes Blog, Kubernetes Multicontainer Pods: An Overview, https://v1-35.docs.kubernetes.io/blog/2025/04/22/multi-container-pods-overview/",
+    "Red Hat, Coming to terms: Ambassador Containers, https://developers.redhat.com/blog/2022/09/23/coming-terms-ambassador-containers",
+    "Red Hat, Working with containers — OpenShift Container Platform documentation, https://docs.redhat.com/en/documentation/openshift_container_platform/4.13/html/nodes/working-with-containers"
+  ]
+}

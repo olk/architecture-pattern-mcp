@@ -1,0 +1,153 @@
+{
+  "name": "load-balancing",
+  "category": "specialized",
+  "context": "A service runs as N identical instances behind one address, and something must decide which instance receives each request. That something is the load balancer, and its design determines far more than request distribution. The first decision is the layer. L4 (transport) balancing forwards by connection using only IP and port: it is protocol-agnostic, cheap, and preserves the full request for the backend to handle, but it cannot see the URL, the cookie, or the header. L7 (application) balancing terminates the connection and reads the request: NGINX and NGINX Plus provide L7 balancing for HTTP and HTTPS specifically, which is what makes host-based routing, path routing, header-based routing, caching, and compression possible at the balancer at all. The second decision is the selection algorithm, and each has a specific failure mode. Round robin is uniform but blind to instance load. Least connections routes to the server with the fewest active connections and handles heterogeneous request durations far better, but NGINX documents that it only works as expected with a shared zone — without one, each worker keeps its own counter and sends requests to the same server another worker just used. Least time picks the lowest average latency and fewest active connections. Hash-based methods buy affinity: NGINX's generic hash with the `consistent` parameter uses ketama consistent hashing so that adding or removing a server remaps only a few keys, which matters specifically when the backends accumulate state such as caches. Envoy's ring hash makes the same trade and warns that a host must appear on the ring proportional to its weight — inserting 1 entry for a weight-1 host and 1 for a weight-2 host does not produce a 2:1 split, so 100 and 200 entries are used instead. Envoy's Maglev uses a fixed 65537-entry backing table, roughly 10x faster to build and 5x faster to look up than a large ring, but is less stable when the host set changes — about double the keys move on removal. The third decision is health checking, and the default is the dangerous one: Envoy states plainly that if no active health checking policy is configured, all cluster members are considered healthy. The fourth is slow start, because a recovered instance dropped into rotation at full weight will be overwhelmed by its own backlog.",
+  "benefits": [
+    "Horizontal capacity: adding instances increases throughput without changing application code",
+    "Failure isolation at the routing layer — an unhealthy instance is removed from rotation, so requests stop being sent to it without a deploy",
+    "Algorithms that match workload shape rather than one-size-fits-all: least connections for long-tailed request durations, least time when latency varies, consistent hashing when backends hold state",
+    "Consistent hashing bounds disruption: adding or removing a server remaps only a fraction of keys, preserving cache hit ratio instead of flushing it",
+    "L7 balancing enables routing policy at the edge — host, path, and header routing, plus caching and compression, without those concerns entering application code",
+    "Locality-aware balancing prefers same-zone or same-region endpoints, cutting latency and cross-zone transfer cost under real traffic patterns",
+    "A single virtual address decouples clients from instance count, so scaling and deployment are invisible to callers",
+    "Priority levels and degraded-endpoint handling let a balancer shed load deliberately instead of distributing it into overload"
+  ],
+  "tradeoffs": [
+    "The balancer is on the critical path of every request and becomes a new single point of failure unless it is itself redundant",
+    "Adds a network hop and therefore latency — unacceptable when the workload explicitly cannot tolerate an additional hop",
+    "Consistent state in backends fights the algorithm: sticky sessions pin load to instances and turn a balancer change into a capacity problem",
+    "Least-connection and least-time algorithms depend on shared state; without a shared zone NGINX workers keep independent counters and the method misbehaves under low load",
+    "Hash-based routing is only effective when there is something meaningful to hash on, so it requires protocol routing with a defined key",
+    "Ring-based balancing needs deliberate configuration to approximate weights — 1 versus 2 ring entries does not give a 2:1 split — and wrong configuration produces hot hosts",
+    "Health checks that are too aggressive flap and remove healthy instances; too lax and traffic keeps being sent to a broken instance",
+    "Without slow start, a recovered instance re-entering at full weight is immediately swamped by its backlog and fails again"
+  ],
+  "quality_attributes": {
+    "scalability": 9,
+    "maintainability": 6,
+    "reliability": 8,
+    "security": 6,
+    "performance": 8,
+    "simplicity": 7
+  },
+  "suitable_domains": [
+    "high-traffic",
+    "high-traffic-systems",
+    "web-servers",
+    "application-servers",
+    "cloud-native",
+    "cloud-native-applications",
+    "global-distribution",
+    "multi-cluster",
+    "kubernetes",
+    "high-concurrency",
+    "steady-high-traffic"
+  ],
+  "unsuitable_domains": [
+    "single-threaded-environments",
+    "low-concurrency-single-node-apps",
+    "low-traffic-applications",
+    "low-complexity-single-service",
+    "small-applications",
+    "latency-sensitive-extreme",
+    "real-time-systems-where-any-latency-overhead-is-unacceptable"
+  ],
+  "use_cases": [
+    "Distributing HTTP traffic across a stateless application fleet behind one address, with active health checks removing failed instances",
+    "Load balancing memcached or another stateful cache with ketama consistent hashing so adding a node remaps only a small share of keys",
+    "Routing between multiple micro frontends or services by hostname or path at the L7 edge",
+    "Zone-aware routing that prefers local endpoints and falls back across zones, cutting cross-zone transfer cost",
+    "Weighted canary rollout, where a small percentage of traffic is directed to a new version by endpoint weight",
+    "Priority-level balancing that sheds load onto degraded endpoints only when primary tiers are exhausted"
+  ],
+  "avoid_when": [
+    "There is exactly one instance — a balancer in front of a single process adds a hop and a failure mode for no distribution benefit",
+    "Traffic is trivial and low-concurrency, so the operational cost of running a balancing tier exceeds the capacity it buys",
+    "The workload explicitly cannot tolerate an additional network hop; some low-latency and hard real-time paths must not pass through a proxy",
+    "The service is stateful with no session affinity and no consistent-hash key, so any balancing scheme will route a request to the wrong instance",
+    "The balancer is being used as a substitute for capacity planning — balancing spreads load across instances that are collectively too small",
+    "You cannot operate a highly available balancer pair, in which case the balancer becomes the outage"
+  ],
+  "component_types": [
+    "Load Balancer: the component that selects an upstream endpoint per request or connection",
+    "Endpoint Set / Cluster: the discovered members the balancer selects from, refreshed as instances come and go",
+    "Selection Algorithm: round robin, least connections, least time, IP hash, generic hash with consistent (ketama), ring hash, Maglev, or random",
+    "Health Checker: active probing or passive in-band failure accounting that decides which endpoints are eligible",
+    "Slow Start Controller: the mechanism that ramps a recovered endpoint's weight from zero to nominal",
+    "Session Affinity (Sticky) Policy: cookie-, header-, or hash-based pinning of a client to an instance",
+    "Connection Pool / Keepalive Manager: the upstream connection reuse layer, with limits on max_conns per instance",
+    "Locality / Priority Router: the component that prefers local or higher-priority endpoints and defines fallback order",
+    "Degraded Endpoint Pool: endpoints excluded from selection because they are below a health threshold",
+    "Overprovisioning Factor: the headroom multiplier applied to capacity estimates when requests may retry elsewhere"
+  ],
+  "technology_stack": [
+    "NGINX / NGINX Plus",
+    "Envoy",
+    "HAProxy",
+    "Kubernetes Service and kube-proxy",
+    "AWS Elastic Load Balancing",
+    "Azure Load Balancer",
+    "Google Cloud Load Balancing",
+    "Traefik",
+    "Consistent hashing (ketama / Maglev)"
+  ],
+  "anti_patterns": [
+    "No active health checking configured, which means every cluster member is treated as healthy and traffic keeps flowing to a broken instance",
+    "Least-connections or least-time without a shared zone, so each worker keeps its own counter and distributes unevenly, especially at low load",
+    "Ring hash with one entry per weight unit, believing weight 2 gets twice the traffic — coincidentally adjacent hashes mean it does not, so multiply the entries and monitor min/max hashes per host",
+    "Uniform round robin on backends with long-tailed request durations, so fast instances finish early while slow ones accumulate work",
+    "Sticky sessions used to paper over stateless design, pinning load to instances and turning any capacity change into a rebalancing problem",
+    "Recovered instances returned to rotation at full weight with no slow start, so they are immediately swamped by their own backlog and fail again",
+    "The balancer placed in-band as an unpaired single instance, converting a routing component into the outage",
+    "Random or round-robin selection when backends are stateful and the request has no hashable key, guaranteeing wrong-instance responses"
+  ],
+  "migration_from": [
+    "client-server",
+    "single-instance-deployment",
+    "monolithic"
+  ],
+  "migration_to": [
+    "microservices",
+    "serverless",
+    "space-based",
+    "edge-computing"
+  ],
+  "related_patterns": [
+    "microservices",
+    "serverless",
+    "master-slave",
+    "space-based",
+    "edge-computing",
+    "service-mesh",
+    "hybrid-cloud",
+    "api-gateway",
+    "modular-monolith"
+  ],
+  "design_principles": [
+    "Choose the algorithm from the workload's shape — round robin for uniform work, least connections for long-tailed durations, consistent hashing when backends hold state",
+    "The balancer must know what is healthy — without active health checking, every endpoint is eligible and the balancer will route into the failure",
+    "Bound disruption on topology change — consistent hashing exists so adding or removing a server remaps a fraction of keys instead of flushing caches",
+    "Return recovered capacity gradually — slow start exists because an endpoint re-entering at full weight is destroyed by its own backlog",
+    "Keep the balancer out of the state — affinity by hash is acceptable; affinity by session pin is a capacity liability",
+    "Balance locality before distance — prefer same-zone endpoints, and treat cross-zone routing as an explicit fallback with its own cost",
+    "Degrade deliberately, not accidentally — priority levels and degraded-endpoint pools let load be shed in a chosen order rather than by whichever instance happens to fail"
+  ],
+  "best_practices": [
+    "Configure active health checks with a shared zone, and tune check interval and failure threshold against real instance startup time",
+    "Set output.uniqueName-style stable identity per endpoint and prefer DNS or control-plane discovery over hard-coded lists",
+    "Use a shared zone (NGINX) so least-connections and least-time see global rather than per-worker state",
+    "If using ring hash, set minimum_ring_size and maximum_ring_size explicitly and monitor min_hashes_per_host and max_hashes_per_host",
+    "Enable slow start for any pool that can recover instances, so a restarted instance ramps rather than absorbs full load immediately",
+    "Cap upstream connections per instance (max_conns) and tune keepalive separately from the connection count",
+    "Enable locality-weighted balancing in multi-zone deployments to reduce cross-zone transfer cost",
+    "Ship session persistence via cookie only where unavoidable, and document it as a capacity constraint",
+    "Load test to find the actual breaking point — balancing distributes load across instances that must collectively have the capacity"
+  ],
+  "references": [
+    "NGINX, HTTP Load Balancing — NGINX Documentation, https://docs.nginx.com/nginx/admin-guide/load-balancer/http-load-balancer/",
+    "nginx, Using nginx as HTTP load balancer, https://nginx.org/en/docs/http/load_balancing.html",
+    "nginx, Module ngx_http_upstream_module (least_conn, least_time, hash consistent, ip_hash, slow_start, max_fails), https://nginx.org/en/docs/http/ngx_http_upstream_module.html",
+    "Envoy, Supported load balancers (round robin, weighted least request, ring hash, Maglev, priority levels, degraded endpoints), https://www.envoyproxy.io/docs/envoy/latest/intro/arch_overview/upstream/load_balancing/load_balancers.html",
+    "Envoy, Load Balancing architecture overview, https://www.envoyproxy.io/docs/envoy/latest/intro/arch_overview/upstream/load_balancing/load_balancing.html"
+  ]
+}

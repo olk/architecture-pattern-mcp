@@ -1,0 +1,136 @@
+{
+  "category": "specialized",
+  "name": "canary-deployment",
+  "context": "A release candidate must be exposed to a small, time-limited slice of real production traffic, evaluated against objective criteria, and only then promoted — or automatically rolled back. The slice receiving the change is 'the canary'; the remainder is 'the control'. Because the candidate is exercised by real production inputs rather than a synthetic environment, defects that only appear under production traffic mix are caught while the blast radius is a fraction of the user base. Google frames the cost explicitly: with 100% of requests failing under a global deploy, a 5% canary population turns a 20% error rate into a 1% overall error rate, which is the difference between burning the error budget and preserving it. The release automation must therefore supply three things: a way to deploy to a subset, an evaluation process, and integration of that evaluation into the release decision.",
+  "benefits": [
+    "Blast radius bounded by canary population: a bad release harms a fraction of traffic instead of everyone, preserving the error budget",
+    "Evaluation on production-representative conditions: real request mixes, real data volumes and real diurnal traffic expose defects that staging data cannot",
+    "Automatic, evidence-based rollback: monitoring business and technical metrics against the control triggers a revert without waiting for a human to notice",
+    "Progressive exposure through successive waves — 1%, 5%, 25%, 50%, 100% — each with its own validation window",
+    "Capacity testing against real load in a production-like environment, avoiding the need for a separate full-scale capacity-test environment",
+    "Safe schema and API evolution via parallel change, keeping both versions runnable while the rollout is in flight",
+    "Fine-grained targeting: internal employees first, then one region, brand, tenant or customer cohort"
+  ],
+  "tradeoffs": [
+    "Multiple versions run in production simultaneously, so version count, state compatibility and debugging complexity all rise",
+    "Requires metric selection discipline — metrics must indicate problems and be representative and attributable; before/after comparison is risky when traffic composition shifts",
+    "Requires an evaluation pipeline; without automated analysis the canary becomes a manual ritual with no exit criterion",
+    "Canary duration must match release velocity: daily deploys cannot afford a week-long canary, and 20 deploys a day need a much shorter one",
+    "Running simultaneous canaries contaminates the signal; Google strongly advises only one canary deployment at a time",
+    "Not suitable for client-side software the team does not control, because upgrade timing is outside the operator's influence",
+    "Temptation to conflate with A/B testing, which corrupts both: regression detection and hypothesis testing have different statistics and timelines"
+  ],
+  "quality_attributes": {
+    "scalability": 7,
+    "maintainability": 6,
+    "reliability": 9,
+    "security": 6,
+    "performance": 8,
+    "simplicity": 5
+  },
+  "suitable_domains": [
+    "high-traffic-systems",
+    "e-commerce-platforms",
+    "cloud-native-applications",
+    "cloud-native-applications-on-kubernetes",
+    "financial-services",
+    "audit-regulatory",
+    "regulated-industries",
+    "ci-cd-environments"
+  ],
+  "unsuitable_domains": [
+    "low-traffic-applications",
+    "low-concurrency-systems",
+    "internal-tools",
+    "mobile-applications",
+    "desktop-applications",
+    "low-budget",
+    "startups-early-stage"
+  ],
+  "use_cases": [
+    "Rolling a new ranking model to 1% of traffic and comparing error rates and business metrics against the control before expanding",
+    "Facebook-style staged rollout: an employee-only canary with every feature flag on, to catch problems before any external user sees them",
+    "Geographic canary — releasing to one region first to expose differences in traffic mix and data residency",
+    "Configuration and secret rollouts that carry the same risk as a code change and must be evaluated the same way",
+    "Graceful rollout of an Android or iOS client release, where the staged percentage of installed instances rising to 100% bounds backend impact",
+    "A database migration deployed alongside the code that reads it, using parallel change so both schema states are valid during the rollout"
+  ],
+  "avoid_when": [
+    "Traffic is too low for a canary slice to produce statistically meaningful signal within a useful window",
+    "There is no way to route a subset of traffic to the candidate version",
+    "The team cannot define the metrics that decide promotion, making the canary decorative",
+    "Client software is installed on devices the team does not control",
+    "Very high release velocity, where the canary bookkeeping would exceed the value of the safety net"
+  ],
+  "component_types": [
+    "Canary fleet: the instances running the candidate release",
+    "Control fleet: the instances running the current release",
+    "Traffic router: load balancer weights, proxy configuration, feature flags or DNS-based partitioning that splits traffic",
+    "Analysis service: compares canary metrics against the control",
+    "Metric pipeline: pre-aggregated, low-latency metrics (request rate, error rate, latency, business KPIs)",
+    "Automated rollback controller: reverts routing when the analysis fails",
+    "Feature flag service: enables the new behaviour for the canary cohort only"
+  ],
+  "technology_stack": [
+    "Google SRE canary analysis",
+    "Istio",
+    "Argo Rollouts",
+    "Flagger",
+    "AWS CodeDeploy",
+    "Azure App Service traffic routing",
+    "NGINX",
+    "Envoy",
+    "LaunchDarkly",
+    "Prometheus",
+    "Kubernetes"
+  ],
+  "anti_patterns": [
+    "No automated analysis: the canary advances on vibes rather than on a defined metric threshold",
+    "No control group: comparing against yesterday instead of against concurrently running traffic, so traffic-mix changes masquerade as regressions",
+    "Concurrent canaries: overlapping experiments that contaminate each other's signal",
+    "Canary size chosen for convenience rather than for the statistical power needed to detect the failure being hunted",
+    "Conflating A/B testing with canarying: business-metric regression detection and hypothesis testing share infrastructure but must not share interpretation",
+    "Canary on an unrepresentative slice — a region or cohort with different data characteristics hides exactly the bugs the canary exists to find",
+    "Advancing on wall-clock time alone with no burn-rate or SLO-based exit criterion"
+  ],
+  "migration_from": [
+    "blue-green-deployment",
+    "multi-stage-deployment"
+  ],
+  "migration_to": [
+    "blue-green-deployment"
+  ],
+  "related_patterns": [
+    "blue-green-deployment",
+    "multi-stage-deployment",
+    "microservices",
+    "service-mesh",
+    "serverless",
+    "multi-cloud",
+    "strangler-fig"
+  ],
+  "design_principles": [
+    "Partial and time-limited exposure: the candidate runs on a defined slice for a defined window, not indefinitely",
+    "Concurrent control: the comparison baseline is the simultaneously running old version, not history",
+    "Blast radius proportional to canary population: the impact of a defect scales with the fraction of traffic exposed",
+    "Automated, metric-driven decisions: promotion and rollback are policy evaluations, not human judgment calls",
+    "Progressive expansion: exposure grows in waves, each wave gated by its own evaluation",
+    "One canary at a time: concurrent experiments destroy the attribution the technique depends on"
+  ],
+  "best_practices": [
+    "Size the canary population and duration against release velocity and against the minimum detectable effect you actually care about",
+    "Pick metrics that indicate problems — error rate, latency distributions, and the business metric most tied to the change — not vanity metrics",
+    "Ensure canary and control receive representative, equivalently shaped traffic so differences are attributable to the change",
+    "Encode promotion and rollback as explicit thresholds wired into the deployment pipeline rather than a manual review step",
+    "Use parallel change (expand-and-contract) so schema and API changes keep both versions runnable throughout the rollout",
+    "Run one canary at a time per service to keep the signal clean",
+    "Roll back first and diagnose afterwards — that ordering is what keeps Mean Time to Recovery low"
+  ],
+  "sources": [
+    "Alec Warner, Štěpán Davidovič et al., Canarying Releases — The Site Reliability Workbook (Google), https://sre.google/workbook/canarying-releases/",
+    "Danilo Sato, Canary Release — Martin Fowler, https://martinfowler.com/bliki/CanaryRelease.html",
+    "Ben Treynor Sloss, Production Services Best Practices — Google SRE Book, https://sre.google/sre-book/service-best-practices/",
+    "Rhandeev Singh, Sebastian Kirsch, Deployment Strategies for Product Launches — Google SRE Book, https://sre.google/sre-book/reliable-product-launches/",
+    "Microsoft, Architecture strategies for safe deployment practices — Azure Well-Architected Framework, https://learn.microsoft.com/en-us/azure/well-architected/operational-excellence/safe-deployments"
+  ]
+}

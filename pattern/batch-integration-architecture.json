@@ -1,0 +1,153 @@
+{
+  "name": "batch-integration",
+  "category": "dataflow",
+  "context": "Two enterprise systems have to stay in sync — an ERP and a CRM, a SaaS platform and a mainframe, a supplier portal and a data warehouse — and the movement of records between them is bulk rather than conversational. A nightly load, a periodic full extract plus delta, a partner's SFTP drop, a nightly Bulk API submission. Synchronous point-to-point integration is the wrong shape here: it would mean one HTTP round trip per record, it would require the source to be available whenever the consumer runs, and it would make a partner's rate limit the throughput ceiling. Batch integration instead treats data movement as a scheduled reconciliation of two systems of record over a defined window: gather a cohort of records, transform them, load them, then reconcile. Microsoft's cross-industry data integration guidance frames it exactly as this — 'scheduled or manual trigger, great for messaging services and asynchronous patterns, fewer individual packages and less message traffic', trading 'data freshness is lower' and a burst of load on the receiving system for scalability. The mechanics are more specific than 'run a job': a batch scope splits an inbound payload into records and writes them to a persistent queue (Mule's Batch Job Load-and-Dispatch phase), runs one or more steps that pull blocks of records in parallel, and a final report phase counts successes and failures (Mule's On Complete). Records that fail a step are not lost — Mule's acceptPolicy routes ONLY_FAILURES to a later step, and maxFailedRecords halts the job so a poison cohort is quarantined rather than retried forever. Where the batch must be large, Mule's Block Size determines how many records are pulled and processed as a unit, and Bulk API 2.0-style bulk endpoints on the target let a whole batch land in one asynchronous job instead of N inserts.",
+  "benefits": [
+    "Record count stops being the throughput constraint: one bulk or file operation moves thousands of records where point-to-point would need thousands of round trips",
+    "The source and target only need to be simultaneously available during the batch window, so neither system must be kept up for the other",
+    "Bulk endpoints and file drops hit the target's efficient path rather than its interactive one, protecting the target's user-facing latency during the load",
+    "Delta-plus-snapshot semantics make the integration idempotent and recoverable: a consumer that falls behind can skip deltas and apply the latest snapshot to reset itself",
+    "Per-record error isolation with failure policies lets a small number of bad records be quarantined and reprocessed instead of aborting a whole window",
+    "A persistent record queue makes the job resumable — if the application is redeployed or crashes mid-run, execution resumes at the point it stopped rather than starting over",
+    "Batch windows are a natural place to put control totals, checksums, reject files, and reconciliation, which point-to-point flows tend to skip",
+    "Watermarks make replay safe: persist the successful watermark only after the batch completes, so a partial failure re-reads rather than skips"
+  ],
+  "tradeoffs": [
+    "Data is stale by design — a change made after the window closes is invisible to the target until the next run, and downstream users must be told the freshness bound",
+    "The receiving system takes a load spike inside the window, and Salesforce's own guidance is to insulate source and target during batch processing because contention can fail a user's update or a partial batch load",
+    "Recovering from a mid-window failure is an operational discipline, not a library call: the watermark must be withheld until completion or the next run silently skips the unprocessed tail",
+    "Bulk endpoints are asynchronous with their own job lifecycle, so the integration must poll or subscribe for job completion rather than assume a synchronous result",
+    "Batch scopes restructure an integration flow into phases with their own semantics, and records plus attributes created inside the scope do not propagate to downstream processors outside it",
+    "Large record counts demand explicit memory decisions — streaming an aggregator handles millions of records, but a fixed-size aggregator holds arrays in memory and disables random access when streaming",
+    "Partial-success semantics leak into the contract: consumers must handle 'this record failed and this one succeeded' rather than a simple success or failure",
+    "Batch is the wrong answer when the business need is a genuine real-time reaction, and forcing it there produces an architecture nobody can reason about"
+  ],
+  "quality_attributes": {
+    "scalability": 9,
+    "maintainability": 6,
+    "reliability": 7,
+    "security": 6,
+    "performance": 8,
+    "simplicity": 6
+  },
+  "suitable_domains": [
+    "etl",
+    "b2b-integration",
+    "enterprise-integration",
+    "data-transformation-pipelines",
+    "data-pipelines",
+    "legacy-system-integration",
+    "multi-external-integrations",
+    "regulated-industries",
+    "big-data-analytics",
+    "cross-organizational"
+  ],
+  "unsuitable_domains": [
+    "real-time-interactive-systems",
+    "real-time-dashboards",
+    "hard-real-time-systems",
+    "latency-sensitive-extreme",
+    "low-latency-required",
+    "payment-processing",
+    "purely-synchronous-workloads"
+  ],
+  "use_cases": [
+    "Nightly change-data-capture extract from an ERP into a CRM using source-timestamp watermarks with a deliberate overlap window",
+    "Full snapshot of a SaaS product catalog into a data warehouse, where a snapshot lets the consumer skip missed deltas and reset",
+    "Partner SFTP file drop parsed into records, registered with batch metadata, parked for a throttle window, then dispatched to processing",
+    "Bulk API 2.0 submission of 50,000 account updates with an asynchronous job that must be polled to completion",
+    "Rejected-record reprocessing: a resubmission flow that reads only records in READY state from an error table and re-runs them",
+    "Reconciling a SaaS platform against an on-premises mainframe inside a maintenance window, with control totals checked on arrival"
+  ],
+  "avoid_when": [
+    "A user or downstream system needs to see a change immediately — batching exists to trade freshness for throughput, so this inverts the purpose",
+    "Neither side can guarantee a stable window, and the target has no capacity headroom for the burst the batch will create",
+    "The volume is small enough that a scheduled job costs more operational attention than a few point-to-point calls",
+    "You cannot implement idempotent replay — without idempotency, a re-run after partial failure duplicates records in the target",
+    "The integration is conversational (request, response, user waiting) rather than reconciliatory",
+    "There is no owner for the failure path — batch windows accumulate silent failures unless someone reconciles and reprocesses rejects"
+  ],
+  "component_types": [
+    "Batch Job Scope: the container that splits an inbound payload into records, persists them, executes steps, and emits a completion report",
+    "Record Queue / Stepping Queue: the persistent store holding records between phases so a crashed run resumes rather than restarts",
+    "Batch Step: a processing phase that pulls blocks of records in parallel and applies one transformation or system call",
+    "Batch Aggregator: the optional terminal component that collects records into fixed-size arrays or a stream for a single bulk call",
+    "Record Filter / Accept Policy: the routing rule that sends records failing a prior step (ONLY_FAILURES) to a later step instead of dropping them",
+    "maxFailedRecords / Quarantine: the guard that halts a job once the failure count crosses a threshold, and the reject store the failures land in",
+    "Watermark / Control Total: the persisted position marker and reconciliation metadata that make a partial window safely replayable",
+    "Parking Lot / Throttle Table: the staging table that holds registered batches and controls how many are processed concurrently",
+    "Scheduler / Trigger: the cron, file-arrival, or event trigger that opens the batch window"
+  ],
+  "technology_stack": [
+    "Mule Batch Job / Batch Step / Batch Aggregator",
+    "Salesforce Bulk API 2.0",
+    "Apache Camel",
+    "Azure Data Factory",
+    "Airbyte",
+    "Fivetran",
+    "Oracle Integration Cloud batch processing",
+    "SFTP / fixed-width file transport",
+    "Change Data Capture"
+  ],
+  "anti_patterns": [
+    "Watermark advanced before the batch completes, so a partial failure causes the next window to skip unprocessed records silently",
+    "Loading during business hours with no capacity headroom, so the batch contends with interactive traffic and fails users' updates",
+    "A single monolithic batch step that transforms, calls the target, and reports together, leaving no seam to reprocess only the failures",
+    "Fixed-size aggregator on a very large record set, exhausting memory where streaming would not",
+    "No maxFailedRecords bound — a poison record causes the window to retry forever and the job never converges",
+    "Assuming a bulk endpoint returns synchronously, so the integration records success before the target's asynchronous job has actually finished",
+    "Treating the batch as the default: applied to low-volume conversational integration, it adds windows, watermarks, and failure paths for no throughput gain",
+    "Aggregating records across batch steps and expecting the modification to be visible to the next step — it is not"
+  ],
+  "migration_from": [
+    "point-to-point-integration",
+    "synchronous-request-response",
+    "event-driven",
+    "pipe-and-filter"
+  ],
+  "migration_to": [
+    "event-driven",
+    "data-mesh",
+    "lambda-architecture"
+  ],
+  "related_patterns": [
+    "event-driven",
+    "pipe-and-filter",
+    "enterprise-service-bus",
+    "data-mesh",
+    "lambda-architecture",
+    "master-slave",
+    "saga",
+    "kappa-architecture"
+  ],
+  "design_principles": [
+    "Windows, not streams, when reconciliation is the goal: a batch window is an explicit, bounded agreement about when data will be consistent",
+    "Idempotent replay is a precondition, not a nice-to-have — every step must tolerate being run twice over the same cohort",
+    "Quarantine, do not retry forever: bound the failure count and route rejects somewhere a human or a later run can see them",
+    "Withhold the watermark until completion, so a crashed window re-reads rather than skips",
+    "Separate snapshot from delta: a delta is cheap and incremental, a snapshot is the escape hatch that lets a lagging consumer reset without replaying everything",
+    "Separate data from metadata: keep file identity, producer, tenant, sequence number, and type in a metadata store so the consumer can order and validate without parsing payloads",
+    "Bulk endpoints for bulk loads: use the target's asynchronous bulk mechanism rather than looping its interactive API",
+    "Declare the freshness bound: consumers must know how stale the data can be, and that number is a contract"
+  ],
+  "best_practices": [
+    "Use source-timestamp watermarks with a deliberate overlap window, because source timestamps can be delayed and commits can race the schedule",
+    "Persist or externally record the successful watermark only after the batch has completed",
+    "Use change data capture against source tables rather than full extracts where the target tolerates incremental updates",
+    "Name, checksum, control-total, archive, and reject-file handling for every file-based hop",
+    "Chunk or stream large files instead of loading a very large payload into a single in-memory transformation",
+    "Poll or subscribe for asynchronous bulk job completion, and treat 'submitted' as distinct from 'applied'",
+    "Monitor per-window success counts, failure counts, and reject counts, and alert when a window's failure ratio moves",
+    "Schedule batch windows against measured target capacity, and prefer off-peak windows where the target has no headroom"
+  ],
+  "references": [
+    "Microsoft, Data integration patterns for Microsoft industry clouds — Microsoft for Industry Well-Architected, https://learn.microsoft.com/en-us/industry/well-architected/cross-industry/data-integration-patterns",
+    "MuleSoft, Batch Processing Component — Mule Runtime documentation, https://docs.mulesoft.com/mule-runtime/latest/batch-processing-concept",
+    "MuleSoft, Batch Job Phases — Mule Runtime documentation, https://docs.mulesoft.com/mule-runtime/latest/batch-phases",
+    "MuleSoft, Configuring Batch Components (record filters and Batch Aggregator) — Mule Runtime documentation, https://docs.mulesoft.com/mule-runtime/latest/batch-filters-and-batch-aggregator",
+    "MuleSoft, Tuning Batch Processing — Mule Runtime documentation, https://docs.mulesoft.com/mule-runtime/latest/tuning-batch-processing",
+    "Salesforce Architects, Integration Patterns (Batch Data Synchronization) — Salesforce Developers, https://architect.salesforce.com/docs/architect/fundamentals/guide/integration-patterns.html",
+    "Oracle, About This Recipe (parking lot pattern for throttled batch import) — Oracle Integration Cloud, https://docs.oracle.com/en/cloud/paas/application-integration/use-recipes/this-recipe-rftat.html",
+    "Holger Kache and Laura Lindeman, Applying the Micro Batching Pattern to Data Transfer — Salesforce Engineering Blog, 2021, https://engineering.salesforce.com/applying-the-micro-batching-pattern-to-data-transfer-5b5f72509da2/"
+  ]
+}

@@ -1,0 +1,168 @@
+{
+  "name": "full-loader",
+  "category": "dataflow",
+  "context": "The full loader is the extract-load half of EL, and its whole argument is that it has no moving parts. Every run rebuilds the target from the entire source using the platforms' own native commands — Snowflake's COPY INTO from an internal or external stage, PostgreSQL's COPY TO and COPY FROM, BigQuery's LOAD DATA — with no transformation layer between them, so there is no pipeline code to be correct, no incremental state to be wrong, and no possibility of drift between what ran and what the source contained. That property is why it is the right default and the wrong ceiling. The defining mechanic is the staging step plus the swap. Data lands in files first — Snowflake requires the files to 'already be in one of the following locations: Named internal stage ... Named external stage', and PostgreSQL's COPY 'moves data between PostgreSQL tables and standard file-system files', with the file 'read or written directly by the server, not by the client application'. The target is then replaced rather than modified, which is what gives the pattern its atomicity guarantee: BigQuery states it flatly — 'If the LOAD DATA statement fails, the table into which you are loading data remains unchanged', with LOAD DATA OVERWRITE replacing an existing table wholesale. Once the new content is complete and verified, the loader points readers at it. The classic risk is the opposite property: PostgreSQL's COPY FROM has no such guarantee at all — it 'physically inserts input rows into the table as it progresses. If the command fails, these rows are left in a deleted state; these rows will not be visible, but still occupy disk space', so a failed full load can leave a large dead-space bill that only VACUUM reclaims. That asymmetry is the pattern's central trade: on an engine with atomic overwrite the failure is free, on one without it you pay for the failed attempt twice. The other half of the pattern is choosing the load mode, which is not cosmetic — Snowflake distinguishes LOAD_MODE = FULL_INGEST, which reloads all the data in the stage and discards previously loaded data, from ADD_FILES_COPY, which skips files already loaded and tracks them with a load history, turning a naive full reload into an incremental one without changing the job.",
+  "benefits": [
+    "Idempotent by construction — every run produces the same result from the same source, so a failed run is retried with no cleanup and no reconciliation",
+    "No incremental state to corrupt: there is no watermark, no checkpoint and no merge key, which removes the entire class of bugs where a partial run leaves a target subtly wrong",
+    "Corrects arbitrary drift automatically — because the whole dataset is rewritten, a load that silently missed rows last week self-heals on the next run",
+    "Uses the platform's fastest path: bulk load commands are native, parallel and server-side, and bulk loading relies on user-provided virtual warehouses which must simply be sized for the expected load",
+    "Atomic replacement where the engine supports it: a failed load leaves the previous table intact and queryable, so readers never observe a half-built target",
+    "Minimal bespoke code — the transformation is the source's own export format, so there is no custom serialisation to maintain and no format drift to version",
+    "Transformation is optional rather than built in: COPY INTO can transform during the load with a SELECT over the staged file columns, so EL can grow into ETL without a rewrite",
+    "Schema and format checking are cheap and early, because the entire dataset is validated on every run rather than only the delta",
+    "The cheapest possible recovery: a bad target is fixed by running the job again, which requires no backfill tooling and no replay of a log",
+    "Naturally parallel — export and load are bulk operations that scale with the warehouse and stage, so a full rebuild is often faster than expected"
+  ],
+  "tradeoffs": [
+    "Cost and latency scale with total dataset size on every run, so the job gets monotonically more expensive as the source grows and never becomes cheaper",
+    "No atomicity guarantee on engines without it: PostgreSQL's COPY FROM inserts rows progressively, so a failure leaves invisible deleted rows that still occupy disk space until VACUUM",
+    "Size ceilings are real and vendor-specific — BigQuery's default load quota is 15 TB per load job per table, which forces multi-job or pipeline strategies for genuinely large sources",
+    "Type mapping is a recurring source of silent corruption: Parquet used as the intermediate format does not support TIMESTAMP_TZ and TIMESTAMP_LTZ, so data must be exported as CSV for those types",
+    "Destination table design costs extra during full transfers: the BigQuery guidance is to 'avoid clustering and partitioning on the destination BigQuery table' for full loads, which means the target may need restructuring later",
+    "Concurrent readers see either the old table or the new one only if the swap is atomic; without a swap the window of inconsistency is the length of the load",
+    "The whole load is repeated even when one row changed, which is exactly wrong for large tables with small change rates",
+    "Load history is a hidden dependency: ADD_FILES_COPY depends on Snowflake's internal load history being correct, and a manually purged or recreated stage invalidates the file-skipping logic",
+    "Sensitive data is copied wholesale, so partial-consent or column-scoped extraction is not expressible in this pattern",
+    "Long-running full loads hold warehouse capacity continuously, and a load that exceeds the window competes with interactive queries for the same resources"
+  ],
+  "quality_attributes": {
+    "scalability": 6,
+    "maintainability": 9,
+    "reliability": 7,
+    "security": 6,
+    "performance": 7,
+    "simplicity": 9
+  },
+  "suitable_domains": [
+    "batch-processing",
+    "data-pipelines",
+    "data-processing",
+    "etl",
+    "data-intensive-workloads",
+    "file-processing",
+    "legacy-system-integration",
+    "cross-organizational",
+    "enterprise-integration",
+    "decision-support-systems",
+    "small-to-medium-scale-data-processing",
+    "scheduled-tasks"
+  ],
+  "unsuitable_domains": [
+    "high-throughput-streaming",
+    "real-time-analytics",
+    "real-time-processing",
+    "ultra-low-latency-requirements",
+    "streaming",
+    "low-latency-required",
+    "big-data-analytics",
+    "stateful-compute-intensive-tasks",
+    "real-time-dashboards"
+  ],
+  "use_cases": [
+    "Nightly full reload of a small dimension table where a full copy is cheap and eliminates any possibility of drift",
+    "Initial load of a new target, where correctness matters more than cost and a rebuild is the safest possible starting state",
+    "Snowflake COPY INTO with LOAD_MODE = FULL_INGEST from an internal stage, reloading all staged data and discarding previously loaded data",
+    "Snowflake COPY INTO with ADD_FILES_COPY, which skips files already loaded and tracks them via load history — a full-loader configuration that behaves incrementally without changing the job",
+    "PostgreSQL COPY TO and COPY FROM for whole-table export and reload into a homogeneous target, accepting the dead-space cost of a failed load",
+    "BigQuery LOAD DATA OVERWRITE for atomic wholesale replacement, with the guarantee that a failed load leaves the table unchanged",
+    "A BigQuery Data Transfer Service job configured with ingestion type FULL from a Snowflake source, unloading to Cloud Storage as Parquet before the load",
+    "Rebuilding a corrupted or drifted target as a scheduled reconciliation, where the full loader is the repair tool rather than the steady-state path"
+  ],
+  "avoid_when": [
+    "The dataset is large and mostly unchanged — reloading it entirely every run will dominate cost and window time",
+    "The target must reflect changes continuously, since a full load's freshness is bounded by the job's duration and schedule",
+    "Readers need to see a consistent view during the load and the engine's overwrite is not atomic",
+    "You must extract only some columns or rows under a consent or licensing constraint, since a full load copies everything",
+    "The load exceeds the engine's per-job quota — BigQuery's default 15 TB per load job per table makes this a hard ceiling",
+    "Source types are unsupported by the chosen intermediate format, since Parquet does not carry TIMESTAMP_TZ or TIMESTAMP_LTZ and forces a slower CSV path",
+    "The target's clustering and partitioning are load-bearing for queries, because full transfers are explicitly faster without them and the two goals conflict",
+    "You have no way to reclaim dead space after a failed load, so repeated failures accumulate invisible storage cost"
+  ],
+  "component_types": [
+    "Native export command: the source platform's whole-dataset export — COPY TO, an unload, or a managed transfer service agent",
+    "Stage / landing zone: the internal or external storage location holding the extracted files; Snowflake requires files to already be staged, and PostgreSQL's COPY reads and writes files on the server rather than the client",
+    "Bulk load command: the target platform's native loader — COPY INTO, COPY FROM, LOAD DATA — including its transformation option for mapping staged file columns to target columns",
+    "Load history / manifest: the platform record of which files have been loaded, which is what distinguishes ADD_FILES_COPY (skip previously loaded files) from FULL_INGEST (reload all)",
+    "Atomic swap: the replacement step that makes the new content visible — LOAD DATA OVERWRITE, or create-and-rename in engines without a native overwrite",
+    "File format contract: CSV, JSON, AVRO, ORC or PARQUET plus its type options, where the format's type support bounds what can be transferred",
+    "Validation step: schema conformance and row-count checks run against the newly loaded content before the swap, using modes such as VALIDATION_MODE = RETURN_ERRORS / RETURN_ALL_ERRORS",
+    "Error policy: ON_ERROR = CONTINUE / SKIP_FILE / ABORT_STATEMENT and PURGE, deciding what happens to a bad file and whether it is removed from the stage",
+    "Warehouse sizing: the compute resource that performs the load, which per Snowflake's model is user-provided and must be sized for the expected volume",
+    "Quota guard: the per-job size ceiling (for example BigQuery's 15 TB per load job per table) that determines whether one job suffices or the load must be split"
+  ],
+  "technology_stack": [
+    "Snowflake COPY INTO",
+    "Snowflake internal and external stages",
+    "Snowflake Snowpipe for continuous loading",
+    "PostgreSQL COPY TO and COPY FROM",
+    "BigQuery LOAD DATA and LOAD DATA OVERWRITE",
+    "BigQuery Data Transfer Service",
+    "Amazon Redshift and S3 unload/load",
+    "Google Cloud Storage as a staging bucket",
+    "Parquet, CSV, JSON and Avro file formats",
+    "Airflow for scheduling"
+  ],
+  "anti_patterns": [
+    "Running a full load against a multi-terabyte table on a schedule, where the job becomes the dominant cost of the warehouse",
+    "Using COPY FROM on PostgreSQL for a large table without a plan for VACUUM, since a failed load leaves invisible deleted rows occupying disk",
+    "Staging Parquet for types it does not support — TIMESTAMP_TZ and TIMESTAMP_LTZ are lost, so the transfer silently requires the slower CSV path",
+    "Leaving clustering and partitioning on the destination table during a full transfer, making the load materially slower for no read benefit during the load window",
+    "Assuming overwrite is atomic everywhere; verify the engine actually replaces atomically before relying on readers seeing the old table during a failed load",
+    "Purging or recreating the stage while relying on ADD_FILES_COPY's file-skipping, invalidating the load history the mode depends on",
+    "Using FULL_INGEST when only new files exist, paying a full reload for an incremental change and discarding the file-level optimisation the platform already provides",
+    "Skipping the validation step so a partial or malformed file is swapped in as the new truth",
+    "Copying columns the target does not need, which is the EL shortcut becoming a governance incident rather than an optimisation",
+    "Scheduling the full load so it overlaps peak interactive query hours, when it holds warehouse capacity for its entire duration"
+  ],
+  "migration_from": [
+    "monolithic",
+    "layered-monolith",
+    "batch-processing"
+  ],
+  "migration_to": [
+    "data-mesh",
+    "command-query-responsibility-segregation",
+    "lambda-architecture"
+  ],
+  "related_patterns": [
+    "data-mesh",
+    "lambda-architecture",
+    "command-query-responsibility-segregation",
+    "pipe-and-filter",
+    "strangler-fig",
+    "event-sourcing",
+    "monolithic",
+    "space-based"
+  ],
+  "design_principles": [
+    "Rebuild rather than reconcile — the target is derived wholly from the source on every run, so drift cannot accumulate",
+    "Idempotence is the primary property: the same source must produce the same target regardless of how many times or how many failures preceded the run",
+    "Prefer atomic replacement over in-place mutation, because a reader that sees the old complete table is strictly better than a reader seeing a half-built one",
+    "Use the platform's native bulk path rather than row-at-a-time transport; the loader's job is to copy, not to transform",
+    "Keep the transformation out of the loader — EL first, ETL when a transformation is genuinely required, and use the loader's built-in transform only as an escape hatch",
+    "Validate before the swap, not after, since a validated-then-published content is the only ordering that makes the swap safe",
+    "Choose the load mode deliberately: FULL_INGEST and ADD_FILES_COPY have different correctness properties, and the file-skipping mode's guarantee rests on load history",
+    "Size the compute for the load rather than letting it default, since the warehouse is a user-provided resource here"
+  ],
+  "best_practices": [
+    "Use atomic overwrite where available and verify the failure guarantee in the engine's own documentation before designing around it",
+    "Run validation modes (for example RETURN_ERRORS or RETURN_ALL_ERRORS) on a sample or a full dry run before the first production load, and set ON_ERROR explicitly rather than accepting ABORT_STATEMENT by surprise",
+    "Pick PURGE deliberately — it controls whether failed or loaded files are removed from the stage, and it interacts with load history",
+    "Partition the load to the engine's quota when the source exceeds the per-job ceiling, and prefer pipeline jobs or a staged multi-job load over a single oversized one",
+    "Export to the format that carries the types you have, and verify type support before choosing Parquet over CSV",
+    "Defer clustering and partitioning on the destination during full transfers and add them afterwards, or accept a slower load in exchange for query performance",
+    "Measure load duration against the schedule window and right-size the warehouse explicitly",
+    "Keep a full reload available as the reconciliation tool — it is the cheapest possible repair for a target that has drifted",
+    "Monitor row counts and schema of the newly loaded content and compare them to the previous version before publishing",
+    "Where repeated failures are likely on a non-atomic engine, plan for space reclamation up front rather than discovering the dead space later"
+  ],
+  "references": [
+    "Snowflake, COPY INTO — staging requirement (named internal or external stage), LOAD_MODE = FULL_INGEST versus ADD_FILES_COPY, transformation via a SELECT over staged file columns, ON_ERROR and PURGE options, MATCH_BY_COLUMN_NAME, and VALIDATION_MODE for pre-load validation — https://docs.snowflake.com/en/sql-reference/sql/copy-into-table",
+    "Snowflake, Overview of data loading — bulk loading via COPY from already-staged cloud storage files, user-provided virtual warehouses that must be sized for the expected load, transformation during load, and the contrast with continuous loading through Snowpipe — https://docs.snowflake.com/en/user-guide/data-load-overview",
+    "PostgreSQL, COPY — COPY TO and COPY FROM semantics, files read and written directly by the server rather than the client, and the explicit warning that COPY FROM physically inserts rows as it progresses so a failure leaves deleted rows that still occupy disk space until VACUUM — https://www.postgresql.org/docs/current/sql-copy.html",
+    "BigQuery, Load statements in GoogleSQL — LOAD DATA INTO appending versus LOAD DATA OVERWRITE replacing, the guarantee that a failed load leaves the destination table unchanged, file_format_spec and load_option_list, and atomic partition overwrite — https://docs.cloud.google.com/bigquery/docs/reference/standard-sql/load-statements",
+    "BigQuery, Schedule a Snowflake transfer — FULL versus INCREMENTAL ingestion types, unloading to Cloud Storage as Parquet with the documented TIMESTAMP_TZ/TIMESTAMP_LTZ limitation, the 15 TB per-load-job-per-table default quota and the PIPELINE job type to lift it, and the guidance to avoid clustering and partitioning on the destination for full transfers — https://docs.cloud.google.com/bigquery/docs/migration/snowflake-transfer",
+    "Snowflake, Bulk loading from Google Cloud Storage — the two-step staging-then-COPY structure and the requirement for a running virtual warehouse to execute the load — https://docs.snowflake.com/en/en/user-guide/data-load-gcs"
+  ]
+}

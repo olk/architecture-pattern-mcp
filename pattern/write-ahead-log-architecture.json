@@ -1,0 +1,105 @@
+{
+  "category": "data",
+  "name": "write-ahead-log",
+  "context": "State that must survive a crash is written to a durable, ordered log before it is considered committed, and recovery replays that log. The local store is a cache: in Kafka Streams the compacted changelog topic is the source of truth and RocksDB is only a non-fault-tolerant lookup structure whose flush timing is uncontrolled. Under exactly-once processing the log write, the input offset commit and the output write must be atomic — and because local store writes were historically not atomic with the changelog commit, a crash would wipe the entire store and replay the changelog, with observed stalls spanning multiple days for high-cardinality tables.",
+  "benefits": [
+    "Recovery is a replay from a known offset rather than a checkpoint of the whole working set",
+    "Makes the durability boundary explicit and auditable — the log is the record of what happened",
+    "Enables end-to-end exactly-once by committing offsets, changelog and output atomically",
+    "Turns state changes into a stream that can be compacted, replicated, audited or fed to other consumers",
+    "Bounds recovery cost by commit interval and log length rather than by the size of the working set"
+  ],
+  "tradeoffs": [
+    "Write amplification: every state change is written locally and to the log, so throughput and storage cost roughly double",
+    "Non-windowed state only compacts; windowed keys carry the window in the key, so compaction can never purge old entries and the log grows until retention",
+    "Transactional state stores buffer uncommitted writes in memory, so a generous commit interval can push meaningful memory pressure",
+    "Finer-grained logging makes checkpoints faster and more stable but increases recovery replay time and space use",
+    "A log is an operational liability: retention, segment counts and rebalance interaction must all be managed"
+  ],
+  "quality_attributes": {
+    "scalability": 8,
+    "maintainability": 7,
+    "reliability": 10,
+    "security": 6,
+    "performance": 7,
+    "simplicity": 6
+  },
+  "suitable_domains": [
+    "stream-processing",
+    "event-driven-systems",
+    "distributed-transactions"
+  ],
+  "unsuitable_domains": [],
+  "use_cases": [
+    "Stream processing state that must be restored exactly after a task or machine failure",
+    "Exactly-once pipelines writing to Kafka topics and to transactional external sinks",
+    "Local state stores backed by RocksDB, where the changelog is authoritative and the store is a cache",
+    "Incremental checkpointing systems that log state deltas and materialise full snapshots in the background",
+    "Audit-grade pipelines where the log of state changes doubles as the compliance record"
+  ],
+  "avoid_when": [
+    "The workload is stateless — there is nothing to make durable beyond the log you already write",
+    "The log would be retained forever and compaction cannot apply, making storage unbounded for no benefit",
+    "The sink cannot participate in the transaction, so the exactly-once claim is not actually achievable",
+    "Recovery from a full recomputation is cheaper than maintaining a log"
+  ],
+  "component_types": [
+    "Changelog topic: compacted, durable ordered log of state changes; the authoritative copy",
+    "Local state store: RocksDB or in-memory cache used for lookups, rebuildable from the changelog",
+    "Commit protocol: periodic flush of stores plus offset commit, or a transaction spanning both",
+    "Transactional state store: buffers writes until the corresponding changelog transaction commits",
+    "Position/checkpoint file: maps local store contents to changelog offsets so recovery knows what is valid",
+    "Restore procedure: replays the changelog to reconstruct the store after a task moves machines"
+  ],
+  "technology_stack": [
+    "Apache Kafka changelog topics",
+    "Kafka Streams state stores",
+    "RocksDB",
+    "Apache Flink (changelog state backend, incremental checkpoints)",
+    "KIP-129 / KIP-447 (exactly-once)",
+    "KIP-844 / KIP-892 (transactional state stores)"
+  ],
+  "anti_patterns": [
+    "Treating the local RocksDB cache as the durable copy and configuring no changelog at all",
+    "Assuming exactly-once makes local state crash-safe: without transactional state stores a crash still wipes and replays",
+    "Leaving changelog replication at its default of one, losing fault tolerance exactly when the state matters",
+    "Retaining windowed changelogs indefinitely, since (key, window) keys defeat compaction entirely",
+    "Setting commit intervals so large that transactional buffering exhausts heap on high-cardinality stores"
+  ],
+  "related_patterns": [
+    "event-sourcing",
+    "event-driven",
+    "master-slave",
+    "space-based",
+    "kappa-architecture"
+  ],
+  "design_principles": [
+    "Log first, cache second — the cache is derived and may be discarded",
+    "Commit atomically or do not claim exactly-once",
+    "Recovery cost is a function of commit interval and log length, both of which are design parameters",
+    "Windowed state needs explicit retention because compaction cannot help it",
+    "The log's retention policy is part of the design, not an afterthought"
+  ],
+  "best_practices": [
+    "Enable transactional state stores so a crash replays only uncommitted records instead of wiping the store",
+    "Name state stores and their changelog topics explicitly so topology evolution does not orphan recovery data",
+    "Bound uncommitted-write buffering with an explicit byte threshold rather than relying on the commit interval alone",
+    "Set changelog replication above one and monitor restore time, not just task liveness",
+    "Test recovery by killing tasks on different machines, and measure how long restore actually takes"
+  ],
+  "migration_from": [
+    "non-durable-local-caches",
+    "full-checkpoint-on-every-failure"
+  ],
+  "migration_to": [
+    "event-sourcing",
+    "master-slave"
+  ],
+  "references": [
+    "Matthias Sax, Kafka Streams Internal Data Management — changelog topic is the source of truth, RocksDB is a non-fault-tolerant cache, https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=65864917",
+    "KIP-844: Transactional State Stores — crash failure wipes and replays state today; atomic commit proposal, https://cwiki.apache.org/confluence/display/KAFKA/KIP-844%3A+Transactional+State+Stores",
+    "Apache Flink, Improving speed and stability of checkpointing with generic log-based incremental checkpoints, https://flink.apache.org/2022/05/30/improving-speed-and-stability-of-checkpointing-with-generic-log-based-incremental-checkpoints/",
+    "Apache Kafka, Core Concepts — processing guarantees and exactly-once (KIP-129, KIP-447), https://kafka.apache.org/43/streams/core-concepts/",
+    "Apache Kafka, Streams Architecture — fault tolerance and recovery, https://kafka.apache.org/43/streams/architecture/"
+  ]
+}

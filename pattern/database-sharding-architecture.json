@@ -1,0 +1,152 @@
+{
+  "name": "database-sharding",
+  "category": "data",
+  "context": "A single relational store has hit its write ceiling: more CPUs or IOPS on one machine will not fix it, because the limit is the machine, and the fix is to spread the data across many. Database sharding partitions one logical dataset horizontally across multiple physical databases — each shard holds a subset of the rows, and together they hold the whole dataset. The critical decision is the distribution key (Citus calls it the distribution column), because every shard placement, every join strategy, and every resharding operation derives from it. Citus assigns rows algorithmically: it hashes the distribution column value and looks up which shard's hash range contains that result, storing the mapping in pg_dist_shard as shardminvalue/shardmaxvalue token ranges. The second critical decision is co-location: tables sharing a distribution column are sharded identically, so rows with the same key value are guaranteed to be on the same node even across tables — and that is what keeps relational operations local. Get it wrong and the consequences are concrete. Using the timestamp as the distribution column for time-series data scatters time ranges at random across shards, while the queries that actually matter ask for 'the most recent data' — so every query pays cross-node network overhead. Using per-entity ids (event_id, page_id) rather than the tenant key disperses related data so that a join which worked on one node now requires issuing two queries and merging on the coordinator. Citus's rule of thumb is blunt: 'the first and most important choice when sharding is the distribution column', and 'the most common mistake' is choosing one that does not group data meaningfully. Reference tables are the escape valve: a table distributed as a single shard replicated to every worker, with two-phase commit on modification, for data every node needs. Placement metadata is tracked separately from shard identity (pg_dist_placement), so a shard can have replicas on several workers and the cluster can be rebalanced without changing which logical shard a row belongs to.",
+  "benefits": [
+    "Horizontal write and read scaling bounded by aggregate cluster capacity rather than by the largest single machine",
+    "Shard pruning: a query on the distribution column touches only the shards whose hash range contains the value, so most queries do not scan the whole dataset",
+    "Blast-radius containment — a corrupt shard, a long-running migration, or an incident is confined to one partition of the data",
+    "Co-location preserves full SQL semantics: joins and foreign keys on the distribution column execute locally on one node instead of crossing the network",
+    "Elastic growth by adding nodes and rebalancing, rather than by a migration to a different database engine",
+    "Tenant isolation by construction when the distribution column is the tenant, which is a load-bearing multi-tenancy boundary",
+    "Independent shard maintenance — index rebuilds, upgrades, and restores run per shard and can be staged",
+    "Reference tables give cheap local access to shared lookup data without duplicating application logic"
+  ],
+  "tradeoffs": [
+    "Cross-shard queries are genuinely expensive: a join, aggregate, or ordering that does not include the distribution column becomes a fan-out to every node plus a merge on the coordinator, and the engine can no longer plan it as one query",
+    "Cross-shard transactions lose single-node ACID; writes touching multiple shards need two-phase commit, which costs throughput and adds a coordinator as a dependency",
+    "The distribution column choice is close to irreversible — changing it later means redistributing the entire dataset, which for a large table is a long, risky operation",
+    "Uniqueness constraints become shard-local, so enforcing a globally unique key requires application-level coordination",
+    "Operational complexity multiplies: N databases to patch, monitor, back up, and restore, and restore semantics change from 'restore one backup' to 'restore the right shards'",
+    "Connection management and pooling must be distributed-aware, since clients now route to the right node and the coordinator adds a hop",
+    "Small queries pay a coordinator hop, so sharding imposes a latency floor even for workloads that would have fit on one machine",
+    "Analytics over the whole dataset still requires a separate path — OLTP sharding does not make cross-shard full scans cheap"
+  ],
+  "quality_attributes": {
+    "scalability": 10,
+    "maintainability": 4,
+    "reliability": 6,
+    "security": 6,
+    "performance": 8,
+    "simplicity": 3
+  },
+  "suitable_domains": [
+    "data-intensive-workloads",
+    "high-scaling-needs",
+    "high-traffic",
+    "large-scale-distributed-systems",
+    "multi-tenant-saas",
+    "multi-tenant-platforms",
+    "data-driven-web-applications",
+    "high-scaling-distributed",
+    "telecommunications",
+    "e-commerce-flash-sales"
+  ],
+  "unsuitable_domains": [
+    "low-data-volume-scenarios",
+    "strong-consistency-requirements",
+    "single-persistence-layer",
+    "applications-needing-complex-cross-shard-joins",
+    "small-applications",
+    "simple-crud",
+    "prototypes"
+  ],
+  "use_cases": [
+    "Multi-tenant SaaS where tenant_id is the distribution column and each tenant's data is fully co-located, preserving single-node SQL for per-tenant queries",
+    "High-volume event ingestion sharded by repo_id or account_id, where queries nearly always filter on the distribution column and prune to one shard",
+    "A monolith whose single database has reached write throughput limits and needs horizontal scale without an engine migration",
+    "Per-tenant fault containment, so a runaway migration or corruption affects one tenant's shard rather than the whole store",
+    "Elastic capacity: adding workers and letting the shard rebalancer move placements as load shifts",
+    "Schema-based sharding (a schema per tenant) for ISVs whose applications cannot adopt row-based sharding without a query rewrite"
+  ],
+  "avoid_when": [
+    "The data fits comfortably on one machine — sharding imposes a coordinator hop and operational load for no benefit",
+    "Your workload's dominant queries do not include the distribution column, so most reads become cross-shard fan-outs",
+    "You need strong consistency or globally unique constraints across the whole dataset, since both degrade sharply under sharding",
+    "The distribution column is still an open question — choosing it wrong means redistributing all the data later",
+    "Operations maturity is limited and you cannot yet patch, monitor, back up, and restore N databases",
+    "The problem is actually a single slow query or a missing index — vertical tuning and query work are much cheaper than distributing the data",
+    "You need arbitrary ad-hoc joins across the whole dataset for analytics — that belongs in a separate analytical store"
+  ],
+  "component_types": [
+    "Coordinator / Router: the entry point that parses the query, computes which shards the distribution key touches, fans out, and merges results",
+    "Shard: one physical database holding a range of the dataset; on a worker it is a regular table named tablename_shardid",
+    "Distribution Key: the column whose hashed value determines shard placement — the single most consequential modelling decision",
+    "Shard Map / Placement Metadata: the catalog mapping shard id and hash token range to physical nodes (pg_dist_shard, pg_dist_placement)",
+    "Co-location Group: the set of tables sharing a distribution column and shard count, which is what keeps joins local",
+    "Shard Rebalancer: the background process that moves shards or placements between nodes as the cluster changes",
+    "Reference Table: a small table replicated to every worker, modified via two-phase commit, for data every node reads",
+    "Virtual Node / Consistent Hash Ring: the placement abstraction that bounds reshuffling when the node set changes",
+    "Resharding Tool: the operation that changes shard count or distribution key and moves the data"
+  ],
+  "technology_stack": [
+    "Citus",
+    "PostgreSQL",
+    "MySQL",
+    "Amazon Aurora",
+    "Google Cloud Spanner",
+    "Azure SQL",
+    "PlanetScale",
+    "Vitess",
+    "TiDB",
+    "CockroachDB",
+    "ProxySQL"
+  ],
+  "anti_patterns": [
+    "Using a timestamp as the distribution column for time-series data, scattering time ranges at random while the real queries ask for recent ranges",
+    "Per-entity ids (event_id, page_id) as the distribution column, dispersing related data and turning a single-node join into a fan-out plus merge",
+    "Sharding before the single-node limits are actually measured — an unindexed query is fixed in hours and sharding is fixed in quarters",
+    "Cross-shard joins in the request path, turning every page load into an N-node fan-out with a coordinator merge",
+    "Empty or heavily skewed shards from a distribution key with low cardinality or a Zipfian skew, leaving most capacity idle",
+    "Global unique indexes assumed to still work, with uniqueness enforced only within a shard",
+    "Using a random or time-ordered primary key on a sharded table, guaranteeing write contention on a single shard",
+    "Resharding live with no rollback plan, treating a full dataset redistribution as a routine operation"
+  ],
+  "migration_from": [
+    "monolithic",
+    "single-persistence-layer",
+    "vertical-scaling",
+    "shared-database-ms"
+  ],
+  "migration_to": [
+    "data-mesh",
+    "space-based",
+    "polyglot-persistence-needs"
+  ],
+  "related_patterns": [
+    "data-mesh",
+    "space-based",
+    "event-sourcing",
+    "edge-computing",
+    "microservices",
+    "lambda-architecture",
+    "command-query-responsibility-segregation",
+    "hybrid-cloud"
+  ],
+  "design_principles": [
+    "The distribution key is the architecture — it determines placement, join locality, query pruning, and resharding cost; choose it before writing any code",
+    "Co-locate by meaning: pick a key that groups related data together, so relational operations stay inside a shard instead of crossing the network",
+    "Model queries first — design the access patterns, then verify every one of them includes the distribution column or accepts a fan-out",
+    "Separate data from topology: shard identity is logical, placement is physical, and rebalancing must move placements without changing which shard a row belongs to",
+    "Bound the reshuffle with virtual nodes, so adding or removing a node moves a fraction of the keyspace rather than remapping everything",
+    "Reference data is replicated, not sharded — small tables every node reads become single-shard tables replicated to each worker with two-phase commit on write",
+    "Accept the consistency model explicitly — cross-shard writes pay two-phase commit, and that is a product decision, not an implementation detail",
+    "Shard for isolation as well as scale, because a partition that contains a failure is worth as much as a partition that adds throughput"
+  ],
+  "best_practices": [
+    "Pick the distribution column from your query patterns, not from the primary key, and write down why before implementing",
+    "Check cardinality and skew before committing — a low-cardinality or Zipfian key produces hot shards that defeat the whole design",
+    "Keep all tables that are joined together in the same co-location group with matching shard count and distribution column type",
+    "Verify with EXPLAIN that ordinary queries prune to few shards rather than fanning out to all of them",
+    "Enable the background shard rebalancer and monitor placement health rather than moving shards by hand",
+    "Use schema-based sharding when the application cannot adopt row-based sharding without invasive query rewrites",
+    "Plan the resharding operation with a rollback before the first one, and rehearse it on production-shaped data",
+    "Keep analytical workloads off the sharded OLTP path entirely; they belong in a store that can scan everything cheaply"
+  ],
+  "references": [
+    "Citus, Concepts — Citus documentation, https://docs.citusdata.com/en/stable/get_started/concepts.html",
+    "Citus, Data modeling — Citus documentation, https://docs.citusdata.com/en/stable/sharding/data_modeling.html",
+    "Citus, Creating and Modifying Distributed Objects (DDL) — Citus documentation, https://docs.citusdata.com/en/stable/develop/reference_ddl.html",
+    "Citus, Metadata Tables Reference — Citus documentation, https://docs.citusdata.com/en/v7.1/reference/metadata_tables.html"
+  ]
+}

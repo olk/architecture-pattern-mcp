@@ -1,0 +1,147 @@
+{
+  "name": "external-configuration-store",
+  "category": "cloud",
+  "context": "Applications ship with configuration baked into deployment packages — files on disk, resource bundles, build-time constants — so changing an endpoint, a feature flag, or a batch size requires a rebuild and redeploy of every instance. That produces three failures at once: configuration changes are coupled to code releases, instances running different code can hold different settings during a rolling deploy, and the same connection string or theme has to be re-declared in every application that needs it. The External Configuration Store pattern moves configuration out of the deployment artifact into a centralized, versioned store that applications read at runtime, so behaviour can change without a release. Azure names the two responsibilities separately: routine settings (feature flags, endpoints, business parameters) belong in the configuration store, while secrets (connection strings, API keys, certificates, passwords) belong in a dedicated secret-management system and are referenced from the store — putting credentials in the config store turns a config change into a credential leak. The store also has to solve the derived problem: an application that fetches its config from the network on every request has traded a restart for a runtime dependency, so nearly every real implementation pairs the store with a local cache plus change notification or polling for invalidation.",
+  "benefits": [
+    "Configuration changes take effect without a rebuild, redeploy, or restart, removing config edits from the release pipeline",
+    "One artifact runs unmodified across dev, test, staging, and production because all environment-specific values are supplied at runtime",
+    "Settings are shared across applications instead of duplicated — a queue URL or schema version is defined once",
+    "Rolling deploys stop producing mixed-configuration windows, because instances converge on the same store rather than carrying divergent local files",
+    "Change history and audit become a property of the store rather than of the version-control log: point-in-time recovery, immutable snapshots, and progressive rollout of a setting",
+    "Feature flags stop being compile-time constants, enabling canary rollout and runtime kill switches without a code change",
+    "Typed and labelled configuration surfaces let the store validate a setting's schema before it reaches an application",
+    "One place to review 'what is configured where', replacing grep across N config files"
+  ],
+  "tradeoffs": [
+    "The store becomes a runtime dependency and a new shared single point of failure; if it is unreachable and the local cache is cold or expired, the application cannot start or must fall back to baked-in defaults",
+    "Requires an availability and latency plan of its own — geo-replication, availability zones, and a bounded staleness budget for the local cache",
+    "Configuration becomes live mutable state, which destroys the property that code is immutable and reviewed: a one-line setting change can alter production behaviour without a peer review of code",
+    "Shared settings create blast radius across applications — an administrator editing one key can break every consumer, because nobody can reason locally about who reads a shared key",
+    "Typed configuration surfaces are versioned schemas, and a schema change is a breaking change for every consumer, reintroducing the coordination coupling the pattern was meant to remove",
+    "Observability and debugging get harder: the effective behaviour of an instance is now the composition of its binary version and whatever the store returned at read time",
+    "Operational cost of running and patching a config service, and the temptation to put too much into it until it becomes a second database with schema migrations"
+  ],
+  "quality_attributes": {
+    "scalability": 7,
+    "maintainability": 8,
+    "reliability": 6,
+    "security": 8,
+    "performance": 6,
+    "simplicity": 5
+  },
+  "suitable_domains": [
+    "cloud-native",
+    "cloud-native-applications",
+    "microservices",
+    "kubernetes",
+    "multi-tenant-saas",
+    "enterprise",
+    "highly-configurable-platforms",
+    "ci-cd-environments",
+    "regulated-industries"
+  ],
+  "unsuitable_domains": [
+    "static-requirements",
+    "mvp",
+    "prototypes",
+    "single-service-applications",
+    "low-complexity-single-service",
+    "simple-crud",
+    "short-lived-projects"
+  ],
+  "use_cases": [
+    "Feature flags and kill switches toggled without redeploying the service that reads them",
+    "One immutable container image promoted across dev, staging, and production with environment values injected at runtime",
+    "Shared endpoints — queue URLs, service base URLs, downstream API hosts — defined once for a family of applications",
+    "Tenant-specific limits and overrides served per tenant from a multi-tenant SaaS control plane",
+    "Configuration rollback after a bad settings change, using the store's revision history and point-in-time recovery",
+    "Progressive rollout of a new setting value to a percentage of instances before it goes to all of them",
+    "Edge and IoT workloads receiving configuration pushed by a cloud controller with local caching for intermittent connectivity"
+  ],
+  "avoid_when": [
+    "Requirements are genuinely static — there is nothing to change after deploy, so the store is pure overhead",
+    "The application is a single small service with a handful of settings and no fleet to keep in sync",
+    "You cannot yet operate a highly available shared service and would be trading a restart for an outage",
+    "Secrets are the only thing being stored — use a secret manager with references, not a config store holding credential values",
+    "Independent deployment of the config schema from the consuming code is not actually achievable in your platform, so the store just becomes a deployment artifact with extra hops",
+    "Regulatory requirements demand that every effective configuration is captured in a signed, immutable release artifact rather than read at runtime"
+  ],
+  "component_types": [
+    "Configuration Store: the centralized, versioned backing system holding key/value settings — cloud key-value storage, a dedicated config service, or a hosted database",
+    "Configuration Client / Library: the in-process component that reads settings, exposes them as typed values, and hides store access from application code",
+    "Local Cache: an in-memory copy so the steady-state read path does not hit the network; the store or client implements cache-aside and tolerates store unavailability",
+    "Change Notification Channel: the push or poll mechanism that invalidates the cache so a setting change propagates without a restart",
+    "Revision / Snapshot Store: immutable history plus point-in-time recovery, so a bad change can be rolled back without redeploying",
+    "Access Control and Identity: managed identity plus role-based access rather than connection strings, with private endpoints for network isolation",
+    "Configuration Authoring / Rollout Controller: the component that stages a new value to a subset of instances before promoting it"
+  ],
+  "technology_stack": [
+    "Azure App Configuration",
+    "Spring Cloud Config Server",
+    "Consul KV",
+    "HashiCorp Vault",
+    "AWS AppConfig",
+    "AWS Secrets Manager",
+    "Kubernetes ConfigMap and Secret",
+    "Nacos",
+    "etcd",
+    "12-Factor Config"
+  ],
+  "anti_patterns": [
+    "Config store used as a secret vault — connection strings and API keys stored directly as settings instead of referenced from a dedicated secret system",
+    "Store with no local cache, turning every settings lookup into a network hop and coupling application latency to store latency",
+    "Boot-time-only read: configuration is fetched at startup and never refreshed, so the store is an indirection with none of the benefit of live reconfiguration",
+    "One giant shared namespace where every team writes every key, making it impossible to reason about who breaks when a value changes",
+    "Config changes applied straight to 100% of instances with no staged rollout, converting a settings edit into an untested production deploy",
+    "Store treated as a general-purpose database — mutable business data accumulates until schema migrations and locking problems appear",
+    "Fallback to silently baked-in defaults when the store is unreachable, hiding a broken dependency behind plausible-looking behaviour"
+  ],
+  "migration_from": [
+    "monolithic",
+    "hardcoded-configuration",
+    "properties-in-deployment-package",
+    "microservices",
+    "kubernetes"
+  ],
+  "migration_to": [
+    "feature-flag-service",
+    "edge-computing",
+    "serverless"
+  ],
+  "related_patterns": [
+    "microservices",
+    "edge-computing",
+    "service-mesh",
+    "serverless",
+    "hybrid-cloud",
+    "event-driven",
+    "space-based",
+    "modular-monolith"
+  ],
+  "design_principles": [
+    "Configuration is data, not code: settings changes must not require a build, so they are governed with the same review and staging discipline as deployment",
+    "Separate settings from secrets: routine configuration in the store, credentials in a dedicated secret system, store entries holding only references",
+    "Local cache with bounded staleness: never make the store a per-request dependency, and make the cache's expiry window an explicit, agreed budget",
+    "Version everything: keep revisions, point-in-time recovery, immutable snapshots, and per-environment labelling so a bad value can be undone",
+    "Fail open to a known-good value: an unreachable store must degrade to last-known-good cached configuration, never to an empty or invented setting",
+    "Typed configuration with schema validation: expose settings as typed values and reject a malformed or wrongly-typed change at write time, not at application start-up",
+    "Least exposure: private endpoints, managed identity, and role-based access rather than long-lived connection strings, because the store is reachable by every workload"
+  ],
+  "best_practices": [
+    "Provision the store in an availability-zone-supported region and geo-replicate, so clients read from the nearest replica and can switch during a regional outage",
+    "Keep secrets in a secret manager and store only a reference; use managed identity and RBAC to authenticate applications instead of connection strings",
+    "Expose configuration to Kubernetes workloads through a provider that renders ConfigMaps and Secrets, rather than baking a client into every container",
+    "Push configuration changes through the same staged, tested pipeline as code changes, and canary a new value before promoting it",
+    "Use content type and label metadata so the store returns a value the application already knows how to parse",
+    "Prefer a push-based refresh or short poll interval over fetch-on-read, and log which revision an instance booted with",
+    "Give the store the same availability SLO as the application tier it configures, and alert on cache-miss rate and store latency"
+  ],
+  "references": [
+    "Microsoft, External Configuration Store Pattern — Azure Architecture Center, https://learn.microsoft.com/en-us/azure/architecture/patterns/external-configuration-store",
+    "Chris Richardson, Pattern: Externalized configuration — microservices.io, https://microservices.io/patterns/externalized-configuration.html",
+    "Microsoft, Azure App Configuration Considerations for Multitenancy — Azure Architecture Center, https://learn.microsoft.com/en-us/azure/architecture/guide/multitenant/service/app-configuration",
+    "Microsoft, Edge Workload Configuration pattern — Azure Architecture Center, https://learn.microsoft.com/en-us/azure/architecture/patterns/edge-workload-configuration",
+    "Paradigma Digital, Architecture Patterns in Microservices: Externalized Configuration, https://en.paradigmadigital.com/dev/architecture-patterns-in-microservices-externalized-configuration/",
+    "Microbus, Configuration — Microservice Substrate documentation, https://docs.microbus.io/microservice-substrate/connector/configuration/"
+  ]
+}

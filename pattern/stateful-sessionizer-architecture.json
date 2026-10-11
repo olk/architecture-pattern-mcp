@@ -1,0 +1,104 @@
+{
+  "category": "dataflow",
+  "name": "stateful-sessionizer",
+  "context": "Raw telemetry arrives as sparse, individually meaningless events with no session identifier — page views, API calls, heartbeats. Sessionization reconstructs periods of activity per entity: events separated by less than an inactivity gap belong to one session, events beyond the gap start a new one. Because an arriving event can extend or merge an existing session rather than merely append to it, sessionization is a genuinely merging, stateful operation and not a window type that can be substituted in place of a fixed window.",
+  "benefits": [
+    "Produces a business-meaningful unit of analysis (a visit, a work session, a drive) that no fixed window can express",
+    "Session identity survives irregular event timing — a user active for 3 minutes then 2 minutes is one session, not two",
+    "Session-level metrics (visits, conversions per visit, funnel abandonment) become computable from unlabelled event streams",
+    "Re-keying events to a stable session id enables downstream joins and grouping by visit rather than by clock interval",
+    "Dynamic per-event gap extraction lets the session boundary adapt to entity behaviour such as page type or action"
+  ],
+  "tradeoffs": [
+    "Windows are variable-length and mutually merging, so the store must support merge operations rather than fixed-range keys",
+    "Results are corrected after emission — a late event can extend a session already sent downstream, so consumers must upsert, not append",
+    "Merging triggers and merging aggregate functions are mandatory; a non-merging configuration silently produces wrong session aggregates",
+    "Late events can bridge the gap between two previously unmerged sessions, causing a late firing and a further merge",
+    "The gap parameter dominates every session metric, and session counts are extremely sensitive to it — the metric is an artefact of the choice"
+  ],
+  "quality_attributes": {
+    "scalability": 7,
+    "maintainability": 7,
+    "reliability": 8,
+    "security": 5,
+    "performance": 7,
+    "simplicity": 6
+  },
+  "suitable_domains": [
+    "stream-processing",
+    "real-time-analytics",
+    "clickstream-analytics"
+  ],
+  "unsuitable_domains": [],
+  "use_cases": [
+    "Clickstream analytics: visits, unique visitors, pages per session, conversion funnels per session",
+    "Application performance: grouping a user's API calls into sessions separated by inactivity",
+    "IoT and industrial telemetry: grouping device messages into operational sessions around an activity window",
+    "Security analytics: detecting a burst of failed actions followed by inactivity within one session",
+    "Network and database telemetry: reconstructing client sessions from connection-level records"
+  ],
+  "avoid_when": [
+    "The business question is a fixed-interval aggregate — tumbling windows are simpler and cheaper",
+    "The source already carries a session or transaction identifier, making reconstruction unnecessary",
+    "Entities can be active indefinitely without a meaningful notion of 'ended' — no gap can close those sessions",
+    "Late data is not tolerable and the source cannot be made more timely; merging corrections would be unbounded"
+  ],
+  "component_types": [
+    "Session window assigner: assigns each element to a session defined by an inactivity gap, static or dynamically extracted per element",
+    "Gap extractor: per-element function returning the inactivity threshold for that record",
+    "Session store: state type that can hold multiple overlapping candidate sessions per key and merge them",
+    "Merging window function: aggregate capable of combining two partially-accumulated session aggregates",
+    "Merging trigger: fires on both element arrival and window merge, merging trigger state alongside window state",
+    "Late-event handler: re-opens and re-merges sessions when a late element bridges a gap"
+  ],
+  "technology_stack": [
+    "Apache Flink (EventTimeSessionWindows, DynamicEventTimeSessionWindows)",
+    "Apache Kafka Streams (SessionWindows, SessionStore)",
+    "Apache Spark Structured Streaming (session window assignor)",
+    "ClickHouse",
+    "Druid"
+  ],
+  "anti_patterns": [
+    "Using session windows where a tumbling window would answer the question, paying merge cost for nothing",
+    "Choosing the inactivity gap from one observed histogram rather than from a distribution across the full population",
+    "Materialising session results into a downstream store that only appends, so merge corrections arrive as duplicates",
+    "Ignoring that a late event can bridge two previously separate sessions and emit a corrected result downstream",
+    "Storing sessions in a fixed-range window store, which cannot represent variable-length merging windows"
+  ],
+  "migration_from": [
+    "fixed-interval-window-aggregation",
+    "raw-event-stream-analysis",
+    "cookie-based-session-guessing"
+  ],
+  "migration_to": [
+    "windowing-pattern",
+    "pipe-and-filter"
+  ],
+  "related_patterns": [
+    "pipe-and-filter",
+    "event-driven",
+    "space-based",
+    "data-mesh",
+    "reactive-architecture"
+  ],
+  "design_principles": [
+    "Inactivity defines the boundary, not the calendar",
+    "Sessions merge, they do not merely grow — every state structure must support combination",
+    "Session identity is an output, not an input",
+    "Corrections are expected downstream; the contract is upsert",
+    "The gap is a product decision with statistical consequences, recorded alongside the metric definition"
+  ],
+  "best_practices": [
+    "Derive the gap from the inter-arrival distribution so the chosen value separates real sessions from noise",
+    "Require a merging trigger and a merging window function; session windows are evaluated differently from fixed windows",
+    "Emit session ids as first-class output so downstream consumers can group without re-implementing sessionization",
+    "Treat every downstream write as an upsert keyed by session id",
+    "Monitor late-event rate — a rising rate means the gap or the watermark tolerance is mis-set"
+  ],
+  "references": [
+    "Apache Kafka, Streams DSL — Session Windows and sessionization, https://kafka.apache.org/43/streams/developer-guide/dsl-api/",
+    "Apache Flink, Windows — session windows, dynamic gaps, merging triggers and late firings, https://nightlies.apache.org/flink/flink-docs-stable/docs/dev/datastream/operators/windows/",
+    "Apache Flink, EventTimeSessionWindows (javadoc) — MergingWindowAssigner, https://nightlies.apache.org/flink/flink-docs-stable/api/java/org/apache/flink/streaming/api/windowing/assigners/EventTimeSessionWindows.html",
+    "Apache Flink, DynamicEventTimeSessionWindows and SessionWindowTimeGapExtractor (javadoc), https://nightlies.apache.org/flink/flink-docs-stable/api/java/org/apache/flink/streaming/api/windowing/assigners/DynamicEventTimeSessionWindows.html"
+  ]
+}

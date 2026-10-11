@@ -1,0 +1,106 @@
+{
+  "category": "data",
+  "name": "vertical-partitioner",
+  "context": "One wide entity is decomposed along field groups — hot versus cold, sensitive versus public, indexed versus blob — into separate partitions, columns, files or topics, so each access path touches only the group it needs and each group can be governed, retained or scanned independently. In stream processing the same move appears as an explicit repartition: the record's key is changed and the stream is deliberately re-partitioned to a declared partition count, so downstream stateful operators are co-partitioned by construction rather than by accident.",
+  "benefits": [
+    "Query cost scales with the group read, not with the whole entity — narrow reads stop paying for wide storage",
+    "Field-level access control becomes enforceable: a restricted group is a separate physical object with its own policy",
+    "Access patterns diverge cleanly — a fast-changing field can live in a compacted partition while an append-only history lives beside it",
+    "Lifecycle policies differ per group: retention, compaction and deletion can each be tuned to what the group actually is",
+    "Declared repartitioning decouples downstream parallelism from the upstream producer's partitioning scheme"
+  ],
+  "tradeoffs": [
+    "A read that genuinely needs several groups becomes a join or a multi-partition fetch, which is far more expensive than one wide read",
+    "Splitting introduces a repartition hop: an extra write, an extra read and a reordering of the stream",
+    "Co-partitioning invariants must hold for downstream joins; a split on the wrong axis silently produces empty join results",
+    "Splitting high-cardinality entities multiplies the number of storage objects and their metadata overhead",
+    "Field-group boundaries are a schema decision that is expensive to change once data exists"
+  ],
+  "quality_attributes": {
+    "scalability": 8,
+    "maintainability": 6,
+    "reliability": 7,
+    "security": 9,
+    "performance": 8,
+    "simplicity": 5
+  },
+  "suitable_domains": [
+    "data-pipelines",
+    "stream-processing",
+    "big-data-analytics"
+  ],
+  "unsuitable_domains": [],
+  "use_cases": [
+    "Separating a hot mutable field from a cold descriptive blob so compaction touches only the small, hot part",
+    "Splitting sensitive identifiers into their own encrypted, policy-restricted store with a pointer left behind",
+    "Re-partitioning a stream to a declared partition count before a stateful consumer so tasks are evenly sized",
+    "Sharding a wide event into a header partition and a payload partition so consumers can subscribe to only one",
+    "Separating per-tenant data into distinct buckets so retention and access tokens can differ per tenant"
+  ],
+  "avoid_when": [
+    "Almost every read needs every field — the split adds a join cost to every query and saves nothing",
+    "The record is already narrow and the partition scheme is driven by entity identity, not field group",
+    "The split would break the co-partitioning invariant a downstream join depends on",
+    "Field-group boundaries are unstable, because entities evolve and the split would have to be migrated repeatedly"
+  ],
+  "component_types": [
+    "Field group: a named subset of fields with its own access pattern, lifecycle and policy",
+    "Key selector: assigns the partition key that defines the split axis",
+    "Repartition topic: internal topic that materialises the split with a declared partition count and partitioner",
+    "Co-partitioning contract: shared key scheme and partition count across all topics that will be joined",
+    "Merge operator: reassembles the groups when a full entity is genuinely required",
+    "Policy boundary: storage-level ACL and encryption applied per group"
+  ],
+  "technology_stack": [
+    "Apache Kafka (repartition topics, Repartitioned)",
+    "Kafka Streams (selectKey, groupBy)",
+    "Columnar stores (hot/cold tiers)",
+    "Object storage partitioned layouts",
+    "MQTT topic hierarchies"
+  ],
+  "anti_patterns": [
+    "Repartitioning after every key-changing operator without checking whether the next operation actually requires it",
+    "Splitting on an axis that breaks co-partitioning, leaving downstream joins silently empty",
+    "Joining the groups back together in every query, paying the split cost and none of the benefit",
+    "Declaring a repartition topic without a partition count, inheriting the source count and capping downstream parallelism",
+    "Splitting sensitive fields into their own partition without a distinct encryption and policy boundary"
+  ],
+  "migration_from": [
+    "wide-single-record-storage",
+    "implicit-partitioning-by-hash",
+    "undifferentiated-entity-tables"
+  ],
+  "migration_to": [
+    "pipe-and-filter",
+    "data-mesh",
+    "client-server"
+  ],
+  "related_patterns": [
+    "data-mesh",
+    "event-driven",
+    "pipe-and-filter",
+    "edge-computing",
+    "lambda-architecture",
+    "client-server"
+  ],
+  "design_principles": [
+    "Split on access pattern, lifecycle or policy — never on convenience",
+    "Declare the partition count explicitly; never inherit it by accident",
+    "The split axis must be compatible with every downstream co-partitioning requirement",
+    "Each group is an independent physical object with its own governance",
+    "Reassembly is the exception, not the default"
+  ],
+  "best_practices": [
+    "Prefer value-only operators (mapValues, flatMapValues) when only values change — they avoid a repartition entirely",
+    "Name repartition topics and declare their partition counts so topology changes do not become breaking changes",
+    "Document the split axis next to every consumer that depends on co-partitioning",
+    "Keep the group that drives joins and aggregation the co-partitioned one; split everything else",
+    "Measure read cost after the split — a split that no query exploits is pure overhead"
+  ],
+  "references": [
+    "Apache Kafka, Streams DSL — repartition, GroupByKey vs GroupBy, and co-partitioning requirements, https://kafka.apache.org/43/streams/developer-guide/dsl-api/",
+    "Apache Kafka, Repartitioned (javadoc) — declaring repartition topic name, partition count and partitioner, https://kafka.apache.org/43/javadoc/org/apache/kafka/streams/kstream/Repartitioned.html",
+    "KIP-221: Enhance DSL with Connecting Topic Creation and Repartition Hint, https://cwiki.apache.org/confluence/display/KAFKA/KIP-221%3A+Enhance+DSL+with+Connecting+Topic+Creation+and+Repartition+Hint",
+    "InfluxData, Designing Your Schema — measurements, tags, fields, buckets and per-bucket retention, https://awesome.influxdata.com/docs/part-2/designing-your-schema/"
+  ]
+}

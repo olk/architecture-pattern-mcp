@@ -1,0 +1,168 @@
+{
+  "name": "flow-interruption-detector",
+  "category": "data",
+  "context": "This pattern is deliberately not a lag detector. A lag detector answers 'how far behind is the consumer', an arithmetic question with a continuous answer whose remedy is to wait or to scale. An interruption detector answers a different question: 'this flow was supposed to produce something by now and it did not'. The signal is the absence of data, which is the hardest thing to monitor because every existing dashboard is built to show what is present. The engineering problem is that engines actively erase the evidence. Flink's watermark is computed as the minimum across all parallel inputs, so if one partition stops carrying events its watermark stops advancing and every downstream window silently freezes — and the documented remedy makes the erasure permanent: `withIdleness` marks the quiet input as idle so it 'will not hold back the progress of watermarks in downstream operators'. That is correct for genuinely low-traffic inputs and catastrophic for a broken producer, because after idleness is declared the two cases are indistinguishable. The detector therefore cannot live inside the engine's progress signal; it has to be built from an external statement of expectation. Airflow's asset model is the cleanest available statement of that contract. A DAG scheduled on an asset is only scheduled when 'all assets the DAG consumes have been updated at least once since the last time the DAG ran', and Airflow marks an asset as updated 'only if the task completes successfully' — a failed or skipped producer emits no update, so the absence of an update is a first-class, queryable fact. Partitioned asset events sharpen it further: an event carries a partition_key, and for a rollup the scheduler 'holds the Dag run until every upstream key in the window has arrived' with WaitForAll, or fires early with MinimumCount to 'tolerate a slow or missing upstream partition'. That is the whole pattern in miniature — a declared set of expected keys, and a detector that reports the ones that never arrived. The producer side completes the contract: a cron timetable that decides the partition key at runtime and simply does not emit when the period's data is not present, which means a missing period produces no event, no run, and no error anywhere. Detecting that silence requires something outside the pipeline. The second half of the pattern is response: once an interruption is detected, the correct action is repair — restart the producer, redrive the stalled partition, backfill the missing period — not waiting, because nothing is going to arrive.",
+  "benefits": [
+    "Detects the class of failure that has no error message — a producer that died cleanly, a schedule that never fired, a partition whose leader vanished, and a file that never landed all produce silence rather than a stack trace",
+    "Closes the zero-lag blind spot explicitly: a consumer group with no active members shows zero lag or, worse, its metrics disappear entirely, so lag alone cannot distinguish caught-up from stopped",
+    "Converts a data-availability requirement into a machine-checkable contract: 'a partition for period P exists' becomes an assertion with a deadline rather than a hope",
+    "Detects gaps, not just totals — sequence, offset and partition-key continuity catch a mid-stream hole that a head/tail comparison cannot see",
+    "Produces an actionable scope: because the expected set is explicit, the detector emits the exact missing periods and can drive a targeted redrive instead of a blanket reprocess",
+    "Fits naturally into data-aware orchestration, where an absent asset event is already meaningful and no extra instrumentation is needed beyond declaring outlets",
+    "Makes idleness safe — once 'quiet' has a separate, monitored meaning, engines can be liberal about marking inputs idle without losing the broken-producer signal",
+    "Cheap to run: expectations are periodic assertions over metadata and keys, not per-record inspection of the data itself",
+    "Fires before user impact in the cases that matter, because a missing period is detectable at the moment of its deadline rather than when someone reads a dashboard"
+  ],
+  "tradeoffs": [
+    "Idleness and interruption are genuinely ambiguous: the engine mechanism that stops a quiet partition from freezing the watermark is the same mechanism that hides a dead producer, so the detector needs an out-of-band expectation to break the tie",
+    "A false positive on an expected-but-genuinely-slow input trains the team to ignore the alarm, so the tolerance and the wait policy must be calibrated against observed arrival times",
+    "Expectations must be declared and maintained — a detector with a stale expectation list reports confidently on the wrong set of periods",
+    "Monitored absence is not prevention: the detector reports after the deadline, so the pipeline is still short a period; the remedy is repair, not avoidance",
+    "Not all silence is a fault — a legitimately event-free weekend, a seasonal outage, or a partition with no matching keys will all trip a naive expectation and require suppression rules",
+    "Circuit-breaking on interruption carries a documented hazard: a delayed job setting off a chain reaction of data failures downstream, which is why breakers should start in a small number of highly visible DAGs",
+    "Choosing fail-open versus fail-closed is a real decision — failing open lets an error or timeout pass and marks the breaker task skipped, while failing closed propagates `upstream_failed` to every downstream task",
+    "Multiple monitors sharing a UUID within a five-minute window share a single execution, which can make a detector look like it evaluated a case it did not",
+    "Detectors that only inspect the head of a stream miss mid-stream gaps, so they need offset or key continuity, which requires storing per-partition state",
+    "Reporting a missing period in an environment with many producers needs ownership metadata, or the alert routes nowhere and is ignored"
+  ],
+  "quality_attributes": {
+    "scalability": 7,
+    "maintainability": 7,
+    "reliability": 9,
+    "security": 5,
+    "performance": 6,
+    "simplicity": 6
+  },
+  "suitable_domains": [
+    "data-pipelines",
+    "distributed-data-pipelines",
+    "data-processing",
+    "event-driven-workloads",
+    "event-driven-workflows",
+    "stream-processing",
+    "streaming",
+    "batch-processing",
+    "scheduled-tasks",
+    "data-intensive-workloads",
+    "log-analysis",
+    "iot-data-ingestion",
+    "enterprise"
+  ],
+  "unsuitable_domains": [
+    "prototypes",
+    "startup-pocs",
+    "single-service-applications",
+    "small-applications",
+    "static-requirements",
+    "batch-analytics-only",
+    "purely-synchronous-workloads",
+    "low-data-volume-scenarios"
+  ],
+  "use_cases": [
+    "A nightly file drop where the contract is 'a file for date D exists in the landing prefix by 07:00', checked by an assertion that fails when the key is absent",
+    "A Kafka producer that exits cleanly after a crash-loop, detected because the expected partition's log-end offset stopped advancing while the topic still has traffic on sibling partitions",
+    "Airflow DAGs scheduled on assets, where a failed or skipped producer emits no asset event and the detector reports the consumer DAG as never-triggered for that period",
+    "A rollup pipeline using a partition-key window whose partial arrivals stay visibly pending under WaitForAll, so a missing upstream period is visible as an incomplete window rather than a late one",
+    "A runtime partition key decided from the data — 'emit only when the day's source file has landed' — which by construction produces no event on a missing day, and therefore requires an external deadline detector",
+    "Detecting a producer that is alive but publishing nothing, which passes every health check and every lag check and is only visible against a stated arrival expectation",
+    "A backfill or replay path where an interruption means 'this period was never processed' and the detector emits the missing period list as redrive input"
+  ],
+  "avoid_when": [
+    "The flow has no arrival expectation — for a pure event stream with no contract about which keys should appear, absence is not evidence",
+    "You only need to know how far behind the consumer is; that is a lag detector and it is simpler and cheaper than an expectation-based one",
+    "Input is genuinely sparse by design, and every quiet period would be a false positive until suppressed — at which point the detector is not earning its cost",
+    "Detection is the only requirement and the pipeline has no repair path; reporting a missing period with no way to backfill it creates noise, not value",
+    "A single-node development environment where the whole point is that nothing is running on a schedule",
+    "The expectation set cannot be derived from anything authoritative — a hardcoded list of expected dates drifts and produces confident nonsense",
+    "The system already has a gap-free source of truth and reconciliation is done by comparing full snapshots, making a real-time interruption detector redundant"
+  ],
+  "component_types": [
+    "Arrival expectation: the declared contract for what should exist by when — a partition key, a date, an offset, a file — derived from the schedule rather than hardcoded",
+    "Expectation registry: the durable list of expected items with their deadlines, versioned with the pipeline so the detector checks what the pipeline actually promised",
+    "Absence check: the assertion that an expected item exists now, expressed as a query over metadata, catalogue or offset state rather than over the data",
+    "Continuity / gap detector: per-partition offset or key monotonicity check that finds a hole in the middle of a stream rather than only at its head",
+    "Idleness-versus-interruption discriminator: the rule that separates an expected quiet period from an unexpected one, using the expectation registry rather than the engine's watermark",
+    "Watermark age and idle-status signal: the per-subtask watermark and idle markers, observed as evidence of a stalled input rather than as the pipeline's own progress",
+    "Asset / partition event stream: the orchestrator-native record of 'this key was produced', where a successful task marks the asset updated and a failed or skipped one emits nothing",
+    "Wait-policy evaluator: WaitForAll versus MinimumCount on a rollup window, which decides whether an absent key blocks the run or is tolerated",
+    "Circuit breaker / publish gate: the component that stops downstream publication when integrity thresholds are breached, with an explicit fail-open or fail-closed decision",
+    "Repair action: restart producer, redrive the named partition, or backfill the missing period — the detector's output is a scoped work item, not just an alert",
+    "Ownership routing: the mapping from a missing period to the team or runbook that fixes it, so the alert reaches someone who can act"
+  ],
+  "technology_stack": [
+    "Apache Airflow assets and partitioned asset events",
+    "Apache Airflow PartitionedAssetTimetable and RollupMapper",
+    "Apache Flink watermark and idle-status monitoring",
+    "Kafka consumer offsets and the Admin API",
+    "Prometheus and Alertmanager",
+    "Kafka lag exporter and prometheus-kafka-consumer-group-exporter",
+    "Monte Carlo monitors as code and circuit breakers",
+    "Object store listing as the arrival check",
+    "dbt source freshness",
+    "OpenLineage run events"
+  ],
+  "anti_patterns": [
+    "Relying on consumer lag alone to detect a stopped consumer, since a group with no members reports zero lag or no metric at all",
+    "Letting the engine's idleness timeout silently cover a broken producer, so the watermark advances happily over a dead input",
+    "Hardcoding the expected dates or partition list in the detector instead of deriving it from the schedule, guaranteeing drift",
+    "Treating 'no error was raised' as evidence that data arrived — a process that exits zero having produced nothing satisfies every success check",
+    "Tripping on legitimately event-free periods without a suppression mechanism, and then having the team mute the alert",
+    "Adding circuit breakers everywhere at once, when a delayed job can set off a chain reaction of data failures downstream",
+    "Choosing fail-open without setting downstream trigger rules to none_failed, so the intended 'pass through on error' behaviour does not actually hold",
+    "Detecting only at the head of the stream, so a hole in the middle of a partition is never seen",
+    "Alerting without the missing-period list, so the responder has to re-derive the scope before they can fix anything",
+    "Building the detector only in the engine and not alongside an orchestrator-level expectation, since the engine has already erased the distinction by the time you look"
+  ],
+  "migration_from": [
+    "batch-processing",
+    "event-driven",
+    "lambda-architecture"
+  ],
+  "migration_to": [
+    "kappa-architecture",
+    "event-driven",
+    "data-mesh"
+  ],
+  "related_patterns": [
+    "event-driven",
+    "kappa-architecture",
+    "lambda-architecture",
+    "reactive-architecture",
+    "task-control-architecture",
+    "enterprise-service-bus",
+    "broker",
+    "space-based"
+  ],
+  "design_principles": [
+    "Distinguish absence from lateness — a backlog is quantitative and self-healing; a missing period is a binary fault that never resolves on its own",
+    "Expectations come from the schedule, not from a hand-maintained list, so the detector checks what the pipeline actually promised",
+    "Silence is not a signal on its own — combine it with a declared expectation, because an engine's own idleness mechanism deliberately erases that distinction",
+    "Detect per key, not per stream, so the alert names the missing period and the repair is scoped rather than global",
+    "Tie-break quiet against broken outside the engine, where the expectation registry still exists",
+    "A detector without a repair action is an anxiety generator; emit a scoped work item, not just a page",
+    "Fail deliberately — choose fail-open or fail-closed once, document it, and set downstream trigger rules to match",
+    "Make suppression explicit and narrow; legitimate event-free periods are real and need modelled exceptions, not muted alerts"
+  ],
+  "best_practices": [
+    "Declare expected partitions as asset events or an equivalent registry keyed by the schedule, and have the detector read that registry rather than its own list",
+    "Monitor per-partition offset monotonicity in addition to head-versus-consumed position, so mid-stream gaps are caught",
+    "Track watermark age and idle flags per subtask separately from end-to-end lag, and alert on them independently",
+    "Use WaitForAll when a missing upstream period must block the downstream run, and MinimumCount only when the tolerance is deliberate and recorded",
+    "Emit the list of missing periods and keys in the alert payload, along with the owning pipeline and a redrive entry point",
+    "Start circuit breakers in a handful of highly visible pipelines and choose monitors whose incident history you understand before rolling them out broadly",
+    "Set the breaker's fail mode and the downstream task trigger rule together, since a fail-open breaker paired with all_success still halts the pipeline",
+    "Give runtime-partition producers an explicit 'not ready' path — emit nothing — and back it with a deadline detector so the missing period is still found",
+    "Suppress known event-free periods with dated, owned exceptions that expire, rather than with a permanent threshold",
+    "Test the detector by stopping a producer deliberately and confirming the alert names the correct period and the repair succeeds"
+  ],
+  "references": [
+    "Apache Flink, Generating Watermarks — idle inputs and sources, the watermark as the minimum across parallel watermarks, and `withIdleness` marking a quiet input so it no longer holds back progress (the mechanism that erases the idleness/interruption distinction) — https://nightlies.apache.org/flink/flink-docs-stable/docs/dev/datastream/event-time/generating_watermarks/",
+    "Apache Flink, WatermarkStrategy API — `withIdleness` semantics and its effect on downstream watermark progression — https://nightlies.apache.org/flink/flink-docs-stable/api/java/org/apache/flink/api/common/eventtime/WatermarkStrategy.html",
+    "Apache Airflow, Asset-Aware Scheduling — assets marked updated only on successful task completion, failed or skipped producers emitting no update, AND/OR scheduling conditions, and AssetOrTimeSchedule — https://airflow.apache.org/docs/apache-airflow/stable/authoring-and-scheduling/asset-scheduling.html",
+    "Apache Airflow, Asset Definitions — partitioned asset events with partition keys, RollupMapper with WaitForAll and MinimumCount wait policies, PartitionedAtRuntime for keys decided at task runtime, and the export example that emits no event when the period's data is not ready — https://airflow.apache.org/docs/apache-airflow/stable/authoring-and-scheduling/assets.html",
+    "Monte Carlo, Circuit breakers — stopping pipelines on integrity thresholds, fail-open versus fail-closed behaviour with downstream trigger rules, monitor UUID execution sharing within five minutes, and the warning about delayed jobs causing a chain reaction of downstream data failures — https://docs.getmontecarlo.com/docs/circuit-breakers",
+    "prometheus-kafka-consumer-group-exporter — exporter consuming `__consumer_offsets` to publish `kafka_consumer_group_lag` and `kafka_topic_highwater`, and the note that offset and high-water values update separately so a computed lag can be transiently negative — https://github.com/braedon/prometheus-kafka-consumer-group-exporter",
+    "Confluent, Monitor Kafka Consumer Lag — offset lag defined as the difference between the latest offset available in a partition and the group's committed offset, best practice to alert on continuous growth, and the max_pending_rebalance metric — https://docs.confluent.io/cloud/current/monitoring/monitor-lag.html",
+    "Segment/kafka-lag-exporter, Kafka Lag Exporter — Prometheus metrics for group lag in records and estimated lag in seconds plus latest offset, and its use as a health endpoint — https://seglo.github.io/kafka-lag-exporter/"
+  ]
+}

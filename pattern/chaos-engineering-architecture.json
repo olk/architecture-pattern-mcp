@@ -1,0 +1,155 @@
+{
+  "name": "chaos-engineering",
+  "category": "specialized",
+  "context": "A distributed system's resilience properties are mostly claims. Unit tests say a function handles an error; a load test says the system handles more traffic; neither says the system survives a dependency being slow, a node disappearing, or a retry storm — the failures that actually take production down. Chaos engineering replaces the claim with an experiment. The discipline was formalized by Netflix after Chaos Monkey showed that an unmonitored microservice architecture could be broken deliberately until it grew resilient: it is defined as 'the discipline of experimenting on a distributed system in order to build confidence in the system's capability to withstand turbulent conditions in production'. The method is a scientific experiment, not random breakage. First define steady state as a measurable output that indicates normal behaviour — Netflix used SPS, streams started per second, not a CPU metric, because only a user-visible output can falsify the hypothesis. Then state a falsifiable hypothesis ('the injected events will not cause the system's steady state to change'). Then vary real-world events sampled from the space of actual failure modes, ideally drawn from historical outage data so past incidents cannot recur. Then compare a control group against an experimental group and look for a statistically significant deviation in steady state. In Netflix's Subscriber experiment, adding 30ms latency to 20% then 50% of cache traffic did not move SPS — until it did at 50%, which disproved the hypothesis and produced concrete remediation work. The approach runs the experiment as close to production as possible, because a staging environment is not the system you need confidence in, and it automates the experiments to run continuously, because confidence decays as the system changes.",
+  "benefits": [
+    "Turns resilience from an assertion into an empirically demonstrated property — the steady-state hypothesis either survives the experiment or it does not",
+    "Reveals systemic weaknesses that unit and integration tests structurally cannot: interaction effects between independently fine components under realistic perturbation",
+    "Finds failure modes before customers do, at a blast radius you chose rather than one an outage chose",
+    "Validates that resilience mechanisms are actually wired correctly — a circuit breaker that was never exercised under real load is an untested assumption",
+    "Builds institutional confidence in the system's ability to absorb turbulent conditions, which is what permits fast, independent releases",
+    "Exercises the human side of resilience: whether on-call can detect, diagnose, and recover from the failure you injected",
+    "Prioritizes engineering effort by empirical evidence rather than by fear, since each experiment's result tells you whether the hypothesized risk was real",
+    "Automatable as a continuous regression suite, so a change that silently removes a resilience mechanism is caught by the next experiment run"
+  ],
+  "tradeoffs": [
+    "Real risk of customer-visible harm — Netflix needed an emergency abort mechanism after cascading failures unintentionally reached more users than intended, which is why minimizing blast radius is its own principle",
+    "Requires the mature observability that chaos is supposed to produce: without a trustworthy steady-state metric, there is nothing to compare, and the experiment produces noise",
+    "Demands operational and organizational maturity, so it is a poor fit for teams still building basic deployment and monitoring capability",
+    "Experiments can produce ambiguous results — a null result may mean the system is resilient or may mean the injection did not actually reach the code path",
+    "Cost: chaos experiments are engineering time that is explicitly not spent on features, and require someone accountable for the blast radius",
+    "Risks normalizing tolerance for outages ('we broke it on purpose, that's chaos') if the practice is not kept scoped and paired with real remediation",
+    "Automation and maintenance burden — experiment definitions drift as the system changes, and a stale experiment that no longer injects anything gives false confidence"
+  ],
+  "quality_attributes": {
+    "scalability": 5,
+    "maintainability": 7,
+    "reliability": 10,
+    "security": 4,
+    "performance": 6,
+    "simplicity": 4
+  },
+  "suitable_domains": [
+    "microservices",
+    "cloud-native",
+    "cloud-native-applications",
+    "kubernetes",
+    "large-scale-distributed-systems",
+    "high-scaling-distributed",
+    "high-scaling-needs",
+    "self-healing-systems",
+    "autonomous-systems",
+    "enterprise-systems-needing-centralized-governance",
+    "regulated-industries"
+  ],
+  "unsuitable_domains": [
+    "low-maturity",
+    "limited-operational-maturity",
+    "teams-without-distributed-systems-expertise",
+    "hard-real-time-systems",
+    "short-lived-projects",
+    "prototypes"
+  ],
+  "use_cases": [
+    "Validating that a dependency's latency spike does not move customer-visible steady state",
+    "Confirming that failover between regions has minimal impact on the primary success metric",
+    "Exercising a circuit breaker's open and half-open transitions against a real, not simulated, failure",
+    "Testing whether a noncritical backend that never responds (blackholed) causes the frontend to reject requests or degrade in latency",
+    "Verifying that retry budgets prevent a retry storm from amplifying an upstream outage",
+    "Running a scheduled organizational failover exercise (Netflix ran Chaos Kong monthly) to test the runbook with humans in the loop",
+    "Regression-testing that a recent refactor did not silently remove a resilience mechanism"
+  ],
+  "avoid_when": [
+    "You cannot define a trustworthy steady-state metric — without a falsifiable signal the experiment cannot conclude anything",
+    "The team lacks basic operational maturity: no monitoring, no on-call rotation, no rollback, no staging discipline to build on",
+    "The failure being injected is genuinely safety-critical with no mechanism to abort it (medical, aviation, nuclear, hard real-time control)",
+    "You are mid-incident — chaos experiments stop when the system is already unstable",
+    "The blast radius cannot be bounded — experiments that cannot be halted or scoped to a cohort are not experiments",
+    "There is no remediation path, so a failure you discover has no owner and no fix waiting",
+    "Compliance or certification forbids deliberate production perturbation and no validated equivalent environment exists"
+  ],
+  "component_types": [
+    "Steady-State Definition: the measurable, user-visible output used as the system health signal and the basis for every hypothesis",
+    "Hypothesis: the falsifiable claim about what the system will and will not do under perturbation",
+    "Fault Injector: the component that introduces the stimulus — latency, packet loss, process kill, CPU steal, DNS failure, zone loss",
+    "Blast Radius Controller: the scoping mechanism that limits the experiment to a traffic percentage or a user cohort, plus the abort path",
+    "Control and Experimental Cohorts: the population split that makes the comparison statistically meaningful",
+    "Failure Injection Testing (FIT): the mid-scale practice between manual QA failure and continuous production chaos",
+    "Chaos Automation Platform: the scheduler that runs experiments continuously and aggregates results",
+    "Observability Stack: metrics, tracing, and alerting that make steady state observable and the experiment's effect detectable",
+    "Remediation Loop: the process that turns a disproved hypothesis into a concrete fix and a follow-up experiment"
+  ],
+  "technology_stack": [
+    "Chaos Monkey",
+    "Chaos Kong",
+    "Chaos Mesh",
+    "Gremlin",
+    "Chaos Engineering Platform (Netflix CAP)",
+    "LitmusChaos",
+    "Istio fault injection",
+    "AWS Fault Injection Service",
+    "OpenTelemetry",
+    "Prometheus"
+  ],
+  "anti_patterns": [
+    "Injecting failures with no steady-state definition — the experiment produces anecdotes, not evidence",
+    "Running experiments only in staging, where the absence of real traffic, real data volume, and real third-party dependencies makes the result meaningless",
+    "Stating the hypothesis after seeing the result, so nothing can actually be disproved",
+    "Starting with large blast-radius events such as zone loss on the first attempt, before the abort path is trusted",
+    "Using fine-grained infrastructure metrics (CPU, latency) as steady state instead of a user-visible output, which hides degradation the user does feel",
+    "Injecting unrealistically — a workload that never sees the shape of real traffic will not reveal the coupling that real traffic creates",
+    "Treating a green experiment as done: confidence decays as the system evolves, so experiments must be automated to run continuously",
+    "'Chaos as permission to be unreliable' — running breakage experiments without pairing each one with remediation work",
+    "Experiment definitions left to rot, so a stale experiment that no longer injects anything reports false confidence"
+  ],
+  "migration_from": [
+    "monolithic",
+    "distributed-systems",
+    "microservices",
+    "reactive-architecture"
+  ],
+  "migration_to": [
+    "service-mesh",
+    "event-driven",
+    "modular-monolith"
+  ],
+  "related_patterns": [
+    "microservices",
+    "reactive-architecture",
+    "service-mesh",
+    "event-driven",
+    "task-control-architecture",
+    "master-slave",
+    "modular-monolith",
+    "serverless"
+  ],
+  "design_principles": [
+    "Build a hypothesis around steady state — every experiment states, in advance, what the system will do and what observation would disprove it",
+    "Vary real-world events — sample stimuli from the space of inputs that actually occur in production, including historical outage data, rather than inventing exotic faults",
+    "Run experiments close to production, because confidence gained in an environment that is not the system is confidence in the wrong thing",
+    "Automate to run continuously — confidence decays as the system changes, so an experiment that only ran once has a shelf life",
+    "Minimize blast radius — scope every experiment to a traffic percentage or user cohort, and have a working abort path before the first injection",
+    "Measure the user-visible outcome, not an internal proxy — fine-grained metrics are for detecting that the service is degraded, never for judging whether steady state held",
+    "Every disproved hypothesis gets remediation and a follow-up experiment — discovery without repair is just an outage report with extra steps"
+  ],
+  "best_practices": [
+    "Define steady state as a user-visible business metric (streams started, orders placed) and treat CPU and latency as diagnostic signals only",
+    "Write the hypothesis and the abort criteria before the run; anything decided after the fact is not an experiment",
+    "Start small — a single instance, a small traffic percentage — and grow the blast radius only after the abort path has been proven",
+    "Run against historical outage data first: those failure modes have already cost you once",
+    "Automate execution, result analysis, and eventually experiment generation, since manual-only experiments do not survive as the system changes",
+    "Test until failure and beyond, including recovery back to nominal load, because a system that cannot exit a degraded mode without human help is not resilient",
+    "Exercise noncritical backends specifically — blackhole them entirely rather than returning errors, since long-deadline waits on 'optional' services are a classic cascade",
+    "Run organizational exercises (failover between regions, dependency loss) with humans in the loop to validate the runbook, not just the code",
+    "Store experiment results as a durable record so a regression can be traced to the change that removed a protection"
+  ],
+  "references": [
+    "Principles of Chaos Engineering, https://principlesofchaos.org/",
+    "Casey Rosenthal, Lorin Hochstein, Aaron Blohowiak, Nora Jones, Ali Basiri, Chaos Engineering — O'Reilly, 2017, https://www.oreilly.com/content/chaos-engineering/",
+    "Netflix Technology Blog, Chaos Engineering Upgraded, 2015, https://netflixtechblog.com/chaos-engineering-upgraded-878d341f15fa",
+    "Nora Jones, Casey Rosenthal, Lorin Hochstein, Chaos Engineering (arXiv preprint), 2017, https://arxiv.org/abs/1702.05843",
+    "Mike Ulrich, Addressing Cascading Failures: Reducing System Outage — Google Site Reliability Engineering, https://sre.google/sre-book/addressing-cascading-failures/",
+    "Google, Site Reliability Engineering Workbook index (Empiricism, disaster recovery testing), https://sre.google/workbook/index/",
+    "Ben Linders and Casey Rosenthal, Building Reliable Software Systems with Chaos Engineering — InfoQ, 2021, https://www.infoq.com/articles/reliable-systems-chaos-engineering/"
+  ]
+}

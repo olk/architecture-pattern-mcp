@@ -1,0 +1,144 @@
+{
+  "category": "cloud",
+  "name": "operator-pattern",
+  "context": "A stateful application on Kubernetes requires operational knowledge — how to install it, how to seed it, how to resize it, how to back it up, how to upgrade it between versions, how to fail it over — and that knowledge normally lives in the heads of administrators and in Ansible playbooks and shell scripts outside the cluster, where it cannot be versioned with the application or reuse the platform's own reconciliation machinery. The operator pattern moves that knowledge into software. An operator is a client of the Kubernetes API that acts as a controller for a Custom Resource: it watches the resource's desired state, observes the cluster's actual state, and drives the two toward each other through a continuous control loop. Kubernetes itself is extended rather than modified — no fork, no API change — by linking a controller to one or more custom resources via a CustomResourceDefinition. The operator runs outside the control plane, normally as an ordinary containerised Deployment, and the application stops being a pile of Pods, Deployments, Services and ConfigMaps to its users, becoming a single object exposing only the knobs that make sense for it. The Operator Framework grew out of CoreOS's goal of putting operational knowledge into software; the Operator SDK exists because writing operators against low-level APIs otherwise means boilerplate, weak modularity and duplication.",
+  "benefits": [
+    "Operational knowledge becomes versioned, reviewable software instead of tribal knowledge and out-of-band scripts",
+    "Day-2 operations become declarative: reconfiguring, updating, backing up, failing over and restoring are expressed as desired state rather than as procedures to type correctly",
+    "The application becomes a first-class Kubernetes object with one API surface exposing only meaningful knobs, rather than a loose collection of primitives users must assemble",
+    "Reuse of the platform's own machinery — informers, work queues, owner references, finalizers, RBAC, leader election — instead of a bespoke automation framework",
+    "Custom APIs let the CRD carry intent that the cluster can validate before anything is created",
+    "Per-application abstractions at scale: many distinct stateful systems can be managed through the same declarative model without an operator per organisation",
+    "Graduation path from Day-1 (installation, configuration) to Day-2 (update, backup, failover, restore) automation in one artifact"
+  ],
+  "tradeoffs": [
+    "Reconcilers are eventually consistent by construction, so the API cannot assume a write has taken effect and every code path must tolerate re-execution",
+    "Operator bugs are cluster-scoped bugs: a reconciliation loop that converges on the wrong state is an outage, not a feature regression",
+    "Substantial complexity — controller-runtime, CRD schemas, finalizers, leader election, webhooks — that is the very boilerplate the SDK exists to reduce",
+    "One operator per ecosystem dependency multiplies install surface: a cluster with six operators has six CRDs, six RBAC models and six upgrade paths",
+    "CRD versions must be maintained across operator upgrades, with conversion webhooks when multiple versions are served",
+    "Webhook failure modes are unforgiving: an unavailable conversion or validating webhook can block writes to the custom resources entirely",
+    "Community fragmentation — multiple frameworks and SDKs for the same problem, each with its own idiom",
+    "Operators written without deep domain knowledge encode the wrong procedures, automating a misunderstanding at scale"
+  ],
+  "quality_attributes": {
+    "scalability": 7,
+    "maintainability": 8,
+    "reliability": 7,
+    "security": 8,
+    "performance": 6,
+    "simplicity": 4
+  },
+  "suitable_domains": [
+    "kubernetes",
+    "cloud-native-applications-on-kubernetes",
+    "cloud-native",
+    "platform-ecosystems",
+    "stateful-compute-intensive-tasks",
+    "data-intensive-workloads",
+    "iot-device-management",
+    "enterprise-applications"
+  ],
+  "unsuitable_domains": [
+    "simple-applications",
+    "simple-single-task-automation",
+    "static-reference-data",
+    "rapid-prototyping",
+    "small-teams",
+    "low-complexity-projects",
+    "serverless"
+  ],
+  "use_cases": [
+    "A clustered database operator that owns Day-1 install and seed and Day-2 resize, backup, failover and restore as reconciliation of a single Cluster resource",
+    "A message broker operator exposing a CR with partition count, replication factor and retention, and driving the StatefulSets and Services to match",
+    "A certificate or certificate-authority operator issuing and rotating certificates as a control loop rather than a cron job",
+    "Enrolling a bare-metal or edge device into a fleet: the operator reconciles desired firmware and configuration onto hardware that cannot run an agent",
+    "Managed database services on cloud providers implemented as operators over the cloud provider's API",
+    "Packaging a third-party stateful application that already has correct operating procedures, so those procedures become reviewable code"
+  ],
+  "avoid_when": [
+    "The application is stateless and immutable — a Deployment plus a ConfigMap is already the complete abstraction",
+    "The platform already offers a managed version of the service, so the operator reimplements what the cloud already maintains",
+    "You cannot staff ongoing maintenance for the operator: reconcilers accumulate bugs and CRD versions accumulate compatibility debt",
+    "Team members are unfamiliar with controller-runtime, informers and Kubernetes API machinery",
+    "The desired-state model does not fit the problem, such as operations whose outcome depends on human judgement at each step"
+  ],
+  "component_types": [
+    "CustomResourceDefinition: the API extension declaring the custom resource's schema",
+    "Custom Resource instance: the user's declarative statement of desired state",
+    "Controller / reconciler: the process implementing the control loop between observed and desired state",
+    "Work queue and informers: the machinery delivering change notifications to the reconciler",
+    "Finalizer: ensuring cleanup completes before the custom resource is removed",
+    "Owner references: making the managed resources garbage-collected with the custom resource",
+    "RBAC bindings: scoping the operator's permissions on the resources it manages",
+    "Conversion and validating webhooks: handling multi-version CRDs and admission-time validation",
+    "OLM / OperatorHub: the management layer that installs, updates and governs operators across a cluster"
+  ],
+  "technology_stack": [
+    "Operator Framework",
+    "Operator SDK",
+    "controller-runtime",
+    "Kubernetes CustomResourceDefinitions",
+    "Kubernetes admission webhooks",
+    "OLM (Operator Lifecycle Manager)",
+    "OperatorHub",
+    "kubebuilder",
+    "Kopf",
+    "Charmed Operator Framework",
+    "Java Operator SDK",
+    "Helm"
+  ],
+  "anti_patterns": [
+    "Operator as a shell-script wrapper: reimplementing imperative automation on top of the API instead of writing a reconciler",
+    "Assuming a write is applied: treating the create or update call as a command, so retries and partial failures corrupt state",
+    "Missing finalizers, so deleting the custom resource orphans the cluster it created",
+    "Reconcilers that are not idempotent, producing duplicate side effects when the same event is delivered twice",
+    "Writing an operator for a problem the managed service already solves, and owning the upgrade burden for nothing",
+    "One operator to manage a dozen unrelated products, coupling their upgrade cycles and blast radius",
+    "Skipping the CRD version lifecycle, breaking every existing custom resource at the next operator release",
+    "Automating procedures nobody fully understands, which scales a misunderstanding rather than a fix"
+  ],
+  "migration_from": [
+    "microservices",
+    "monolithic",
+    "container-pattern"
+  ],
+  "migration_to": [
+    "serverless",
+    "microservices"
+  ],
+  "related_patterns": [
+    "container-pattern",
+    "sidecar-pattern",
+    "microservices",
+    "service-mesh",
+    "serverless",
+    "event-driven",
+    "reactive-architecture",
+    "event-sourcing"
+  ],
+  "design_principles": [
+    "Reconcile, don't command: express desired state and let a continuous control loop drive reality toward it, because the loop is what survives restarts and retries",
+    "Level-triggered, not edge-triggered: act on current observed state rather than on the sequence of events that got you there",
+    "Idempotent by construction: every reconcile call must be safe to repeat, since the loop will repeat it",
+    "Extend the API, do not fork it: operators add custom resources to Kubernetes rather than modifying Kubernetes",
+    "Operational knowledge as a versioned artifact: the running system's behaviour is code that can be reviewed, tested and rolled back",
+    "One object, meaningful knobs: the custom resource exposes the application's own configuration vocabulary, not the platform's primitives"
+  ],
+  "best_practices": [
+    "Write the reconcile function against observed state and return early when already converged — never assume your previous write succeeded",
+    "Always install a finalizer before creating owned resources, so deletion cleans up rather than orphans",
+    "Use owner references so managed resources are garbage-collected with the custom resource",
+    "Keep the CRD versioned and ship a conversion webhook before introducing a second version, never in the same release that drops the first",
+    "Run leader election so multiple replicas do not reconcile concurrently, and set appropriate resource requests",
+    "Grant the operator the narrowest RBAC permissions that let it do its job, and audit those permissions as carefully as application code",
+    "Unit-test reconcilers against a fake client and integration-test them against a real API server (envtest) before release",
+    "Model Day-1 and Day-2 together from the start — an operator that only installs is half an operator"
+  ],
+  "sources": [
+    "Kubernetes, Operator pattern, https://kubernetes.io/docs/concepts/extend-kubernetes/operator/",
+    "Operator Framework, Welcome to the Operator Framework, https://operatorframework.io/",
+    "Operator SDK, Overview, https://sdk.operatorframework.io/docs/overview/",
+    "Operator SDK, Operator SDK home, https://sdk.operatorframework.io/"
+  ]
+}

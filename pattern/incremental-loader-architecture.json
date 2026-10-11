@@ -1,0 +1,172 @@
+{
+  "name": "incremental-loader",
+  "category": "dataflow",
+  "context": "The incremental loader processes only what changed since the last successful run, which makes it a stateful machine whether or not the code admits it. Its correctness rests on three artefacts: a way to identify the delta, a durable record of where the delta boundary currently is, and an idempotent way to apply the delta so that a retry after a partial failure does not duplicate. dbt makes the boundary conditions explicit and they are worth reading as a specification: an incremental model applies only when 'the model must already exist as a table in the database', 'the full-refresh flag is not passed', and 'the running model is configured with materialized=incremental' — the `is_incremental()` macro returns true only when all three hold, which is how a model bootstraps correctly into an empty environment instead of filtering against a table that does not exist. The delta itself comes from one of two shapes. A delta column — a reliable updated_at or load timestamp — gives `where updated_at > (select max(updated_at) from this)`, which the best-practice guidance qualifies with the correction that the `>=` form is used deliberately to include rows sharing the max timestamp. Or a monotonically identified set of new partitions, where the job detects newly present partitions rather than comparing timestamps. Applying the delta is a strategy choice with materially different costs, and the documentation is unusually candid about them: `merge` inserts new rows and updates matching ones on a unique key, but 'it can be expensive for large tables because it scans the entire destination table to determine what to update or insert'; `append` is cheap and low-cost but 'doesn't check for duplicates or verify whether a record already exists in the destination', so a repeated record is inserted again; `delete+insert` deletes then inserts and 'may be less efficient for larger datasets'; `insert_overwrite` replaces whole partitions and is ideal for tables partitioned by date, 'useful for refreshing recent or corrected data without full table rebuilds'. Two consequences follow that the pattern must own. First, drift: if the model's transformation logic changes, 'your transformations on your new rows of data may diverge from the historical transformations, which are stored in your target table', so only a full refresh can realign them. Second, entropy: late-arriving rows fall outside a cutoff derived from the target's maximum and are excluded permanently, so the pattern needs a lookback window — subtracting days from the cutoff — and a periodic full rebuild to reset the accumulated difference.",
+  "benefits": [
+    "Cost and latency proportional to the change rate rather than to dataset size, so a table with a billion rows and ten thousand daily changes costs the same as a small table",
+    "Idempotent upserts when a unique key is supplied: merge 'inserts records with a unique_key that don't exist yet in the destination table and updates records with keys that do exist', so retries do not duplicate",
+    "Partition-scoped replacement avoids full rebuilds for correction work — insert_overwrite overwrites 'only the affected partitions, not the whole table', which is ideal for date-partitioned tables",
+    "Handles mutable sources as well as append-only ones, so a source that overwrites rows in place is still loaded correctly as long as it exposes a reliable change timestamp",
+    "Cost control through query pruning: clustering or partitioning on the timestamp column means the delta filter touches a small fraction of the table",
+    "Microbatch variant makes backfills safe and chunked — dbt generates per-batch predicates from event_time, batch_size, begin and lookback, so 'each run processes multiple smaller queries (one per batch), making larger backfills safer and easier to retry'",
+    "Filters old rows stay aggregated: incremental aggregation queries 'do not have to maintain the full data for a long time such that late data can be handled correctly', so state stays bounded while within tolerance",
+    "Freshness SLA is achievable because the job duration is bounded by the delta, allowing a run every few minutes rather than nightly",
+    "Automatic late-data handling through a lookback parameter that reprocesses recent batches, so late arrivals are corrected by design rather than by a separate mechanism",
+    "Explicit escape hatch — --full-refresh drops and rebuilds the target, so the pattern can always be reset to a known-good state"
+  ],
+  "tradeoffs": [
+    "It is stateful, and dbt says so bluntly: 'Incremental models are stateful, so they're the easiest place to accidentally break idempotence — the expectation that re-running a model produces the same result'",
+    "Transformation drift is invisible until it is expensive: when model logic changes, new rows are computed differently from historical rows and nothing fails",
+    "The delta definition must be trusted — a source with a non-monotonic updated_at, or one that backdates rows, produces a delta that silently misses data",
+    "merge scales poorly on large tables because determining what to update requires scanning the destination, which can cost more than the full reload it replaced",
+    "append is cheap but does not deduplicate: 'if the same record appears multiple times in the source, it will be inserted again, potentially resulting in duplicate rows'",
+    "delete+insert pays delete and insert costs, and is 'less efficient for larger datasets'",
+    "Timestamp-boundary bugs are subtle — a strict > comparison on the max timestamp drops rows that share the boundary value, which is why >= is the recommended form",
+    "Late-arriving rows are excluded permanently by a cutoff derived from the target's own contents, so the pattern drifts away from the source without any error",
+    "A lookback window is a permanent cost applied on every run to mitigate an occasional problem, and it does not eliminate the drift",
+    "Schema evolution is manual: incremental models are created without the new column, so adding a column does not appear in the target and removing one fails the run",
+    "Merge performance degrades as the table grows unless clustering or predicates keep the scan bounded, so the optimisation must be maintained as data accumulates"
+  ],
+  "quality_attributes": {
+    "scalability": 9,
+    "maintainability": 6,
+    "reliability": 6,
+    "security": 6,
+    "performance": 9,
+    "simplicity": 5
+  },
+  "suitable_domains": [
+    "batch-processing",
+    "data-pipelines",
+    "data-processing",
+    "etl",
+    "data-intensive-workloads",
+    "distributed-data-pipelines",
+    "big-data-analytics",
+    "clickstream-analytics",
+    "real-time-analytics",
+    "data-science-platforms",
+    "log-analysis",
+    "e-commerce-platforms",
+    "scheduled-tasks"
+  ],
+  "unsuitable_domains": [
+    "small-to-medium-scale-data-processing",
+    "prototypes",
+    "startup-pocs",
+    "high-throughput-streaming",
+    "real-time-deterministic",
+    "static-requirements",
+    "volatile-core-frequent-changes",
+    "audit-regulatory",
+    "systems-requiring-audit-trails"
+  ],
+  "use_cases": [
+    "An hourly fact table fed from append-only raw events, filtered on event timestamp beyond the target's maximum and merged on an event_id unique key for idempotent upserts",
+    "A near-real-time event table updated every few minutes with `merge` on event_id and clustering on the event date so the merge's scan stays bounded",
+    "A date-partitioned dimension refreshed with `insert_overwrite`, replacing only the affected partitions when recent data is corrected",
+    "CDC-style loading driven by the warehouse's native change capture streams, where each run processes only the changed rows and no timestamp filter is needed",
+    "Microbatch incremental models with `event_time`, `batch_size` and `lookback`, processing billions of clickstream rows in hourly chunks so backfills are safe and retryable",
+    "A mutable source table that overwrites rows in place, loaded incrementally using a reliable updated_at column and merged on the primary key",
+    "A staging layer with a lookback window of several days so rows landing after their partition's initial load are captured on the next run",
+    "An incremental model paired with a snapshot, where staging is loaded incrementally for cheap runs and a separate snapshot preserves history"
+  ],
+  "avoid_when": [
+    "The dataset is small — incremental machinery is pure overhead when a full rebuild is cheaper and simpler",
+    "The source offers no reliable change indicator, neither a delta column nor monotonically new partitions; the loader cannot know what changed",
+    "The transformation logic changes frequently, because historical rows keep the old logic and only a full rebuild can realign them",
+    "The target is an immutable audit log where rewriting or merging existing rows is impermissible",
+    "Deletes in the source must be propagated and the chosen strategy cannot represent them — append and merge on a non-unique key will not remove rows",
+    "You cannot tolerate any drift from the source; incremental loading accumulates differences and only a periodic full rebuild resets them",
+    "The destination is small enough that merge's full destination scan costs more than a full reload",
+    "Correctness must be provable by inspection of the target alone, since incremental state lives outside the data and cannot be verified from the table",
+    "Source timestamps are not monotonic or are backdated by the producer, making the max-timestamp boundary structurally unsafe"
+  ],
+  "component_types": [
+    "Delta selector: the filter identifying rows changed since the last run, typically `updated_at > (select max(updated_at) from target)` or a newly present partition list",
+    "Delta-state checkpoint: the durable record of the last processed boundary — the target's own max timestamp, a control table, or the orchestrator's logical date",
+    "Bootstrap condition: the is_incremental predicate (target exists, not full-refreshing, materialisation configured) that makes the first run load everything",
+    "Unique key / merge key: the column or set of columns that identify a row across runs; without it merge degrades to append",
+    "Apply strategy: append, merge, delete+insert, insert_overwrite or microbatch, each with a different cost and duplicate-handling profile",
+    "Lookback window: the subtraction from the cutoff that re-reads recent periods so late-arriving rows are captured rather than excluded",
+    "Partition key: the clustering or partitioning that bounds the scan so incremental cost stays proportional to the delta",
+    "Schema-change policy: on_schema_change handling (ignore, fail, append_new_columns, sync_all_columns), since new columns do not backfill and dropped columns fail the run",
+    "Full-refresh escape hatch: the flag that drops and rebuilds the target and its downstream models, used for realignment and drift reset",
+    "Drift monitor: the periodic comparison between source row counts and target contents for the recent window, since the loader itself cannot detect the divergence it creates"
+  ],
+  "technology_stack": [
+    "dbt incremental materializations",
+    "dbt merge, delete+insert, insert_overwrite, append and microbatch strategies",
+    "Snowflake Streams for change data capture",
+    "Delta Lake, Apache Iceberg and Apache Hudi MERGE",
+    "Apache Spark",
+    "Snowflake and BigQuery clustering keys",
+    "BigQuery partition decorators and partition overwrite",
+    "Apache Airflow logical dates for batch boundaries",
+    "Debezium for change data capture",
+    "Amazon Redshift spectrum and copy"
+  ],
+  "anti_patterns": [
+    "Using a strict > comparison against max(updated_at), which drops every row sharing the boundary timestamp",
+    "Using merge without a unique_key, which silently behaves as append and duplicates on retry",
+    "Appending without deduplication on a source that can repeat records, since append does not check whether a record already exists",
+    "Keeping a transformation that changed while leaving historical rows computed the old way, producing a table no single query could produce",
+    "Using max(updated_at) as the cutoff with no lookback, so rows landing after their partition are filtered out permanently",
+    "Choosing merge on a large table without clustering or a predicate on the destination scan, so the merge costs more than the full reload",
+    "Adding a column to an incremental model and expecting it in the target — the model is created without it, so the column simply does not appear",
+    "Running incremental forever with no scheduled full refresh, letting drift accumulate until the table is untrustworthy",
+    "Applying merge on a key that is not actually unique, which produces non-deterministic matches and corrupted rows",
+    "Not monitoring the source-to-target delta, so a loader that stopped loading is indistinguishable from a source with no new data"
+  ],
+  "migration_from": [
+    "monolithic",
+    "layered-monolith",
+    "batch-processing"
+  ],
+  "migration_to": [
+    "data-mesh",
+    "command-query-responsibility-segregation",
+    "lambda-architecture"
+  ],
+  "related_patterns": [
+    "data-mesh",
+    "lambda-architecture",
+    "command-query-responsibility-segregation",
+    "pipe-and-filter",
+    "event-driven",
+    "reactive-architecture",
+    "space-based",
+    "strangler-fig"
+  ],
+  "design_principles": [
+    "State lives outside the data and must be treated as a first-class artefact — the delta boundary is as much a part of the system as the table",
+    "Idempotence is the precondition for retry, so the apply strategy must be chosen so the same delta applied twice is indistinguishable from applying it once",
+    "A unique key is what converts cheap append into correct upsert; without it, cheapness is bought with duplicate risk",
+    "Bound the cost of applying the delta — clustering, predicates or partition overwrite are what keep incremental cost proportional to the change",
+    "Late data is expected, so the cutoff needs an overlap; a cutoff at the exact maximum is a permanent silent exclusion",
+    "Incremental is a debt with an interest rate — schedule the full rebuild that resets the drift rather than pretending it does not accumulate",
+    "Logic changes invalidate history, so a transformation change is a rebuild event rather than a deployment",
+    "Bootstrap correctness is part of the design: the first run must load everything, which is a condition of the incremental path rather than an exception to it"
+  ],
+  "best_practices": [
+    "Filter with >= rather than > against the target's maximum timestamp so rows sharing the boundary value are not dropped",
+    "Always supply a unique_key with merge, and test uniqueness on that key with a data test so a non-unique key fails loudly",
+    "Cluster or partition on the timestamp column so the merge's destination scan is bounded, and monitor merge performance as the table grows",
+    "Add a lookback window sized from the source's observed late-arrival profile, and record why it is that size",
+    "Use insert_overwrite for date-partitioned tables when correcting recent data, since it replaces only affected partitions",
+    "Use microbatch for very large time-series tables so backfills process in bounded chunks with a lookback that reprocesses recent batches",
+    "Schedule a periodic full refresh on a low-traffic window — weekly for many models — and track its duration as a budget",
+    "Set on_schema_change deliberately and remember that none of the behaviours backfill values into historical rows for new columns",
+    "Take a snapshot alongside an incremental model when history is needed, because an incremental model only ever holds current values",
+    "Reconcile source and target row counts over a recent window on a schedule, since the loader cannot detect the drift it creates"
+  ],
+  "references": [
+    "dbt, About incremental models — the materialisation strategy of transforming and loading only new or changed data, the explicit warning that incremental models are stateful and the easiest place to break idempotence, and merge versus delete-then-insert on platforms without merge — https://docs.getdbt.com/docs/build/incremental-models-overview",
+    "dbt, Configure incremental models — the is_incremental preconditions (model exists as a table, --full-refresh not passed, materialised as incremental), the is_incremental macro, unique_key behaviour, full-refresh semantics and downstream propagation, and the four on_schema_change behaviours with their backfill caveat — https://docs.getdbt.com/docs/build/incremental-models",
+    "dbt, About incremental strategy — merge scanning the entire destination table and therefore expensive for large tables, append performing no duplicate checking and possibly inserting repeated records, delete+insert being less efficient for larger datasets, and insert_overwrite replacing only affected partitions — https://docs.getdbt.com/docs/build/incremental-strategy",
+    "dbt, Incremental models in-depth — the max(updated_at) cutoff, the documented consequence that rows arriving days after their partition are filtered out and never reach the model, the lookback window mitigation, and the recommendation to run a full refresh periodically to reset drift — https://docs.getdbt.com/best-practices/materializations/4-incremental-models",
+    "dbt, Incremental patterns for near real-time data — merge from append-only tables, CDC via Snowflake Streams, and microbatch with event_time, batch_size, lookback and cluster_by for massive time-series tables with common late-arriving data — https://docs.getdbt.com/best-practices/how-we-handle-real-time-data/2-incremental-patterns",
+    "dbt, Choosing incremental models or snapshots — when each is appropriate, the requirement that the source expose a reliable change timestamp, and the trade-off between cheap incremental staging and preserved history — https://docs.getdbt.com/best-practices/how-we-handle-cdc/2-choosing-incremental-or-snapshots",
+    "dbt, Apache Spark configurations — Spark-specific incremental strategies (append default, insert_overwrite, merge requiring delta/iceberg/hudi, microbatch) and the requirement that a partition predicate accompanies insert_overwrite so all relevant data is reselected — https://docs.getdbt.com/reference/resource-configs/spark-configs"
+  ]
+}

@@ -1,0 +1,146 @@
+{
+  "name": "static-content-hosting",
+  "category": "cloud",
+  "context": "A web application's request stream mixes two very different kinds of traffic. Dynamic traffic — pricing a cart, rendering a personalized account page — needs compute and is worth paying for per request. Static traffic — images, stylesheets, client-side JavaScript, PDFs, and, increasingly, SPA build output — is byte-identical for every visitor and never changes between requests. Serving both from application instances wastes the most expensive resource in the system on work a storage service does better and cheaper. Static content hosting splits them: deploy immutable assets to an object storage service that exposes an HTTP endpoint and lets clients fetch them directly, so compute instances shrink to only the requests that actually need computation. Azure's framing is explicit about the economics — storage costs far less than compute, and moving assets out 'can reduce the requirement for potentially expensive compute instances'. A CDN in front of the storage container then caches the content across datacenters worldwide, which turns the pattern from a cost optimization into the primary global delivery mechanism. The pattern has a hard boundary that is easy to get wrong: static means byte-identical across visitors, so anything that varies per user, per request, or per A/B cohort is not static content and must not be published to a publicly addressable container. Azure Storage serves a container's files to anonymous requests by default only after you deliberately make it public; if the assets are not meant to be anonymous, the correct mechanism is a short-lived, time- and scope-limited shared access signature in the URL (a valet key), generated with a user-delegated token. Newer static website hosting features add a custom domain, HTTPS via CDN, and the ability to serve a whole build output as an anonymous static site — which is what makes it the default deployment target for frontend-only applications.",
+  "benefits": [
+    "Compute instances scale down: the fleet only serves requests that require computation, so instance count and cost fall with static traffic volume",
+    "Storage is dramatically cheaper than compute per byte served, so the marginal cost of a page view drops substantially",
+    "Static assets leave the application tier entirely, removing asset-request load from instances that are sized for dynamic work",
+    "A CDN in front of the container caches content in datacenters worldwide, cutting origin latency for distant users and absorbing repeat views at the edge",
+    "Assets are uploaded by a build pipeline rather than served by an application, so deploys of static content become atomic file operations with no application restart",
+    "Horizontal scalability is nearly free — object storage and CDN handle traffic spikes without scaling the application fleet",
+    "Availability is inherited from the storage and CDN services, which replicate and fail over independently of the application",
+    "Frontend-only applications can be deployed as a complete static site with no server runtime at all"
+  ],
+  "tradeoffs": [
+    "Only genuinely immutable, user-independent content qualifies — anything personalized, A/B tested, or computed per request does not belong on a public container, and misclassifying it leaks data",
+    "Anonymous access is the default risk: a container left publicly readable exposes its contents, so access control is a first-class concern rather than a detail",
+    "A signed-URL (valet key) approach trades openness for expiry management — signatures must be short-lived, correctly scoped, and regenerated, which pushes work into the application that emits them",
+    "Cache invalidation becomes a real problem: content-addressed or fingerprinted filenames are effectively mandatory, and a new deployment must purge CDN edge caches or users get stale assets",
+    "Cross-origin configuration (CORS) and custom-domain TLS add setup steps that are easy to get subtly wrong and produce confusing browser-side failures",
+    "Uploading assets becomes a separate deployment concern with its own pipeline, credentials, and failure modes, independent of the application deploy",
+    "The volume of static content can be small enough that the overhead of separate storage and CDN configuration outweighs the benefit — Azure lists this as an explicit consideration",
+    "Origin-pull traffic, storage transactions, and CDN requests are all separately billed, so the cost model is more complex than an instance-hour bill"
+  ],
+  "quality_attributes": {
+    "scalability": 9,
+    "maintainability": 8,
+    "reliability": 8,
+    "security": 5,
+    "performance": 9,
+    "simplicity": 8
+  },
+  "suitable_domains": [
+    "content-management-systems",
+    "web-applications",
+    "global-distribution",
+    "high-traffic-portals",
+    "cloud-native",
+    "media-processing",
+    "e-commerce",
+    "geographical-expansion-without-building-datacenters",
+    "static-requirements",
+    "large-scale-distributed-systems"
+  ],
+  "unsuitable_domains": [
+    "single-persistence-layer",
+    "low-latency-local-calls",
+    "strongly-consistent-single-entity",
+    "state-dependent-processing",
+    "real-time-processing",
+    "systems-requiring-strong-consistency",
+    "simple-single-view-applications"
+  ],
+  "use_cases": [
+    "A single-page application deployed entirely to object storage with static website hosting, served through a CDN, with no application server",
+    "Product images, brand assets, and downloadable documents served from a storage container rather than from web application instances",
+    "Versioned JavaScript and CSS bundles uploaded by CI with content-hashed filenames, so a new deploy changes URLs and CDN caching remains correct",
+    "A documentation or marketing site whose HTML, images, and styles are entirely static, hosted at near-zero compute cost",
+    "Large media and document downloads moved off the application tier so they do not compete with interactive requests for instances",
+    "Private or licensed assets delivered via time- and scope-limited shared access signatures generated per user session"
+  ],
+  "avoid_when": [
+    "Content varies per user, per request, or per A/B cohort — publishing it to a shared container exposes or serves the wrong bytes",
+    "The total static content volume is very small, so the overhead of separate storage and CDN setup outweighs the compute savings",
+    "Assets must be regenerated per request or are tightly coupled to application state, making them dynamic by definition",
+    "You need authenticated per-user assets and have no plan for issuing, scoping, and expiring access tokens",
+    "Cache invalidation is a hard requirement without immutable filenames, since a CDN will serve stale content after every deploy",
+    "The whole application is server-rendered with few static assets — the cost argument is about moving bytes off compute, and there are not enough bytes to move"
+  ],
+  "component_types": [
+    "Object Storage Container: the backing store holding the assets, exposed over an HTTP endpoint",
+    "Static Website Endpoint: the anonymous-serving capability that turns a container into a web root for a SPA build",
+    "Content Delivery Network: the edge cache in front of the container, serving content from datacenters worldwide and absorbing repeat views",
+    "Custom Domain and TLS: the hostname and certificate configuration that lets the content be served over HTTPS under the application's own domain",
+    "Deployment Pipeline / Upload Job: the CI step that uploads assets to the container and purges the CDN endpoint",
+    "Asset Fingerprinter: the build step producing content-hashed filenames so a changed asset gets a new URL",
+    "Access Signature Generator: the component issuing time- and scope-limited shared access signatures for non-public assets",
+    "CORS Configuration: the cross-origin rules that let the application origin fetch from the storage or CDN origin"
+  ],
+  "technology_stack": [
+    "Azure Blob Storage / Static website hosting",
+    "Azure CDN",
+    "Amazon S3",
+    "AWS CloudFront",
+    "Google Cloud Storage",
+    "Cloud CDN",
+    "Netlify",
+    "Vercel",
+    "Cloudflare R2 / Pages",
+    "Fastly"
+  ],
+  "anti_patterns": [
+    "Serving images, stylesheets, or bundles from application instances because moving them 'is not worth the effort' — paying compute prices for byte-identical responses",
+    "Publishing per-user or per-cohort content into a container with anonymous read access, leaking data to anyone with the URL",
+    "Long-lived shared access signatures, which turn a temporary access token into a permanent public link",
+    "Non-fingerprinted asset filenames combined with a CDN, so users keep loading stale JavaScript after deploys",
+    "Uploading assets without purging the CDN endpoint, shipping a new build that most users never receive",
+    "Hosting per-user HTML in a static container, turning a caching win into a correctness and privacy incident",
+    "No CORS or custom-domain TLS configuration, producing browser-side failures that look like application bugs"
+  ],
+  "migration_from": [
+    "client-server",
+    "monolithic",
+    "layered-monolith",
+    "microservices"
+  ],
+  "migration_to": [
+    "edge-computing",
+    "serverless",
+    "modular-monolith"
+  ],
+  "related_patterns": [
+    "edge-computing",
+    "client-server",
+    "serverless",
+    "api-gateway",
+    "strangler-fig",
+    "microservices",
+    "modular-monolith",
+    "microkernel-plugin"
+  ],
+  "design_principles": [
+    "Split compute from bytes — only requests that require computation should consume a compute instance",
+    "Immutable assets, immutable URLs — content-hashed filenames make caches correct without invalidation logic, which is the only cheap way to run a CDN",
+    "Static means byte-identical for every visitor; anything that varies per user, request, or cohort is dynamic and stays on the application tier",
+    "Never publish protected content anonymously — an asset store that requires a token must be reached through short-lived, scoped tokens, not a public container",
+    "Deploy assets like code — uploads are atomic file operations driven by CI, and the asset pipeline is versioned alongside the application",
+    "Push the CDN to the edge — origin requests should be the exception, not the norm; a deployment purges the edge so new assets reach users immediately"
+  ],
+  "best_practices": [
+    "Fingerprint asset filenames with a content hash so a changed asset always has a new URL and caches stay correct",
+    "Serve over HTTPS on a custom domain through the CDN, with the container itself private where possible",
+    "Use anonymous access only for genuinely public assets; generate time- and scope-limited shared access signatures with user-delegated tokens for everything else",
+    "Purge the CDN endpoint as part of the deployment pipeline so a new build actually reaches users",
+    "Upload with a batch-capable CLI action from CI so the whole build output lands in one step",
+    "Configure CORS explicitly for the application origin rather than allowing everything",
+    "Check asset volume against the setup overhead before committing — tiny static content does not justify the extra moving parts",
+    "Monitor cache hit ratio and origin request counts so you can tell whether the CDN is actually absorbing traffic"
+  ],
+  "references": [
+    "Microsoft, Static Content Hosting pattern — Azure Architecture Center, https://learn.microsoft.com/en-us/azure/architecture/patterns/static-content-hosting",
+    "Microsoft, Static content hosting (legacy Cloud Design Patterns), https://learn.microsoft.com/en-us/previous-versions/msp-n-p/dn589776%28v=pandp.10%29",
+    "Microsoft, Use GitHub Actions to deploy a static site to Azure Storage, https://learn.microsoft.com/en-us/azure/storage/blobs/storage-blobs-static-site-github-actions",
+    "Microsoft, Cloud Design Patterns index (Static Content Hosting listed under Cost Optimization), https://learn.microsoft.com/en-us/azure/architecture/patterns"
+  ]
+}

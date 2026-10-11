@@ -1,0 +1,105 @@
+{
+  "category": "cloud",
+  "name": "device-lifecycle",
+  "context": "An IoT or edge fleet must be enrolled, authenticated, grouped, described, found and retired as a population rather than device by device. The registry holds an entry per physical thing — name, attributes, type, group membership — and provisioning is a template-driven act that mints the thing, the client certificate and the IoT policy together, so a device that joins the fleet becomes routable and authorised in one step instead of three manual ones. Grouping then becomes the unit at which policy, targeting and bulk operations apply.",
+  "benefits": [
+    "Devices are provisioned from a versioned template, so onboarding a thousand units is a loop over parameter sets rather than a thousand console operations",
+    "Thing, certificate and policy are created together, removing the window where a device exists but cannot talk or can talk but is not registered",
+    "Provisioning by claim lets a device bootstrap itself on first connect using a shared claim certificate, then receive its own credentials",
+    "Thing groups form a hierarchy with inherited policies, so permission changes apply to a whole population in one edit",
+    "Dynamic groups express membership as a live query over connectivity, shadow existence and Device Defender findings, so the fleet stays classified without manual curation"
+  ],
+  "tradeoffs": [
+    "Registry state drifts from physical reality — a decommissioned device is indistinguishable from an offline one until the inventory is reconciled",
+    "Dynamic groups are eventually consistent: creation moves through a BUILDING state and membership changes lag the underlying facts",
+    "A group can have at most one direct parent and a thing belongs to at most ten groups, which constrains hierarchy design",
+    "Template parameters and override settings make provisioning subtly order-dependent; a re-provision can MERGE, REPLACE or leave attributes untouched depending on configuration",
+    "Certificate rotation at fleet scale requires group-level policy attachment rather than per-device edits, which couples security operations to the group model"
+  ],
+  "quality_attributes": {
+    "scalability": 9,
+    "maintainability": 8,
+    "reliability": 8,
+    "security": 9,
+    "performance": 6,
+    "simplicity": 6
+  },
+  "suitable_domains": [
+    "iot",
+    "iot-device-management",
+    "edge-computing-bandwidth"
+  ],
+  "unsuitable_domains": [],
+  "use_cases": [
+    "Onboarding a manufactured batch where serial numbers are known at packing time",
+    "Self-provisioning field devices that carry only a shared claim certificate",
+    "Rolling certificate rotation across an entire device group",
+    "Classifying a fleet by behaviour — devices that never connect, devices with no shadow, devices with Defender findings",
+    "Attaching and detaching authorisation policy across a fleet by group membership instead of per device"
+  ],
+  "avoid_when": [
+    "The deployment has a handful of devices — the registry machinery has real operational cost for no benefit",
+    "Devices are never re-provisioned, re-certified or decommissioned, so there is no lifecycle to manage",
+    "Identity is derived from a gateway rather than per device, making per-device registry entries redundant",
+    "The registry must be the authoritative real-time state of a device, which it is not — the shadow and the device are"
+  ],
+  "component_types": [
+    "Device registry: one record per thing with name, attributes, type and group memberships",
+    "Provisioning template: versioned parameterised declaration of thing, certificate and policy resources",
+    "Claim certificate: shared fleet credential used once for self-registration",
+    "Client certificate: per-device credential issued at provisioning and rotated independently",
+    "IoT policy: permission document attached to certificates or groups, inherited down the hierarchy",
+    "Static and dynamic thing groups: explicit membership versus membership derived from a registry query"
+  ],
+  "technology_stack": [
+    "AWS IoT Core device registry",
+    "AWS IoT provisioning templates and fleet provisioning",
+    "AWS IoT thing groups",
+    "AWS IoT fleet indexing",
+    "AWS IoT Device Defender",
+    "Azure IoT Hub device provisioning service"
+  ],
+  "anti_patterns": [
+    "Creating the thing, the certificate and the policy as separate manual steps per device, leaving partially onboarded devices",
+    "Using a per-device certificate embedded at manufacture, making rotation impossible without physical access",
+    "Ignoring group hierarchy constraints (one direct parent, ten groups per thing) and producing a model that cannot be expressed",
+    "Treating dynamic group membership as immediately consistent and acting on it before the BUILDING backfill completes",
+    "Using the registry as the source of truth for device state instead of the device shadow"
+  ],
+  "migration_from": [
+    "per-device-manual-onboarding",
+    "shared-credentials-for-every-device",
+    "spreadsheet-device-inventories"
+  ],
+  "migration_to": [
+    "device-shadow",
+    "edge-computing"
+  ],
+  "related_patterns": [
+    "edge-computing",
+    "api-gateway",
+    "event-driven",
+    "microservices",
+    "master-slave"
+  ],
+  "design_principles": [
+    "Registry, identity and authorisation are provisioned atomically as one template",
+    "Per-device credentials are the default; shared claim credentials are a bootstrap, not a steady state",
+    "Grouping is the unit of fleet-scale policy and targeting",
+    "Dynamic membership expresses intent as a query, not as curated state",
+    "The registry describes identity and grouping; it does not describe live device state"
+  ],
+  "best_practices": [
+    "Version provisioning templates and pin devices to a version so a fleet rollout is reproducible",
+    "Use group-attached policies so a certificate rotation is one group edit rather than N device edits",
+    "Plan the group hierarchy before creating children — a group's parent cannot be changed later",
+    "Treat dynamic group membership as eventually consistent and gate automation on the ACTIVE status",
+    "Keep claim certificates out of steady state; rotate provisioned devices onto their own credentials"
+  ],
+  "references": [
+    "AWS IoT, Provisioning templates — JITP, bulk registration and fleet provisioning, https://docs.aws.amazon.com/iot/latest/developerguide/provision-template.html",
+    "AWS IoT, Device provisioning — provisioning by claim and resource creation, https://docs.aws.amazon.com/iot/latest/developerguide/iot-provision.html",
+    "AWS IoT, Thing groups — hierarchies, policy inheritance and membership limits, https://docs.aws.amazon.com/iot/latest/developerguide/thing-groups.html",
+    "AWS IoT, Dynamic thing groups — membership from registry queries and the BUILDING backfill state, https://docs.aws.amazon.com/iot/latest/developerguide/dynamic-thing-groups.html"
+  ]
+}

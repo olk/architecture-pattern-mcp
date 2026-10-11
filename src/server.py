@@ -257,7 +257,7 @@ class MCPArchitectServer:
       - cancel_architecture_design: Cancels a running job (best-effort; exits at next stage boundary)
 
     Read-only pattern catalogue:
-      - list_architecture_patterns: Lists all 40 patterns; filter by category and/or domain
+      - list_architecture_patterns: Lists all 128 patterns; filter by category and/or domain
       - get_architecture_pattern: Returns the full JSON spec for a specific pattern
 
     Attributes:

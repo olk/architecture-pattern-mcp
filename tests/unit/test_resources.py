@@ -114,11 +114,7 @@ class TestPatternResourceList:
         assert isinstance(result, list)
 
     def test_list_count_at_least_34(self, pattern_resource: PatternResource):
-        """We have at least 34 valid patterns in the catalogue.
-
-        Note: presentation-abstraction-control-architecture.json fails validation
-        (missing 'security' in quality_attributes), so only 34 load.
-        """
+        """We have at least 34 valid patterns in the catalogue (128 since the expansion)."""
         result = pattern_resource.list_pattern_resources()
         assert len(result) >= MIN_VALID_PATTERNS, (
             f"Expected >= {MIN_VALID_PATTERNS} patterns, got {len(result)}"

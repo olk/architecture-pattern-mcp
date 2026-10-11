@@ -1,0 +1,142 @@
+{
+  "category": "data",
+  "name": "database-per-service",
+  "context": "A microservices application needs each service to own its persistent data so that the service can be developed, deployed and scaled independently of every other service. The service's database becomes part of that service's implementation: no other service reads or writes it, and a service's transactions only ever touch its own store. Crucially, this does not require a database server per service. Three levels of isolation exist in increasing cost: private tables per service, a private schema per service, and a dedicated database server per service. The first two have the lowest overhead — a schema per service is appealing because it makes ownership unambiguous — while a high-throughput service may justify its own server. Ownership must be enforced, not merely documented: each service gets its own database user and database grants so that the boundary is a mechanism rather than a convention.",
+  "benefits": [
+    "Loose coupling is enforced at the data layer: changing one service's schema cannot break another service, because no other service reads those tables",
+    "Polyglot persistence: each service selects the store that fits its access pattern — a document store for one, a graph store for another, Elasticsearch for full-text — and optimises it independently",
+    "Independent scaling of the data tier: only the service whose data grows gets its storage or database scaled",
+    "Blast-radius containment: one database cannot become a single point of failure shared by every service",
+    "Team autonomy: the owning team chooses schema, indexing and storage technology without negotiating with other teams",
+    "Finer compliance boundaries: services with different regulatory or security requirements can be given different stores and different credentials"
+  ],
+  "tradeoffs": [
+    "Cross-service transactions stop being local: distributed transactions are best avoided under the CAP theorem and many modern NoSQL stores do not support them at all, so a saga or compensating transactions are required",
+    "Cross-service joins become an application concern: queries that joined customer and order tables must now be resolved by API composition or by CQRS materialized views kept up to date from events",
+    "Operational surface multiplies: a mixed estate of relational and NoSQL engines must all be provisioned, backed up, patched, monitored and upgraded",
+    "Every store independently must satisfy two of consistency, availability or partition tolerance, so consistency guarantees vary across the system",
+    "Referential integrity cannot be enforced across service boundaries, so invariants that previously lived in foreign keys must be reimplemented in business logic",
+    "Reporting and analytics lose a single source of truth and must be assembled from many stores",
+    "Without enforced grants, developers bypass APIs and read other services' tables directly, collapsing the boundary within weeks"
+  ],
+  "quality_attributes": {
+    "scalability": 9,
+    "maintainability": 7,
+    "reliability": 8,
+    "security": 8,
+    "performance": 8,
+    "simplicity": 4
+  },
+  "suitable_domains": [
+    "microservices-architecture",
+    "event-driven-microservices",
+    "microservices-communication",
+    "polyglot-persistence-needs",
+    "distributed-transactions",
+    "multi-team-organizations",
+    "enterprise-applications-with-distinct-business-capabilities",
+    "e-commerce-platforms"
+  ],
+  "unsuitable_domains": [
+    "applications-needing-complex-cross-shard-joins",
+    "strong-consistency-requirements",
+    "systems-requiring-strong-acid-transactions",
+    "single-persistence-layer",
+    "multiple-services-same-data",
+    "small-teams",
+    "monolith-or-fewer-than-3-services",
+    "low-complexity-projects"
+  ],
+  "use_cases": [
+    "An online store where the Order Service, Customer Service and Product Service each own a private schema, and the Order History Service keeps a CQRS view in its own store",
+    "A compliance service that must keep records in a database with a different residency and encryption profile from the rest of the application",
+    "A recommendation service that needs a graph store while the transaction core stays relational",
+    "Resolving a credit-limit invariant across Order and Customer services with a saga, once the single ACID transaction that used to enforce it is no longer possible",
+    "Assembling a customer-with-recent-orders view through API composition at the gateway, or by subscribing to events and maintaining a materialized view"
+  ],
+  "avoid_when": [
+    "The application is one service, or a handful of services that genuinely operate as one unit — the isolation cost buys nothing",
+    "Business rules require cross-service ACID transactions that no saga or compensation strategy can express",
+    "Reporting and analytics depend on cross-domain joins that are impractical to reconstruct",
+    "The team cannot operate many separate database instances, backups and upgrades reliably",
+    "The team will not enforce access with per-service credentials, making the boundary purely advisory"
+  ],
+  "component_types": [
+    "Service-local database: the store physically or logically exclusive to one service",
+    "Per-service database user: a distinct principal with grants limited to its own schema",
+    "API boundary: the only sanctioned path to another service's data",
+    "Saga orchestrator or choreography: coordinates multi-service business transactions with compensating actions",
+    "CQRS materialized view: a denormalised read model built by subscribing to domain events",
+    "API composition layer: performs the join at the application or gateway level",
+    "Migration and schema-versioning tooling: forward-and-backward compatible schema evolution per service"
+  ],
+  "technology_stack": [
+    "PostgreSQL",
+    "MySQL",
+    "MongoDB",
+    "Neo4j",
+    "Elasticsearch",
+    "Amazon Aurora",
+    "Amazon DynamoDB",
+    "Azure Cosmos DB",
+    "Apache Kafka",
+    "Eventuate Tram"
+  ],
+  "anti_patterns": [
+    "Shared tables with a naming convention: tables prefixed by service name, but a single shared user means anyone can still read anything",
+    "Distributed two-phase commit to preserve cross-service invariants, coupling availability to a coordinator that is usually the weakest link",
+    "Report queries that reach directly into other services' schemas, reintroducing exactly the coupling the pattern removes",
+    "One database instance per service by default, multiplying operational cost when schema-level isolation would suffice",
+    "Assuming eventual consistency is free — the read-your-writes and reconciliation costs land somewhere, usually on the user",
+    "Synchronous cross-service joins in the request path, turning every page load into a distributed query with cascading failure risk",
+    "Deferring enforcement of ownership to a code review, since the first direct-SQL shortcut permanently defeats it"
+  ],
+  "migration_from": [
+    "shared-database",
+    "monolithic",
+    "modular-monolith",
+    "data-mesh"
+  ],
+  "migration_to": [
+    "event-sourcing",
+    "saga"
+  ],
+  "related_patterns": [
+    "shared-database",
+    "microservices",
+    "command-query-responsibility-segregation",
+    "event-driven",
+    "saga",
+    "event-sourcing",
+    "data-mesh",
+    "hexagonal",
+    "modular-monolith",
+    "strangler-fig"
+  ],
+  "design_principles": [
+    "Data ownership is private and exclusive: the service's database is part of its implementation, not a shared asset",
+    "Transactions are local by construction: a service's transaction only ever involves its own database",
+    "The API is the only sanctioned access path: other services consume data through published interfaces, never through tables",
+    "Polyglot persistence by default: choose the store that matches the access pattern, not the store the organisation standardised on",
+    "Enforce boundaries with credentials, not conventions: per-service database users and grants make encapsulation a mechanism",
+    "Isolation level matches the need: schema-per-service is sufficient until throughput genuinely justifies a server per service"
+  ],
+  "best_practices": [
+    "Give every service its own database user whose grants cover only its own schema — this is the single highest-value practice in the pattern",
+    "Start with schema-per-service or private tables on a shared server and promote a service to its own server only when measured throughput demands it",
+    "Design service boundaries around bounded contexts so each database genuinely corresponds to a coherent domain",
+    "Replace cross-service transactions with sagas and compensating actions, and cross-service joins with API composition or CQRS views",
+    "Store only the data a service needs — do not mirror full entities across bounded contexts",
+    "Define the consistency level per service explicitly and prefer eventual consistency where the domain tolerates it",
+    "Publish event schemas (JSON Schema, Protobuf, Avro) so consumers depend on a contract rather than on your table layout",
+    "Test that a service is genuinely blocked from reading another's tables, not merely that it does not"
+  ],
+  "sources": [
+    "Chris Richardson, Pattern: Database per service — microservices.io, https://microservices.io/patterns/data/database-per-service.html",
+    "Chris Richardson, Pattern: Shared database — microservices.io, https://microservices.io/patterns/data/shared-database.html",
+    "Microsoft, Data Considerations for Microservices — Azure Architecture Center, https://learn.microsoft.com/en-us/azure/architecture/microservices/design/data-considerations",
+    "AWS Prescriptive Guidance, Database-per-service pattern, https://docs.aws.amazon.com/prescriptive-guidance/latest/modernization-data-persistence/database-per-service.html",
+    "James Montemagno, Data sovereignty per microservice — .NET Architecture Center, https://learn.microsoft.com/en-us/dotnet/architecture/microservices/architect-microservice-container-applications/data-sovereignty-per-microservice",
+    "Chris Richardson, The FTGO application and the Database per service pattern, https://microservices.io/post/microservices/patterns/data/2019/07/15/ftgo-database-per-service.html"
+  ]
+}

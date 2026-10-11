@@ -1,0 +1,161 @@
+{
+  "name": "sidecar",
+  "alternative_names": ["sidekick", "container sidecar", "sidecar-pattern"],
+  "category": "structural",
+  "context": "A primary application needs cross-cutting peripheral functionality — logging and metrics shipping, secret and config fetching, service discovery, outbound TLS/mTLS termination, retry and circuit breaking, ingress/egress authentication, data synchronization — that is not core business logic and that would otherwise be reimplemented as a language-specific client library inside every service. Decomposing that functionality into a separate network service adds a network hop and a distributed-systems contract; embedding it in-process couples the helper's lifecycle, deployment, and language to the host application. The sidecar pattern places the helper in its own process or container, deployed alongside and sharing the lifecycle of each application instance, so the application reaches it over the loopback interface (or a shared volume) without it being part of the application. In Kubernetes this co-location unit is the Pod: sidecars share the Pod's network namespace, optionally its storage volumes, and its scheduling and fate, with an independent restart lifecycle.",
+  "benefits": [
+    "Language independence: the sidecar runs outside the host application's runtime, so one implementation can be attached to services written in different languages and frameworks (the Azure pattern's 'consistent interface for platform services across languages')",
+    "Failure isolation: a runtime fault in the sidecar does not cascade into the primary application, unlike an in-process library linked into the same runtime",
+    "Independent lifecycle and version: the helper can be updated, scaled, or replaced without rebuilding the application artifact, so cross-cutting upgrades do not force a coordinated release of every service",
+    "Low-latency local access: the application talks to the sidecar over localhost or a shared volume rather than a remote network hop, keeping peripheral calls off the wire",
+    "Shared resource visibility: the sidecar can observe or mediate the same resources the application uses — e.g. tailing its log stream, resolving its config, terminating its outbound connections",
+    "Fine-grained resource control: a component can be given its own memory/CPU limits independent of the main container, instead of sharing one process budget",
+    "Attaches to applications with no native extension mechanism: an application that ships no plugin or hook surface can still be given logging, proxying, or policy enforcement",
+    "Decouples team and vendor ownership: a platform team or external partner can own and ship the peripheral component without owning the business service"
+  ],
+  "tradeoffs": [
+    "Per-instance resource overhead: every application instance pays for a second runtime. Sidecar proxies commonly cost on the order of tens of megabytes of memory and measurable CPU per pod, multiplied by total instance count across the fleet",
+    "Extra hop on every call: even a loopback call is an additional network round trip and serialization step, and the proxy must be sized not to become the bottleneck of the pod",
+    "Asymmetric, non-obvious failure model: the application depends on a component it does not own, so the sidecar is a new failure domain. With Kubernetes native sidecars the application container is not restarted when the sidecar restarts, so an application that hard-depends on the sidecar can keep running while silently broken",
+    "Startup ordering is not free: the kubelet advances past a sidecar-style init container once it is merely *started* (process up, no startupProbe), so the application frequently begins before the sidecar is serving. A readinessProbe alone does not gate the application; only a startupProbe (or a postStart hook) does",
+    "Upgrade and version-skew handling: if the sidecar is hand-declared per workload rather than injected and centrally versioned, every manifest must be updated to pick up a fix, which reintroduces the coupling the pattern was meant to remove",
+    "Deployment-surface drift on older platforms: without native sidecar support, the pattern degrades to extra entries in .spec.containers, where all containers terminate simultaneously and applications must hand-roll lifecycle signalling (the sentinel-file-over-a-shared-volume workaround that KEP-753 was written to eliminate)",
+    "Job semantics need care: with native sidecars in a Job, the sidecar keeps being restarted after it finishes and does not block pod completion — behaviour that differs from a regular container and must be accounted for",
+    "Shared-namespace security cost: enabling shareProcessNamespace so the sidecar can signal the application also exposes all /proc state — env vars and argv secrets included — and the other container's filesystem via /proc/$pid/root, protected only by ordinary Unix permissions, plus a required SYS_PTRACE capability"
+  ],
+  "quality_attributes": {
+    "scalability": 7,
+    "maintainability": 8,
+    "reliability": 6,
+    "security": 8,
+    "performance": 6,
+    "simplicity": 6
+  },
+  "suitable_domains": [
+    "kubernetes",
+    "cloud-native-applications-on-kubernetes",
+    "microservices",
+    "cross-language-platforms",
+    "multi-external-integrations",
+    "log-analysis",
+    "enterprise-systems-needing-centralized-governance"
+  ],
+  "unsuitable_domains": [
+    "monolith-or-fewer-than-3-services",
+    "single-service-applications",
+    "simple-crud-applications",
+    "resource-constrained-environments",
+    "low-latency-requirements-that-cannot-tolerate-additional-hop",
+    "small-teams-without-dedicated-infrastructure-ops",
+    "static-requirements"
+  ],
+  "use_cases": [
+    "Service mesh data plane: an Envoy or Linkerd proxy attached to every service instance handling routing, retries, mTLS, policy, and telemetry with zero application-code changes",
+    "Dependency abstraction runtime: a Dapr `daprd` sidecar exposing building-block HTTP/gRPC APIs (service invocation, pub/sub, state, secrets, bindings) so applications in different languages get the same platform interface",
+    "Log and metrics shipping: a Fluent Bit / Vector / OTLP collector co-located with the app tailing its log stream via a shared volume, keeping agents out of the application image",
+    "Ingress and egress authentication sidecars performing token validation and outbound credential injection on behalf of the application, so auth logic lives in one place rather than in every service",
+    "Secret and configuration injection: a small helper that retrieves credentials at startup and exposes them over a local endpoint or shared tmpfs instead of baking them into the image",
+    "Service discovery and outbound proxying for services that cannot or will not embed a client library",
+    "Legacy or vendor runtimes with no extension point, where the only way to add observability or policy is to wrap the process",
+    "Gateway/Ambassador-style adapters deployed one-per-instance rather than as a single shared gateway, to keep the data path on the same node as the workload"
+  ],
+  "avoid_when": [
+    "The workload is a single process with no peripheral concerns worth separating — the extra container is pure overhead",
+    "The cluster is resource-constrained or the fleet is very large and per-pod memory cost is material (the overhead is per instance, not per cluster)",
+    "The hot path cannot absorb an additional local hop and proxy CPU, or per-call latency dominates",
+    "The helper needs state shared across many instances — a per-pod sidecar is the wrong scope for shared coordination; use a real service or the platform's shared facility",
+    "The team has no way to operate the extra moving part: it needs its own image, probes, resource limits, upgrade path, and on-call story",
+    "The platform lacks native sidecar lifecycle semantics and you cannot afford the ad-hoc shutdown-signalling workaround that legacy multi-container Pods require",
+    "The helper genuinely carries business logic — at that point it is a service with a hidden coupling problem, not a sidecar"
+  ],
+  "component_types": [
+    "Primary application container: the workload owning the business logic; talks to the sidecar over localhost or a shared volume",
+    "Sidecar container: a separate process/container implementing the peripheral concern; runs for the Pod's whole life and can be started, stopped, or restarted independently",
+    "Co-location unit: the Kubernetes Pod (network namespace, optionally shared volumes and process namespace) — or a single VM in the non-container form of the pattern",
+    "Local API surface: the localhost HTTP/gRPC endpoint (or shared volume contract) through which the application reaches the sidecar",
+    "Lifecycle ordering mechanism: startupProbe / postStart hook to gate the application on sidecar readiness, and native sidecar shutdown ordering to keep the sidecar alive until the app exits",
+    "Injection or declaration mechanism: a mutating webhook that adds the container to Pods automatically (e.g. Dapr's `dapr-sidecar-injector` watching `dapr.io/enabled`), or explicit sidecar entries in the workload manifest",
+    "Control plane (optional, mesh/runtime case): the controller that provisions certificates and pushes proxy configuration; the sidecar works without one, e.g. Dapr's per-node/per-cluster 'Dapr Shared' mode"
+  ],
+  "technology_stack": [
+    "Kubernetes Pods (native sidecar containers via KEP-753: initContainers with restartPolicy: Always)",
+    "Envoy (Istio sidecar data plane)",
+    "Linkerd2 proxy",
+    "Dapr / daprd sidecar",
+    "Fluent Bit, Vector (log/metrics collection sidecars)",
+    "OpenTelemetry Collector",
+    "Mutating admission webhooks (sidecar injection)",
+    "Docker / containerd (non-Kubernetes co-deployment)"
+  ],
+  "anti_patterns": [
+    "Sidecar as a business-logic container: putting domain rules in the sidecar creates hidden coupling the team cannot see from the service repo, and the rules silently fork per service",
+    "Business application hard-depending on sidecar startup with no gate: the kubelet starts the application as soon as the sidecar process is up, so the app can begin serving before the sidecar is ready and crash or silently fail",
+    "Assuming a sidecar restart heals the application: with native sidecars the app container is not restarted, so a restarting sidecar leaves a live but non-functional application (visible only as failing requests)",
+    "Legacy ad-hoc lifecycle signalling: hand-rolling a sentinel file on a shared volume to tell the sidecar when the app exited, instead of using native sidecar termination ordering — the exact workaround KEP-753 exists to remove",
+    "Resource neglect: omitting requests/limits on the sidecar so it is CPU-throttled or OOM-killed, with the eviction blamed on the application container",
+    "Sidecar dumping ground: piling unrelated concerns into one 'utility' sidecar until it is a second monolith that nothing can upgrade independently",
+    "Hidden shared state: keeping a cache, counter, or queue in a per-pod sidecar and treating it as global, silently losing state on every reschedule",
+    "Declaring sidecars manually per workload so a security fix requires editing every manifest — losing the independent-upgrade property that justified the pattern",
+    "Enabling shareProcessNamespace without accounting for it as a security boundary loss (all env vars and secrets in /proc visible, other container filesystem reachable)",
+    "Treating the sidecar as in-process code: no timeout, no retry policy, no circuit breaker on the local call, so a hung sidecar stalls the application indefinitely"
+  ],
+  "migration_from": [
+    "in-process-client-libraries-for-platform-concerns",
+    "language-specific-service-discovery-and-retry-code",
+    "shared-daemon-set-log-agent-on-every-node",
+    "per-workload-manifests-that-hardcode-a-proxy-container"
+  ],
+  "migration_to": [
+    "service-mesh",
+    "serverless",
+    "edge-computing"
+  ],
+  "related_patterns": [
+    "service-mesh",
+    "microservices",
+    "api-gateway",
+    "backend-for-frontend",
+    "microkernel-plugin",
+    "client-server",
+    "master-slave",
+    "edge-computing",
+    "strangler-fig",
+    "serverless",
+    "actor-based"
+  ],
+  "design_principles": [
+    "Encapsulate, do not absorb: the sidecar owns the peripheral concern end to end; the application should not reimplement any of it behind the local API",
+    "One instance per application instance: the sidecar's lifecycle is bound to its host, which is what gives locality and failure isolation — it must not become a shared singleton",
+    "Co-location is the whole point: if the sidecar would be just as effective as a remote service, use a service and accept the network semantics; the pattern exists for the locality",
+    "Declare intent, let the platform handle delivery: prefer injection and central versioning over hand-written sidecar entries, so a fix ships to every workload without a manifest sweep",
+    "Fail the sidecar, not the application: because native sidecars can restart without restarting the app, the application must degrade or retry rather than assume permanent co-availability",
+    "Order by readiness, not by liveness: a sidecar that is a genuine dependency of the application must gate it with a startupProbe or postStart hook, since readiness alone does not delay the app container"
+  ],
+  "best_practices": [
+    "Declare the sidecar as a native sidecar (initContainers with restartPolicy: Always, KEP-753, on by default since Kubernetes v1.29) rather than as a regular container, so it starts before and terminates after the application",
+    "Gate the application on sidecar readiness with a startupProbe (httpGet or exec) — a readinessProbe or livenessProbe alone will not delay the main container, and a postStart hook is the alternative if you must supply the wait loop yourself",
+    "Version-pick the sidecar centrally: inject it via a mutating webhook or Helm base rather than hardcoding the image in every workload manifest",
+    "Set explicit requests and limits on the sidecar, sized from its real footprint, and alert on sidecar restart counts separately from application restarts",
+    "Give the sidecar its own liveness probe so a hung helper is restarted, and design the application to fail soft or retry on the local call rather than block on it",
+    "Use native sidecar ordering for shutdown — the kubelet postpones terminating sidecars until the app containers have fully stopped, then shuts them down in reverse spec order, with preStop hooks delivered before application termination so a proxy can stop accepting inbound traffic first",
+    "Prefer sharing a volume or the loopback interface over shareProcessNamespace; if process-namespace sharing is unavoidable, treat it as a deliberate security decision and scope capabilities accordingly",
+    "Version-pin the injected sidecar and check feature-gate support (node labels/affinity, or a runtime-detection injector) if the fleet is not uniformly on a version with native sidecar support",
+    "In Jobs, remember native sidecars keep restarting after completion and do not block pod completion — handle their exit explicitly",
+    "Keep one cohesive concern per sidecar; if the sidecar needs its own cluster-wide state or availability, it has outgrown the pattern"
+  ],
+  "references": [
+    "Kubernetes, Sidecar Containers (concept), https://kubernetes.io/docs/concepts/workloads/pods/sidecar-containers/",
+    "Kubernetes, Adopting Sidecar Containers (tutorial), https://kubernetes.io/docs/tutorials/configuration/pod-sidecar-containers/",
+    "Agata Skorupka, Start Sidecar First: How To Avoid Snags, 2025, https://kubernetes.io/blog/2025/06/03/start-sidecar-first/",
+    "Kubernetes Enhancements / SIG-Apps, KEP-753 SidecarContainers, https://github.com/kubernetes/enhancements/blob/e0fc0e7eab51078b5b7bd0730cf48f550bc91d1e/keps/sig-apps/sidecarcontainers.md",
+    "Microsoft, Sidecar Pattern — Azure Architecture Center, https://learn.microsoft.com/en-us/azure/architecture/patterns/sidecar",
+    "Microsoft, Cloud Design Patterns for Microservices (Sidecar listed as a distinct pattern from Service mesh), https://learn.microsoft.com/en-us/azure/architecture/microservices/design/patterns",
+    "Dapr, Dapr sidecar (daprd) overview, https://docs.dapr.io/concepts/dapr-services/sidecar/",
+    "Dapr, Deploy Dapr per-node or per-cluster with Dapr Shared, https://docs.dapr.io/operations/hosting/kubernetes/kubernetes-dapr-shared/",
+    "Dapr, Service invocation overview (sidecar-to-sidecar gRPC data path), https://docs.dapr.io/developing-applications/building-blocks/service-invocation/service-invocation-overview/",
+    "Kubernetes, Communicate Between Containers in the Same Pod Using a Shared Volume, https://kubernetes.io/docs/tasks/access-application-cluster/communicate-containers-same-pod-shared-volume/",
+    "Kubernetes, Share Process Namespace between Containers in a Pod, https://kubernetes.io/docs/tasks/configure-pod-container/share-process-namespace/",
+    "Thoughtworks, Authentication sidecar — a new experience in microservice architecture, https://www.thoughtworks.com/en-us/insights/blog/architecture/authentication-sidecar-a-new-experience-in-microservice-architecture-part-one",
+    "Chris Richardson, The Microservice Architecture Pattern Language (Sidecar and Service mesh as separate patterns), https://microservices.io/i/MicroservicePatternLanguage.pdf"
+  ]
+}

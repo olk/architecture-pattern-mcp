@@ -1,0 +1,128 @@
+{
+  "category": "data",
+  "name": "shared-database",
+  "context": "This is an architecture ANTI-PATTERN catalog entry, not a recommendation. It describes the arrangement that teams adopt when decomposing a monolith: several independently deployable services are built, but they all point at the same database and read and write each other's tables freely, using local ACID transactions. It looks like microservices because the code is split, the services deploy independently, and traffic management exists — but the data has not been split, so the decomposition is only skin-deep. AWS names it the shared-database-per-service pattern and is explicit that it does not reduce dependencies between development teams. The pattern is documented here so that it can be recognised, named and deliberately migrated away from toward database-per-service.",
+  "benefits": [
+    "Near-zero migration cost: no data must be moved or split, which is why it is the default destination when a monolith is decomposed under deadline pressure",
+    "Cross-service ACID transactions remain possible, so existing business invariants encoded as foreign keys and multi-table transactions keep working unchanged",
+    "A single database to operate: one backup, one upgrade, one set of credentials, one tuning exercise",
+    "Ad-hoc cross-domain reporting and ad-hoc SQL still work because all the data is in one place",
+    "No need for sagas, compensating transactions or API composition, all of which are avoided complexity for teams that do not need independence"
+  ],
+  "tradeoffs": [
+    "Development-time coupling: a developer changing the Order service's schema must coordinate with every team whose service reads those tables, so releases cannot be scheduled independently",
+    "Runtime coupling: services interfere through the database — a long-running transaction in one service holds locks that block another, so an unrelated feature degrades an unrelated service's availability",
+    "Schema changes must be backward compatible with the current and previous version of every service simultaneously, which freezes schema evolution at the pace of the slowest consumer",
+    "The shared database becomes a single point of failure and a shared blast radius: one outage, one bad migration or one runaway query takes down every service at once",
+    "No polyglot persistence: every service is forced onto the storage engine chosen for the monolith",
+    "Distributed monolith: the services are technically separate and logically welded, so the cost of a network architecture is paid without any of its benefits",
+    "Hot tables — single tables written by multiple services — turn every contention problem into a cross-team coordination problem",
+    "Testing and independent local setup degrade, because a developer cannot stand up their service without standing up the shared database and its data"
+  ],
+  "quality_attributes": {
+    "scalability": 4,
+    "maintainability": 4,
+    "reliability": 3,
+    "security": 4,
+    "performance": 5,
+    "simplicity": 7
+  },
+  "suitable_domains": [
+    "monolith-or-fewer-than-3-services",
+    "short-lived-projects",
+    "legacy-modernization",
+    "systems-requiring-strong-acid-transactions",
+    "strong-consistency-requirements",
+    "prototypes"
+  ],
+  "unsuitable_domains": [
+    "microservices-architecture",
+    "multi-team-organizations",
+    "greenfield-microservices",
+    "event-driven-microservices",
+    "polyglot-persistence-needs",
+    "platform-ecosystems",
+    "multi-tenant-platforms",
+    "applications-planning-eventual-extraction-to-microservices"
+  ],
+  "use_cases": [
+    "An initial decomposition where services are split first and data ownership is deferred — legitimate only as an explicit, time-boxed staging state on the way to database-per-service",
+    "A modernising monolith that must keep ACID transactions across what are still logically one business capability, where splitting the data would be wrong until the boundary is understood",
+    "Reporting and analytics workloads that legitimately need to query across the whole estate in one statement",
+    "A very short-lived project where the operational cost of many databases would never be repaid"
+  ],
+  "avoid_when": [
+    "The goal is independent deployability — the shared database cancels the main benefit the decomposition was for",
+    "Multiple teams own different services and release independently; they will be permanently blocked on each other's schema changes",
+    "You want polyglot persistence, which a single engine forecloses",
+    "The blast radius of a single database outage would exceed your tolerance",
+    "You intend to keep the arrangement indefinitely rather than treating it as an intermediate state"
+  ],
+  "component_types": [
+    "Shared database server: the single store all services connect to",
+    "Shared schema: tables owned by one service but readable and writable by others",
+    "Shared credentials or broad grants: the mechanism by which the coupling is permitted",
+    "Hot table: a table written by more than one service, the primary contention point",
+    "Compatibility window: the N-1 release constraint that every schema change must satisfy",
+    "Migration plan: the incremental path toward per-service data ownership"
+  ],
+  "technology_stack": [
+    "MySQL",
+    "PostgreSQL",
+    "SQL Server",
+    "Oracle Database",
+    "Amazon RDS",
+    "Azure SQL Database"
+  ],
+  "anti_patterns": [
+    "Distributed monolith: services deployed independently but coupled through shared tables, producing network complexity with none of the isolation",
+    "Schema changes shipped without an N-1 compatibility window, breaking every service that has not yet upgraded",
+    "Hot tables contended by multiple services, turning an ordinary index or lock issue into an organisational incident",
+    "Cross-service JOINs in request paths that silently reintroduce a distributed query",
+    "A single shared database user for all services, so ownership cannot be enforced or audited",
+    "Using the shared database to justify avoiding sagas indefinitely, turning a temporary tradeoff into a permanent architecture",
+    "Ignoring that a single failed migration now blocks every service simultaneously"
+  ],
+  "migration_from": [
+    "microservices",
+    "modular-monolith",
+    "data-mesh"
+  ],
+  "migration_to": [
+    "database-per-service",
+    "event-driven",
+    "saga"
+  ],
+  "related_patterns": [
+    "database-per-service",
+    "microservices",
+    "modular-monolith",
+    "command-query-responsibility-segregation",
+    "event-driven",
+    "saga",
+    "event-sourcing",
+    "data-mesh",
+    "strangler-fig",
+    "monolithic"
+  ],
+  "design_principles": [
+    "Anti-pattern documentation: this entry exists to make the failure mode recognisable in design review, not to endorse it",
+    "Trade, don't pretend: shared databases are a legitimate short-term tradeoff when the cost of splitting data exceeds the benefit, provided the decision is explicit and time-boxed",
+    "Independence must extend to data: a service boundary that does not include the data is not a boundary",
+    "Incremental extraction: the fix is gradual — split one table group at a time, routing cross-service reads through an API first"
+  ],
+  "best_practices": [
+    "Treat a shared database as a time-boxed staging state on the path to database-per-service, with a named owner and a date",
+    "Eliminate the easiest couplings first: route cross-service reads through an API even while the tables are still shared, so the future extraction is mechanical",
+    "Introduce per-service database users with grants limited to owned tables as soon as possible, even in a shared server",
+    "Keep every schema change backward compatible with the previous version of every service until the last consumer has upgraded",
+    "Identify and eliminate hot tables first — they are the tables whose contention and ownership disputes block all other progress",
+    "Introduce sagas and CQRS views for the business transactions and queries that cross service boundaries",
+    "Re-baseline performance: query plans that relied on a single normalised schema must be re-tested once data is split"
+  ],
+  "sources": [
+    "Chris Richardson, Pattern: Shared database — microservices.io, https://microservices.io/patterns/data/shared-database.html",
+    "AWS Prescriptive Guidance, Shared-database-per-service pattern, https://docs.aws.amazon.com/prescriptive-guidance/latest/modernization-data-persistence/shared-database.html",
+    "Microsoft, Data Considerations for Microservices — Azure Architecture Center, https://learn.microsoft.com/en-us/azure/architecture/microservices/design/data-considerations"
+  ]
+}

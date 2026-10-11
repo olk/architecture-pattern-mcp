@@ -1,0 +1,131 @@
+{
+  "name": "change-data-capture",
+  "category": "dataflow",
+  "context": "A service owns a database whose contents other services, search indexes, and warehouses need, but the producer cannot be changed: it is a vendor product, another team's release train, or a service that has no business knowing a broker exists. The producer's own transaction log already contains an ordered, durable record of every committed state transition, so change data capture reads that log rather than the tables. Debezium's connectors tail the MySQL binlog and the PostgreSQL write-ahead log and emit change events; the same tailing mechanism is what makes the transactional outbox work, where the domain event is written in the same transaction as the business row and the capture relay only has to move what was already committed.",
+  "benefits": [
+    "No application change and no schema change. Debezium states it explicitly: log-based CDC requires no changes to your data model, such as a 'Last Updated' column",
+    "Delay in the millisecond range for MySQL and PostgreSQL, without the CPU cost of frequent polling queries that competing approaches pay",
+    "Captures deletes, and depending on the database and its configuration also the before-image, the transaction id and the causing query - information a polling SELECT cannot reconstruct",
+    "Combined with the transactional outbox it removes the dual-write problem: the business row and the event row commit in one transaction, so the two can never disagree",
+    "Retained topic history lets a consumer that did not exist when the event was produced replay from the beginning and materialize its own projection, with no change to the producer",
+    "Because log-based CDC never reads table contents, the outbox row can be inserted and deleted in the same transaction; the log records both, the connector emits the insert and ignores the delete, and the table stays empty with no house-keeping job"
+  ],
+  "tradeoffs": [
+    "Delivery is at-least-once, not exactly-once. When a connector task dies without recording its latest offset, the replacement resumes from the last recorded offset and emits the same change events again, arriving at a new, higher offset. Consumers must be idempotent",
+    "An offset is not a version. Because a replayed event arrives at a different offset, you cannot dedupe or order on it; use the event id and a sequence column",
+    "Ordering is per partition only. Keying the message by aggregate id puts every event for one aggregate in one partition and guarantees that order - and guarantees nothing across aggregates",
+    "The connector is database-specific and its configuration is per-engine (binlog settings, replication slots, logical decoding). The portability of the pattern is conceptual, not plug-and-play",
+    "The connector reads privileged - it needs binlog or replication-slot access and long-lived credentials, which makes the capture path itself a secret-management concern and an attractive target",
+    "Database schema leaks into the wire format, so a column rename becomes an integration contract change with every consumer",
+    "Latency is not zero. Reading the log and then traversing a broker adds hops, and the outbox row still has to be captured and routed",
+    "Long transactions hold the log position, and a lagging connector's slot or binlog position can pin storage on the source"
+  ],
+  "quality_attributes": {
+    "performance": 8,
+    "scalability": 9,
+    "reliability": 7,
+    "maintainability": 6,
+    "security": 6,
+    "simplicity": 5
+  },
+  "suitable_domains": [
+    "data-pipelines",
+    "distributed-data-pipelines",
+    "etl",
+    "data-transformation-pipelines",
+    "stream-processing",
+    "microservices",
+    "greenfield-microservices",
+    "event-driven-microservices",
+    "big-data-analytics",
+    "legacy-system-integration",
+    "cloud-native"
+  ],
+  "unsuitable_domains": [
+    "strong-consistency-required",
+    "single-persistence-layer",
+    "real-time-deterministic",
+    "teams-unfamiliar-with-event-driven-patterns",
+    "mvp",
+    "prototypes",
+    "low-history-requirements"
+  ],
+  "use_cases": [
+    "Propagating order events from a Postgres outbox table to Kafka without touching the order service",
+    "Filling a search index or warehouse from a production OLTP database you may not modify",
+    "Building local read models in other services so they do not query the owning database",
+    "Replacing scheduled batch extract jobs whose latency is measured in hours with a continuous change stream"
+  ],
+  "avoid_when": [
+    "The consumer needs the same transaction as the writer. CDC is explicitly eventually consistent with respect to the captured events; it does not participate in the source transaction",
+    "The producer can emit domain events directly, in which case CDC adds a hop for no gain",
+    "Per-key ordering across many keys must hold globally, which partitioning cannot provide",
+    "Exactly-once processing is a hard requirement stated without a plan for idempotent consumers - the pipeline cannot deliver it"
+  ],
+  "component_types": [
+    "Source database with an accessible transaction log",
+    "CDC connector (Debezium)",
+    "Outbox table",
+    "Single Message Transform (EventRouter SMT)",
+    "Message broker / topic",
+    "Idempotent consumer with a processed-event log"
+  ],
+  "technology_stack": [
+    "Apache Kafka and Kafka Connect",
+    "Debezium (MySQL binlog, PostgreSQL logical replication/WAL, SQL Server CDC)",
+    "PostgreSQL logical replication slots",
+    "MySQL binlog",
+    "Quarkus Debezium outbox extension",
+    "EXTERNAL.SEQUENCE / schema history topics"
+  ],
+  "anti_patterns": [
+    "Claiming exactly-once end to end. The application-to-database hop is one transaction; the connector hop is at-least-once; Kafka-to-consumer is a separate system with no shared transaction. What you can build is exactly-once processing",
+    "Using the Kafka offset as the event version - a connector re-read arrives at a new offset with the same id, so the offset silently fails as a dedupe key",
+    "Polling `SELECT * FROM t WHERE updated_at > ?` on a high-write table and calling it CDC; it misses deletes, burns CPU, and double-counts on timestamp ties",
+    "Capturing the whole database instead of only the outbox table, so heartbeats, schema-change records and transaction markers flow into consumer topics",
+    "Non-idempotent consumers. Store the processed event id in the same transaction as the state write, or a restart double-counts",
+    "Propagating outbox cleanup DELETEs downstream; set tombstones on delete to false and filter DELETE ops in the transform",
+    "Assuming idempotent producer settings cover the relay hop - they do not stop a connector from re-reading an event after a restart"
+  ],
+  "design_principles": [
+    "Read the log, not the table: the transaction log is the only record that is complete, ordered and cheap to tail",
+    "Make the producer's change atomic with the event it implies, so publication intent is decided inside one transaction",
+    "Design the relay for at-least-once and the consumer for idempotence, because exactly-once across independent systems is not achievable",
+    "Treat captured events as a replayable log with a retention policy, not as a message queue with a fire-and-forget consumer",
+    "Partition by aggregate so the ordering guarantee you actually need - per entity - falls out of the key",
+    "Keep the connector off the application request path; capture is infrastructure, not application logic"
+  ],
+  "best_practices": [
+    "Insert the outbox row and delete it in the same transaction when using log-based CDC, so the table stays empty and needs no cleanup process",
+    "Restrict the connector to the outbox table only, and scope the transform to its events with a predicate or route regex so heartbeats and schema changes are excluded",
+    "Use the aggregate id as the message key and propagate the event id as a message header, so consumers dedupe without parsing the payload",
+    "Expect re-emission after any connector restart and treat it as normal operation rather than an incident",
+    "If CDC is unavailable, use a polling publisher with FOR UPDATE SKIP LOCKED for concurrency-safe relay instances - and still design the consumer for at-least-once",
+    "Give the connector its own least-privilege database identity and rotate it like any other credential",
+    "Version the event envelope so a schema change is a deliberate, reviewable contract update"
+  ],
+  "related_patterns": [
+    "event-driven",
+    "event-sourcing",
+    "command-query-responsibility-segregation",
+    "data-mesh",
+    "lambda-architecture",
+    "kappa-architecture",
+    "broker",
+    "pipe-and-filter",
+    "microservices",
+    "enterprise-service-bus"
+  ],
+  "migration_from": [
+    "batch-processing"
+  ],
+  "migration_to": [
+    "event-driven",
+    "event-sourcing"
+  ],
+  "references": [
+    "Debezium, Reliable Microservices Data Exchange With the Outbox Pattern - https://debezium.io/blog/2019/02/19/reliable-microservices-data-exchange-with-the-outbox-pattern/",
+    "Debezium reference documentation, Features (why log-based CDC differs from polling and dual writes) - https://debezium.io/documentation/reference/stable/features.html",
+    "Debezium, Distributed Data for Microservices - Event Sourcing vs. CDC vs. Outbox - https://debezium.io/blog/2020/02/10/event-sourcing-vs-cdc/"
+  ]
+}

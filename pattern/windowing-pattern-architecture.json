@@ -1,0 +1,104 @@
+{
+  "category": "dataflow",
+  "name": "windowing-pattern",
+  "context": "A stream is unbounded, so no aggregate over 'everything' is computable. Windowing defines how records sharing a key are grouped into bounded regions of event time or record count so that aggregations and joins become well-defined: each record is assigned to one or more windows, the window accumulates state, a trigger decides when to emit, and a retention bound decides when the state can be discarded. Tumbling windows do not overlap, hopping and sliding windows overlap by a chosen advance, session windows are delimited by inactivity, and global windows span the whole stream.",
+  "benefits": [
+    "Makes aggregation and join semantics well-defined on an unbounded input",
+    "Aligns computation with the business question — an hourly rate, a five-minute window, a rolling hour — instead of with batch boundaries",
+    "Enables parallel execution because a window's records share a key and therefore a partition",
+    "Explicit triggering and retention separate 'when do I emit' from 'when do I forget', which is what makes correct alerting possible",
+    "Continuous emission gives fresh partial results, while suppression converts the same computation into final results on demand"
+  ],
+  "tradeoffs": [
+    "Overlapping windows multiply state: a sliding window with a small advance can produce many concurrent windows per record",
+    "State for a window is retained until its end plus the allowed-lateness bound, so memory and storage lag the window boundary",
+    "Emitting final results requires a suppression buffer, which is unbounded unless explicitly capped",
+    "Continuous emission means downstream sees corrections; append-only sinks get duplicates and non-idempotent logic gets wrong answers",
+    "Wall-clock-aligned windows on event-time data produce the familiar repeated corrections at every hour boundary"
+  ],
+  "quality_attributes": {
+    "scalability": 8,
+    "maintainability": 7,
+    "reliability": 8,
+    "security": 5,
+    "performance": 8,
+    "simplicity": 7
+  },
+  "suitable_domains": [
+    "stream-processing",
+    "real-time-analytics",
+    "event-driven-systems"
+  ],
+  "unsuitable_domains": [],
+  "use_cases": [
+    "Per-minute and per-hour rate and count aggregation over high-volume event streams",
+    "Windowed joins where two streams are matched only when their records are close in event time",
+    "Alerts that must fire on a closed window rather than on every intermediate update",
+    "Sliding-window threshold detection for anomaly and compliance monitoring",
+    "Count windows over record counts rather than time, for fixed-size batching of unbounded input"
+  ],
+  "avoid_when": [
+    "The computation is a stateless per-record function — windows add state and cost for nothing",
+    "The input is bounded and complete, so ordinary batch grouping is simpler and exactly correct",
+    "Business semantics require whole-stream aggregation, which no finite window can provide",
+    "The output must be a single final number and no correction semantics are available downstream"
+  ],
+  "component_types": [
+    "Window assigner: maps each record to one or more windows (tumbling, hopping, sliding, session, global)",
+    "Window state store: per-key, per-window accumulator retained until the retention bound passes",
+    "Trigger: decides when a window fires — on element arrival, on a timer, or on both including merges",
+    "Grace or allowed lateness: the bound within which a late record still updates the window",
+    "Emit policy: continuous emission of partial results, or suppression until the window closes",
+    "Retention policy: when window state may be discarded"
+  ],
+  "technology_stack": [
+    "Apache Kafka Streams (TimeWindows, SessionWindows, Suppressed)",
+    "Apache Flink (WindowAssigner, Triggers, allowed lateness)",
+    "Apache Spark Structured Streaming (windowing and session window assignors)",
+    "Apache Beam (fixed and sliding windows)"
+  ],
+  "anti_patterns": [
+    "Emitting continuous results into an append-only sink, producing duplicate rows for the same window",
+    "Using a suppression buffer with no memory cap in production, turning a final-result feature into an OOM",
+    "Choosing a window size from a dashboard default rather than from the question being asked",
+    "Ignoring allowed lateness and treating a single firing as final",
+    "Windowing on wall-clock time while the data is event-time, guaranteeing boundary corrections"
+  ],
+  "migration_from": [
+    "batch-window-aggregation",
+    "unbounded-scan-aggregates",
+    "clock-aligned-flush-loops"
+  ],
+  "migration_to": [
+    "pipe-and-filter",
+    "event-driven"
+  ],
+  "related_patterns": [
+    "pipe-and-filter",
+    "event-driven",
+    "kappa-architecture",
+    "lambda-architecture",
+    "space-based",
+    "reactive-architecture"
+  ],
+  "design_principles": [
+    "Windows are the unit of aggregation because the stream has no end",
+    "Assignment, triggering and retention are three separate decisions",
+    "Every record belongs to a key and a window; both are part of the state identity",
+    "Emit partial results by default; suppress only when the business question needs a final answer",
+    "Bounds are explicit — grace, retention and state limits are stated, not defaulted"
+  ],
+  "best_practices": [
+    "Choose window size and advance from the question, then compute the resulting state volume before committing",
+    "Bound the suppression buffer explicitly in production code",
+    "Upsert by (key, window) downstream rather than appending",
+    "Set a grace period from measured lateness and log records discarded after it",
+    "Prefer tumbling windows unless overlap is genuinely required — hopping windows cost state per record"
+  ],
+  "references": [
+    "Apache Kafka, Streams DSL — Hopping, Tumbling, Sliding and Session Windows, grace period and window final results, https://kafka.apache.org/43/streams/developer-guide/dsl-api/",
+    "Apache Flink, Windows — assigners, triggers, allowed lateness, main and late firings, https://nightlies.apache.org/flink/flink-docs-stable/docs/dev/datastream/operators/windows/",
+    "Apache Flink, Timely Stream Processing — windows as the scoping mechanism for unbounded aggregates, https://nightlies.apache.org/flink/flink-docs-master/docs/concepts/time/",
+    "Apache Kafka, Core Concepts — Windowing and the grace period, https://kafka.apache.org/43/streams/core-concepts/"
+  ]
+}

@@ -1,0 +1,164 @@
+{
+  "name": "dynamic-late-data-integrator",
+  "category": "dataflow",
+  "context": "A result has already been published for time period T, and then a record whose event time falls inside T arrives. Something has to give: the late record is silently dropped, or it is integrated and something already consumed is now wrong. The fixed-tolerance approach answers this with a constant — allow lateness of 10 minutes, a grace period of 5 seconds, a lookback of 7 days — chosen once and applied forever. The dynamic integrator instead derives the tolerance from the data and, more importantly, decides the blast radius from the data rather than from a calendar. Where does late data actually come from? A multi-hour replay from the broker after a restart; a backfill; a third-party feed that was down for a day; a mobile client offline for a week. The lateness distribution is not stationary, so a constant either wastes state (too generous) or silently drops (too tight). Flink makes the mechanism explicit: a window is created when its first element arrives and 'completely removed when the time passes its end timestamp plus the user-specified allowed lateness', so every unit of tolerance is retained state held indefinitely. And when a late element lands inside that tolerance, 'a late but not dropped element may cause the window to fire again' — a late firing whose output 'should be treated as updated results of a previous computation', meaning the stream now contains multiple results for the same computation and the consumer must deduplicate or apply them as corrections. The integration strategy is therefore a choice, and the engine encodes the choices explicitly. Flink's retract stream encodes an UPDATE as a retract message for the old row plus the new row; its upsert stream encodes it as a single message given a unique key, which 'is more efficient'. Spark draws a similar line: a watermark delay of 2 hours 'guarantees that the engine will never drop any data that is less than 2 hours delayed', but the guarantee is strictly one-directional — data delayed by more may or may not be aggregated, so beyond the tolerance the behaviour is undefined rather than merely lossy. The dynamic integrator's job is to sit between those two facts: measure the arriving lateness, choose a tolerance that covers it, identify exactly which partitions or intervals the late records contaminate, and re-integrate only those.",
+  "benefits": [
+    "Tolerance sized to the observed lateness distribution rather than to a guess — the state held for late arrivals tracks what the source actually does instead of a constant someone picked in a design doc",
+    "Blast radius limited to the contaminated intervals: reloading the partitions a late record actually touches replaces the fixed re-open window that reprocesses far more than needed",
+    "Correctness preserved where it is free — with a properly derived tolerance, Flink's default rule never drops anything inside the tolerance, so published results stay valid",
+    "Supports correcting already-published results rather than only preventing new errors, which is the only option once the consumer has acted on a wrong number",
+    "Retraction/upsert encoding makes the correction explicit on the wire so a downstream consumer can apply it deterministically instead of guessing whether a repeat is a duplicate or an update",
+    "Late firings preserve the operator-defined function semantics — the window function runs again rather than the correction being an ad-hoc patch applied outside the computation",
+    "Handles the structurally hard case, not just the straggler: a late element can bridge two previously separate session windows into a merged window, which a fixed re-open rule never anticipates",
+    "Turns a silent correctness risk into a measurable one — once late arrival is tracked per source, tolerance is a tunable parameter with an SLO instead of folklore"
+  ],
+  "tradeoffs": [
+    "Tolerance is paid for in retained state: a window is removed only when time passes end plus allowed lateness, so widening tolerance multiplies the state held per open window",
+    "Late firings produce multiple results for the same computation, and the docs are blunt that consumers 'need to take these duplicates into account or deduplicate them'",
+    "Output semantics change from append-only to update: a sink that only accepts inserts silently loses corrections, so the sink must be keyed and able to apply retractions",
+    "A dynamic tolerance that adapts to observed spikes can be gamed by one pathological source, so it needs per-source windows and a hard ceiling",
+    "Recomputing a contaminated interval is still a recomputation — the integration strategy bounds the cost, it does not make the recomputation free",
+    "Session windows can merge late, which means a single late record can change the identity and bounds of windows that were already emitted, invalidating downstream per-window assumptions",
+    "Conflicting writers during a targeted rewrite are a real risk: on partitions that late-arriving data updates, compaction must use partial progress so a collision costs one commit rather than the entire rewrite",
+    "Flink's contract is genuinely undefined past the tolerance, not merely lossy — beyond the threshold data 'may or may not get aggregated', which makes correctness reasoning impossible there and forces the integrator to own that region",
+    "The dbt-style lookback remedy has its own failure mode: widening the incremental filter reprocesses fixed periods on every run forever, which is a permanent cost chosen to avoid occasional full rebuilds"
+  ],
+  "quality_attributes": {
+    "scalability": 7,
+    "maintainability": 6,
+    "reliability": 8,
+    "security": 5,
+    "performance": 6,
+    "simplicity": 4
+  },
+  "suitable_domains": [
+    "stream-processing",
+    "streaming",
+    "data-pipelines",
+    "distributed-data-pipelines",
+    "data-processing",
+    "real-time-analytics",
+    "event-driven-workloads",
+    "iot-data-processing",
+    "clickstream-analytics",
+    "financial-systems",
+    "log-analysis",
+    "big-data-analytics"
+  ],
+  "unsuitable_domains": [
+    "ultra-low-latency-requirements",
+    "sub-millisecond-response-requirements",
+    "real-time-deterministic",
+    "simple-request-response",
+    "batch-analytics-only",
+    "static-requirements",
+    "low-ml-requirements",
+    "prototypes",
+    "simple-domains"
+  ],
+  "use_cases": [
+    "Flink windows with a derived allowed lateness where the window state is retained past the watermark and the window function re-fires on the late element",
+    "Spark Structured Streaming with `withWatermark` set from the measured lateness profile, accepting late data inside the threshold as an update-mode correction and routing anything later to an explicit late-data path",
+    "Kafka Streams windowed aggregations with `ofTimeDifferenceAndGrace`, where records arriving after windowEnd + grace are rejected and must be routed to a compensation path",
+    "Flink side outputs capturing records discarded as late, which become the input to a targeted re-integration job rather than a silent hole",
+    "dbt incremental models with a lookback window that re-reads N days of source on every run, plus a scheduled weekly full refresh that resets the accumulated drift from late arrivals",
+    "dbt microbatch incremental models where `lookback` reprocesses recent batches automatically because late-arriving data is expected",
+    "An Iceberg lake where late data lands in cold partitions and a partition-scoped rewrite with partial progress re-integrates them without conflicting with active writers",
+    "Session-window analytics where a late event bridges two sessions and the integrator must accept a merged window as the corrected result"
+  ],
+  "avoid_when": [
+    "The downstream contract is strictly append-only and cannot represent a retraction — there is no way to integrate late data without rewriting published output",
+    "Tight latency SLOs make wide tolerance unaffordable: every unit of allowed lateness is retained state and delayed emission",
+    "The source genuinely has bounded, known lateness — then a fixed tolerance derived from the contract is simpler and equally correct",
+    "Results are consumed immediately and never revisited, in which case dropping is cheaper than re-integrating",
+    "The computation is not idempotent per interval, so recomputing a contaminated partition produces different output each time and cannot be reconciled",
+    "You cannot distinguish a late update from a duplicate, so applying a correction risks double-counting instead of fixing",
+    "The sink has no primary key, so a retraction has nothing to retract against",
+    "The lateness distribution is unbounded and pathological; no tolerance is sufficient, and the honest answer is a bounded-time ingestion contract rather than more state"
+  ],
+  "component_types": [
+    "Tolerance policy: the component that derives allowed lateness per source from observed lateness rather than from a hard-coded constant, with a ceiling",
+    "Lateness histogram: the per-source measurement of arrival delay relative to the watermark, which is the input to the tolerance policy and to any alerting",
+    "Window / partition state with retention: state held past the watermark until end + allowed lateness, which is what makes integration possible at all",
+    "Late-firing trigger: the mechanism that re-runs the window function on a late element and re-emits the result as a correction",
+    "Changelog / retraction encoder: converts the updated result into either a retract-plus-append pair or a keyed upsert message for the sink",
+    "Side-output late channel: captures records discarded as late so they can be routed to re-integration instead of vanishing",
+    "Contaminated-interval resolver: identifies exactly which partitions or windows the late records touch, turning a late event into a bounded recomputation scope",
+    "Targeted re-integration job: reloads only the affected intervals and rewrites them, with partial progress so a write collision costs one commit",
+    "Drift-reset job: the periodic full rebuild that clears the residual error that incremental integration leaves behind",
+    "Duplicate/correction discriminator at the sink: the logic that distinguishes a late correction from a genuine duplicate"
+  ],
+  "technology_stack": [
+    "Apache Flink allowed lateness and late firings",
+    "Flink side outputs",
+    "Flink retract and upsert changelog encoding",
+    "Apache Spark Structured Streaming withWatermark",
+    "Kafka Streams JoinWindows grace periods",
+    "dbt incremental models with lookback and microbatch",
+    "Apache Iceberg rewrite_data_files with partial progress",
+    "Delta Lake MERGE",
+    "Apache Airflow for targeted re-runs",
+    "Prometheus for lateness distribution metrics"
+  ],
+  "anti_patterns": [
+    "Setting allowed lateness to a round number with no measurement behind it — too tight silently drops, too generous holds state forever",
+    "Treating post-tolerance behaviour as 'drops everything late' when the engine's guarantee is one-directional and the outcome is genuinely unspecified",
+    "Emitting a correction as a plain insert into an append-only sink, which silently loses the correction or double-counts it",
+    "Publishing intermediate results as final and never modelling them as revisable, so late data can only ever be lost",
+    "Opening a fixed re-processing window of N days on every run forever, when a per-source measured tolerance would cover the same ground at a fraction of the cost",
+    "Re-running the entire pipeline for one late record instead of resolving the contaminated interval and reloading only that",
+    "Ignoring late firings in the sink design, so the second emission for the same window is treated as a duplicate and dropped — the correction is lost exactly when it was needed",
+    "Rewriting actively-written partitions during late integration without partial progress, turning a small conflict into a full recompact",
+    "Never resetting drift: running incremental forever without a periodic full rebuild lets a small daily error accumulate into a table nobody trusts",
+    "Applying a late correction to a session-window result without handling the merge case, where the late record changed which windows exist at all"
+  ],
+  "migration_from": [
+    "batch-processing",
+    "lambda-architecture"
+  ],
+  "migration_to": [
+    "kappa-architecture",
+    "event-sourcing"
+  ],
+  "related_patterns": [
+    "kappa-architecture",
+    "lambda-architecture",
+    "event-sourcing",
+    "event-driven",
+    "reactive-architecture",
+    "data-mesh",
+    "space-based",
+    "actor-based"
+  ],
+  "design_principles": [
+    "Measure lateness, do not assume it — the tolerance is a parameter of the source's behaviour, not a constant of the pipeline",
+    "Corrections must be first-class output; if the encoding cannot express an update, the late record cannot be integrated honestly",
+    "Bound the blast radius by data, not by calendar: identify the contaminated intervals and reload exactly those",
+    "Wider tolerance is not free — it is retained state and delayed emission, so treat it as a budgeted cost with a ceiling",
+    "Past the tolerance the engine's behaviour is undefined, so that region belongs to an explicitly owned path (side output, re-integration) rather than to hope",
+    "Incremental correction accumulates drift; a periodic full rebuild is the mechanism that makes the incremental path trustworthy",
+    "Idempotence per interval is a prerequisite: re-integrating a partition twice must produce the same result as integrating it once",
+    "Detect before you correct — measurement of late arrivals is what lets the tolerance be tuned rather than guessed"
+  ],
+  "best_practices": [
+    "Build a lateness histogram per source before choosing a tolerance, and re-evaluate it when the source's delivery pattern changes",
+    "Capture late records to a side output (or equivalent) from day one, so the re-integration path has data even before you need it",
+    "Keep the operator function pure and idempotent per interval so a late firing and a replay of the same interval are indistinguishable in output",
+    "Key the sink and implement retract/upsert application, and test it by deliberately replaying an old partition and asserting the result converges",
+    "Use partition-scoped rewrites with partial progress enabled for tables that late-arriving data updates, rather than table-wide rewrites",
+    "Combine a per-source dynamic tolerance with a hard ceiling, so one pathological producer cannot inflate global state",
+    "Schedule a periodic full rebuild on a low-traffic window to reset incremental drift, and track its duration as a budget",
+    "Document which outputs are provisional (emitted before the tolerance expires) and which are final, and never let a consumer treat a provisional result as final",
+    "Alert on the lateness distribution's tail, not just the mean — a mean of 2 minutes with a p99 of six hours is the case that breaks the pipeline"
+  ],
+  "references": [
+    "Apache Flink, Windows — allowed lateness semantics, window state retained until end + allowed lateness, late firings and late merges in session windows, side outputs for discarded late data, and the requirement that consumers deduplicate repeated results — https://nightlies.apache.org/flink/flink-docs-stable/docs/dev/datastream/operators/windows/",
+    "Apache Flink, Timely Stream Processing — lateness defined relative to the watermark, why no finite watermark is safe when elements can be arbitrarily delayed, and the latency cost of holding watermarks back — https://nightlies.apache.org/flink/flink-docs-stable/docs/concepts/time/",
+    "Apache Flink, Streaming Analytics — late events dropped by default, side outputs, allowed lateness causing re-firing, and late events bridging previously separate session windows — https://nightlies.apache.org/flink/flink-docs-stable/docs/learn-flink/streaming_analytics/",
+    "Apache Flink, Dynamic Tables — retract stream encoding an UPDATE as retract plus append, and upsert stream encoding it as a single message given a unique key, plus why some queries are unfit for continuous evaluation (state size, cost of computing updates) — https://nightlies.apache.org/flink/flink-docs-master/docs/concepts/sql-table-concepts/dynamic_tables/",
+    "Apache Spark, Structured Streaming Programming Guide — watermark state cleanup conditions and the one-directional guarantee that a delay under the threshold is never dropped while a longer delay may or may not be aggregated — https://spark.apache.org/docs/3.5.8/structured-streaming-programming-guide.html",
+    "dbt, Incremental models in-depth — adding a lookback window to the cutoff to capture late-arriving rows and running a full refresh periodically to reset the drift it causes — https://docs.getdbt.com/best-practices/materializations/4-incremental-models",
+    "dbt, Incremental patterns for near real-time data — microbatch `event_time` plus `lookback` for massive time-series tables where late data is common and backfills must be chunked — https://docs.getdbt.com/best-practices/how-we-handle-real-time-data/2-incremental-patterns",
+    "AWS Prescriptive Guidance, Iceberg compaction for partitions updated by late-arriving data — PARTIAL_PROGRESS_ENABLED splits the rewrite into multiple commits so a collision limits the retry cost to the affected commit — https://docs.aws.amazon.com/prescriptive-guidance/latest/apache-iceberg-on-aws/best-practices-compaction.html"
+  ]
+}

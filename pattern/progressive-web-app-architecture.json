@@ -1,0 +1,108 @@
+{
+  "category": "presentation",
+  "name": "progressive-web-app",
+  "context": "A web application that must start reliably on slow or absent connections, serve the content the user last interacted with, and update itself in place. The architecture is a service worker that sits between the application and the network as middleware: it intercepts every request within its scope and acts as a proxy, even when the device is offline. Around that sit the app shell as a precached minimal UI, versioned caches whose lifecycle is tied to the worker's install/activate events, and background mechanisms that let work continue while the application is closed.",
+  "benefits": [
+    "Repeat visits render instantly from cache instead of the network, which is where most perceived performance lives",
+    "Navigation requests resolve to a cached app shell, so an unvisited URL still produces a working interface instead of a browser error page",
+    "Cache strategies are chosen per resource — precache the shell, stale-while-revalidate assets, network-first data",
+    "The worker survives the application being closed and is restarted on a triggering event, enabling background sync and push",
+    "Installable and app-like delivery without an app store review or a user installing anything"
+  ],
+  "tradeoffs": [
+    "Two layers of caching exist — the HTTP cache and the Cache Storage API — and debugging 'why is this stale' requires understanding both",
+    "Version skew is inherent: the new worker installs in the background while the old one still serves, until every client is released or skipWaiting is called",
+    "In-memory state does not survive worker termination, so anything reused between runs must be persisted (typically IndexedDB)",
+    "The worker thread is killed when idle, which bounds background work and makes long tasks the job of Background Fetch",
+    "Adds weight and complexity to the client for applications that never work offline"
+  ],
+  "quality_attributes": {
+    "scalability": 6,
+    "maintainability": 6,
+    "reliability": 7,
+    "security": 7,
+    "performance": 9,
+    "simplicity": 5
+  },
+  "suitable_domains": [
+    "mobile-applications",
+    "mobile-first-applications",
+    "web-applications"
+  ],
+  "unsuitable_domains": [],
+  "use_cases": [
+    "Content and commerce sites that must render on a flaky mobile connection",
+    "An application shell that loads instantly on repeat visits and shows content while data loads",
+    "Read-only or semi-offline experiences where caching media and tickets matters more than live data",
+    "Web applications that need push notifications and periodic content refresh without being open",
+    "Replacing a native install where store distribution is the main barrier"
+  ],
+  "avoid_when": [
+    "The application is cloud gaming or a crypto-asset wallet where full offline behaviour is not the goal",
+    "The content is highly personalised and uncacheable, making the shell the only useful artefact",
+    "Sensitive data must never be persisted on the device in a shared cache",
+    "A native or desktop client already provides the required offline and install behaviour"
+  ],
+  "component_types": [
+    "Service worker: network-proxy middleware on its own thread, scoped by the directory it is served from",
+    "Application shell: minimal HTML, CSS and JS (header, navigation, persistent chrome) precached at install time",
+    "Cache Storage: named, origin-scoped caches partitioned by version, populated during install and on route change",
+    "Fetch handler: per-resource strategy (cache-first, network-first, stale-while-revalidate, cache-only)",
+    "Lifecycle controller: install / waiting / activate transitions, old-cache cleanup, optional skipWaiting and clients.claim",
+    "Background mechanism: Background Sync, Background Fetch or Periodic Background Sync for work while the app is closed"
+  ],
+  "technology_stack": [
+    "Service Worker API",
+    "Cache Storage API",
+    "IndexedDB",
+    "Web App Manifest",
+    "Workbox",
+    "Background Sync API",
+    "Background Fetch API",
+    "Navigation Preload"
+  ],
+  "anti_patterns": [
+    "Precaching everything at install, wasting bandwidth and storage and serving unintended stale resources",
+    "Caching the HTML document permanently, so users never receive an updated application",
+    "Deleting the previous version's cache during install rather than during activate, breaking clients still on the old worker",
+    "Holding state in worker memory across events, which is discarded whenever the browser terminates the worker",
+    "Using Background Sync for long tasks, which the browser deliberately kills to limit IP exposure and battery use"
+  ],
+  "migration_from": [
+    "server-rendered-html-only-delivery",
+    "native-app-for-offline-behaviour",
+    "unmanaged-browser-cache-dependence"
+  ],
+  "migration_to": [
+    "offline-first",
+    "client-server"
+  ],
+  "related_patterns": [
+    "client-server",
+    "presentation-abstraction-control",
+    "model-view-controller",
+    "api-gateway",
+    "edge-computing"
+  ],
+  "design_principles": [
+    "The worker is middleware, not a cache decorator — it owns the request path within its scope",
+    "Precache the shell; choose strategies per resource rather than one global policy",
+    "Version caches explicitly and delete old versions only on activate, once no client is using them",
+    "Offline is a capability, not a promise — degrade with your own messaging, never a browser error page",
+    "Worker state must be persisted, because the worker is terminated freely between events"
+  ],
+  "best_practices": [
+    "Use waitUntil around cache writes so the worker is not terminated mid-population",
+    "Serve navigation requests from the precached shell with navigateFallback so deep links work offline",
+    "Use clients.claim only when mid-session takeover is intended; it is what causes version-skew surprises",
+    "Require TLS for the Cache Storage API and keep cross-origin responses scoped to your origin",
+    "Use navigation preload so the fetch starts in parallel with worker activation instead of after it"
+  ],
+  "references": [
+    "web.dev, Service workers — middleware model, scope and lifecycle, https://web.dev/learn/pwa/service-workers",
+    "web.dev, Caching — Cache Storage, strategies and precaching at install, https://web.dev/learn/pwa/caching",
+    "MDN, Using Service Workers — install/activate, updating, skipWaiting, clients.claim and navigation preload, https://developer.mozilla.org/en-US/docs/Web/API/Service_Worker_API/Using_Service_Workers",
+    "MDN, Offline and background operation (Progressive web apps) — cache strategies, background sync and background fetch, https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps/Guides/Offline_and_background_operation",
+    "Chrome for Developers, Workbox — Service workers and the application shell model, https://developer.chrome.com/docs/workbox/app-shell-model"
+  ]
+}

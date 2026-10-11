@@ -1,0 +1,105 @@
+{
+  "category": "structural",
+  "name": "offline-first",
+  "context": "An application treats the copy of the data on the user's device as the primary copy, not a cache of a server's. Reads and writes hit local storage and never wait for a network round trip; a background sync layer reconciles the local replica with other devices and with the server when a connection exists. The decisive statement is not that servers are absent but that their role changes — from source of truth to a supporting participant in replication. The seven ideals that define the pattern are: no spinners, multi-device, offline, multi-user, long-term preservation, security and privacy by default, and the user retaining ultimate ownership and control.",
+  "benefits": [
+    "User interaction never blocks on the network — writes apply locally and the local write is the state, so there is no separate 'optimistic' mode",
+    "The application keeps functioning normally regardless of network status rather than showing an offline error that blocks work",
+    "Data ownership moves to the user; a server outage degrades collaboration, not the user's access to their own work",
+    "Conflict resolution can be automated with CRDTs, so most concurrent edits merge without user intervention or a server round trip",
+    "End-to-end encryption becomes practical because servers only ever hold ciphertext they cannot read"
+  ],
+  "tradeoffs": [
+    "There is no single authoritative database, so server-side authorisation, validation and auditing must be rebuilt elsewhere",
+    "Clients cannot display data they have not yet received — every new query has a first-result loading period",
+    "Sync engines carry real complexity: hybrid logical clocks, durable operation logs, retries, coalescing and idempotent application",
+    "Conflict resolution that is purely structural cannot understand domain meaning, so some conflicts still need human judgement",
+    "Replicated metadata and retained history grow over time and need compaction and garbage collection"
+  ],
+  "quality_attributes": {
+    "scalability": 7,
+    "maintainability": 5,
+    "reliability": 8,
+    "security": 9,
+    "performance": 9,
+    "simplicity": 4
+  },
+  "suitable_domains": [
+    "mobile-applications",
+    "mobile-first-applications",
+    "collaborative-applications"
+  ],
+  "unsuitable_domains": [
+    "real-time-systems"
+  ],
+  "use_cases": [
+    "Collaborative editors and whiteboards where several users work and reconnect constantly",
+    "Field-service and survey applications used in areas with no connectivity",
+    "Note-taking and task applications where losing network access must not lose work",
+    "Design tools with multi-device sessions across laptop, tablet and phone",
+    "Any application that wants to keep working after the vendor shuts the backend down"
+  ],
+  "avoid_when": [
+    "The data is inherently non-shareable or the product requires a single canonical server record for everyone",
+    "Strong server-side authorisation is the primary control and cannot be deferred to a client replica",
+    "Multi-region write conflict resolution has not been decided — local-first pushes that decision to the front",
+    "The application is a thin client over a server whose latency is already acceptable"
+  ],
+  "component_types": [
+    "Local replica: the primary store on the device, typically SQLite, IndexedDB or an embedded engine",
+    "Sync engine: background component that exchanges changes with peers and the server",
+    "Operation log: durable, ordered record of local changes awaiting propagation",
+    "Conflict resolution: CRDT merge, or field-level last-writer-wins under a hybrid logical clock",
+    "Sync transport: server relay, WebSocket, or peer-to-peer such as WebRTC, local WiFi or Bluetooth",
+    "Subscription/filter model: per-client declarations of which data to mirror"
+  ],
+  "technology_stack": [
+    "CRDTs (Automerge, Yjs, Loro)",
+    "SQLite / IndexedDB / Realm",
+    "WebRTC peer-to-peer data channels",
+    "Server relay for coordination",
+    "Hybrid logical clocks"
+  ],
+  "anti_patterns": [
+    "Building 'offline support' as an error path: showing an offline banner and blocking the user's work",
+    "Keeping the server as the source of truth and bolting a retry queue in front of it — the pattern is the inverted ownership, not the queue",
+    "Resolving conflicts by wall-clock time alone, which is non-deterministic across devices with skewed clocks",
+    "Treating a sync conflict as an exception path instead of as normal convergent state",
+    "Assuming a replica can show data it has never received, and designing the UI around that assumption"
+  ],
+  "related_patterns": [
+    "event-driven",
+    "client-server",
+    "reactive-architecture",
+    "master-slave",
+    "presentation-abstraction-control"
+  ],
+  "design_principles": [
+    "The local copy is primary; servers hold secondary copies in a supporting role",
+    "Reads and writes never block on the network",
+    "Convergence is the default conflict policy; user resolution is the exception",
+    "Replication is transport-agnostic — a server, a peer, or a local network",
+    "The user owns the data and can keep it when the service disappears"
+  ],
+  "best_practices": [
+    "Make the local write authoritative immediately; do not model 'optimistic' and 'confirmed' as different states",
+    "Give every write a hybrid logical clock timestamp and a node id so merges are deterministic and idempotent",
+    "Persist the outbound operation log durably before attempting any network send",
+    "Distinguish 'not loaded yet' from 'empty' in the UI — folding an empty value onto a loading row erases data",
+    "Keep CRDT metadata out of undo capture and define a compaction policy for row history"
+  ],
+  "migration_from": [
+    "server-authoritative-with-retry-queue",
+    "cloud-only-collaboration"
+  ],
+  "migration_to": [
+    "client-server",
+    "reactive-architecture"
+  ],
+  "references": [
+    "Ink & Switch, Local-first software: you own your data, in spite of the cloud, https://www.inkandswitch.com/essay/local-first/",
+    "Kleppmann, Wiggins, van Hardenberg and McGranaghan, Local-first software — seven ideals and CRDT foundations, https://www.inkandswitch.com/essay/local-first/local-first.pdf",
+    "Automerge, CRDT implementation by Ink & Switch, https://automerge.org/",
+    "MDN, Using Service Workers — cache-first and offline-first request handling in the browser, https://developer.mozilla.org/en-US/docs/Web/API/Service_Worker_API/Using_Service_Workers"
+  ]
+}

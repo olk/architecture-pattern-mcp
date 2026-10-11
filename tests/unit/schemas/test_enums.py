@@ -88,13 +88,14 @@ class TestArchitectureStyle:
     """
 
     def test_has_40_values(self):
-        """Verify ArchitectureStyle enum contains exactly 40 values (matching pattern JSON files)."""
+        """Verify ArchitectureStyle enum contains exactly 128 values (matching pattern JSON files)."""
         actual_values = len(ArchitectureStyle)
-        assert actual_values == 40, f"Expected 40 values, got {actual_values}"
+        assert actual_values == 128, f"Expected 128 values, got {actual_values}"
 
     def test_pattern_names_from_json_files(self):
-        """Verify ArchitectureStyle values match Pattern.name from all 36 JSON files."""
+        """Verify ArchitectureStyle values match Pattern.name from all 128 JSON files."""
         import glob, json
+
         expected = set()
         for path in glob.glob("pattern/*-architecture.json"):
             with open(path) as f:
@@ -162,9 +163,7 @@ class TestArchitectureDomain:
     def test_domain_values_are_lowercase(self):
         """Verify all ArchitectureDomain values are lowercase strings."""
         for item in ArchitectureDomain:
-            assert item.value == item.value.lower(), (
-                f"ArchitectureDomain value '{item.value}' should be lowercase"
-            )
+            assert item.value == item.value.lower(), f"ArchitectureDomain value '{item.value}' should be lowercase"
 
     def test_sample_domains_match_pattern_files(self):
         """Verify ArchitectureDomain values match the problem-space domains used in pattern JSON files."""

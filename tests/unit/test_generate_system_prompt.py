@@ -54,21 +54,18 @@ class TestEnumDerivation:
     def test_category_enum_list_is_derived_from_schema_enum(self):
         assert ", ".join(c.value for c in PatternCategory) == _CATEGORY_ENUM_LIST
 
-    def test_prompt_contains_every_style_enum_value(self):
+    def test_prompt_names_requested_style(self):
+        # Since the 40→128 catalog expansion the full style list is referenced
+        # by rule (requested style + get_architecture_pattern resolvability),
+        # not inlined — inlining cost ~375 proxy tokens against the budget cap.
         prompt = _generate_system_prompt_cached("microservices")
-        for style in ArchitectureStyle:
-            assert style.value in prompt, f"prompt is missing style: {style.value}"
+        assert "overview.style MUST be exactly the requested style" in prompt
+        assert "resolvable via get_architecture_pattern" in prompt
 
     def test_prompt_contains_every_category_enum_value(self):
         prompt = _generate_system_prompt_cached("microservices")
         for category in PatternCategory:
             assert category.value in prompt, f"prompt is missing category: {category.value}"
-
-    def test_styles_missing_from_v1_prompt_are_now_present(self):
-        """The v1 hand-maintained list omitted these 5 valid styles."""
-        prompt = _generate_system_prompt_cached("microservices")
-        for style in ("blackboard", "strangler-fig", "clean-architecture", "client-server", "master-slave"):
-            assert style in prompt
 
 
 class TestPromptContent:
@@ -146,6 +143,5 @@ class TestPromptTokenBudget:
     def test_total_prompt_under_hard_cap(self, style: ArchitectureStyle):
         prompt = _generate_system_prompt_cached(style.value)
         assert len(prompt) // 4 <= TOTAL_TOKEN_LIMIT, (
-            f"{style.value}: total prompt is {len(prompt) // 4} proxy tokens "
-            f"(limit {TOTAL_TOKEN_LIMIT})"
+            f"{style.value}: total prompt is {len(prompt) // 4} proxy tokens (limit {TOTAL_TOKEN_LIMIT})"
         )

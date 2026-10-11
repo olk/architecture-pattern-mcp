@@ -1,0 +1,161 @@
+{
+  "name": "fault-tolerance",
+  "category": "specialized",
+  "context": "In any distributed system, components fail — a replica dies, a network partition splits a cluster, a bad deploy corrupts state, a dependency returns nonsense. The question an architecture answers is not 'will it fail' but 'what does the system do when it does'. Fault tolerance is the architectural discipline of keeping a service available, at reduced capability if necessary, while any subset of its components is failing. It is built from four concerns that have to be chosen together. First, redundancy topology: how many copies exist and in what relation. Active/passive with N+1 keeps a hot standby so failover has no ramp-up and the user sees no service failure, but failover is a discrete event with a real time cost and an N+1 configuration needs a fail-back step; active/active has no failover event at all but degrades under failure and demands specialized data redundancy. Second, error detection — hot-standby patterns differ precisely in how failure is noticed: by intermediate checkpoints from primary to standby, by a separate controller that observes and initiates mode transitions, or by mutual observation where each component watches its sibling's output and self-elects. Third, recovery — switch to the redundant resource based on replication, and handle the cases where the redundancy is itself broken. Fourth, correct behaviour when there is no redundancy left, which is where isolation earns its keep: divide the system into autonomous failure units that can fail without taking the whole system with them. That last one is the organizing idea — SAP's resilience guidance calls isolation 'the basic principle of resilience, on which almost all other resilience patterns build', warning that the state of the art is human operators, and that high availability therefore requires automating detection and recovery because human response time is too long to rely on for no-downtime targets. It also names the cost honestly: human error causes roughly 80% of downtime and cannot be fixed by redundancy at all.",
+  "benefits": [
+    "The system keeps serving, at degraded capability, while components fail — availability stops depending on every part being alive",
+    "Redundancy topology is an explicit design choice (N+1, active/passive, active/active, hot/warm standby) rather than an emergent property of the deployment",
+    "Failure isolation prevents one failing unit from cascading into a total outage, which is the mechanism behind most large incidents",
+    "Automatic detection and recovery remove the human operator from the critical path, which is what makes no-downtime targets achievable",
+    "Quarantine lets a repeatedly-failing input or component be set aside and handled in isolation instead of blocking or destabilizing the system",
+    "Clear redundancy semantics make failure-mode reasoning possible: you can state what the system does when a third of the cluster disappears",
+    "Warm versus hot standby is a deliberate cost/latency trade rather than an accident of infrastructure",
+    "Explicit treatment of split brain, quorum loss, and amnesia makes the dangerous distributed failure cases designed-for instead of discovered in production"
+  ],
+  "tradeoffs": [
+    "Cost — redundancy means duplicate hardware, duplicate data, or duplicate capacity, and that cost is paid continuously to cover rare events",
+    "Redundancy can mask defects: a component that fails constantly is silently replaced every time, so the underlying bug is never fixed",
+    "Failover is a complex state machine with its own failure modes — dual master, split brain from a broken cluster interconnect, amnesia after a restart with stale configuration",
+    "Correctness under partition requires quorum and fencing; without them a partitioned cluster can produce conflicting writes that no amount of redundancy repairs",
+    "Hot standby keeps a standby that is idle and untested until it is needed, so it can be broken at exactly the moment it is required",
+    "Graceful degradation is a product decision: degraded behaviour must be specified per feature, which requires business input, not just engineering",
+    "Automation of detection and recovery is genuinely hard — it is distributed-systems code with the highest possible blast radius",
+    "Human-error resilience is not bought with redundancy: the largest cause of downtime needs change control, testing, and training, which is a different budget entirely"
+  ],
+  "quality_attributes": {
+    "scalability": 5,
+    "maintainability": 6,
+    "reliability": 10,
+    "security": 6,
+    "performance": 5,
+    "simplicity": 3
+  },
+  "suitable_domains": [
+    "regulated-industries",
+    "financial-services",
+    "payment-processing",
+    "telecommunications",
+    "autonomous-vehicles",
+    "industrial-automation",
+    "energy",
+    "banking-and-finance",
+    "disaster-recovery",
+    "self-healing-systems",
+    "high-traffic-systems"
+  ],
+  "unsuitable_domains": [
+    "prototypes",
+    "mvp",
+    "short-lived-projects",
+    "low-budget",
+    "limited-operational-maturity",
+    "low-concurrency-single-node-apps",
+    "single-threaded-environments"
+  ],
+  "use_cases": [
+    "Active/passive with a hot standby so a crashed node is replaced with no ramp-up and no user-visible service failure",
+    "N+1 configurations where failover must not require a fail-back step because the extra capacity is already warm",
+    "Mutual-observation error detection, where two components watch each other's output and self-elect rather than depending on a controller that could itself fail",
+    "Controller-based mode transitions, where a separate component detects failure of the primary and orders the surviving component into the primary role",
+    "Quarantine of a data payload that repeatedly triggers the same failure, so the unit keeps running and the bad data is handled separately",
+    "Watchdog-driven detection, where a monitor observes a component's metrics and triggers action once a threshold is crossed",
+    "Isolating failure units so one tenant, one region, or one shard can fail without degrading the whole service",
+    "Automated failover to a secondary region with fencing to prevent the partitioned side from continuing to write"
+  ],
+  "avoid_when": [
+    "The system is a prototype or has no operational owner — redundancy without someone to maintain it is cost with no benefit",
+    "The budget cannot carry duplicate infrastructure, and the honest availability requirement is lower than the aspirational one",
+    "The dominant failure cause is human error or bad change, which redundancy cannot address; fix change control first",
+    "The workload is single-node and single-threaded with no redundancy point, so fault tolerance has nothing to attach to",
+    "Nobody has specified what degraded behaviour means for each feature — availability without defined degradation is just a plan for partial failure nobody has designed",
+    "Correctness under network partition is required but no fencing or quorum mechanism is available, because unfenced failover causes split brain rather than preventing it"
+  ],
+  "component_types": [
+    "Redundant Resource Pair: the active and standby components whose role is switched on failure",
+    "Error Detector: one of three distinct mechanisms — checkpoint-based detection from primary to standby, a dedicated controller, or mutual observation between peers",
+    "Supervisor: the component that controls other components' lifecycle — starting, stopping, and reconfiguring them",
+    "Watchdog: a monitor that observes another component's metrics and triggers action when a threshold is crossed",
+    "Failure Unit / Bulkhead: the isolation boundary that defines what can fail without taking the application down",
+    "Quarantine Store: the holding area for data or components that repeatedly cause the same failure",
+    "Fencing / Resource Guard: the mechanism that prevents a partitioned subgroup from continuing to act as leader",
+    "Quorum Arbiter: the witness (node, disk, file share) that lets a partition determine which side may operate",
+    "Checkpoint Store: the durable point to which state is restored on recovery",
+    "Failover Controller: the automation that performs detection, mode transition, and switchover without a human operator",
+    "Circuit Breaker: the component that suspends calls to a failing dependency rather than amplifying the failure"
+  ],
+  "technology_stack": [
+    "Kubernetes (liveness/readiness probes, PodDisruptionBudget)",
+    "etcd / ZooKeeper (quorum)",
+    "Keepalived / VRRP",
+    "HAProxy",
+    "Corosync / Pacemaker",
+    "Envoy outlier detection",
+    "AWS Auto Scaling Groups",
+    "Hystrix-style circuit breakers",
+    "SAN/distributed storage with quorum"
+  ],
+  "anti_patterns": [
+    "Redundancy treated as self-healing — a component that fails constantly is silently replaced forever while the actual defect is never diagnosed",
+    "Unfenced failover, where a partitioned cluster elects two leaders and both keep accepting writes, producing unrecoverable conflict",
+    "A hot standby that is never exercised, so it is discovered to be broken at the moment failover is actually needed",
+    "Assuming redundancy addresses human error — the largest single cause of downtime needs change control and testing, not a second copy",
+    "Leaving the operator in the critical path, because human reaction time cannot support a no-downtime target",
+    "Failure units sized too large to isolate anything, where the 'isolation' boundary sits at the whole application",
+    "No defined degraded behaviour, so when a dependency is unavailable the system fails hard rather than serving a reduced feature set",
+    "Quarantine with no exit path, where failed payloads are set aside and never resolved, silently capping throughput",
+    "Optimistic unbounded retries during failover, converting one component failure into a load storm against the surviving components"
+  ],
+  "migration_from": [
+    "single-point-of-failure-topology",
+    "monolithic",
+    "distributed-transactions",
+    "reactive-architecture"
+  ],
+  "migration_to": [
+    "master-slave",
+    "space-based",
+    "microservices",
+    "modular-monolith",
+    "event-driven"
+  ],
+  "related_patterns": [
+    "master-slave",
+    "microservices",
+    "reactive-architecture",
+    "space-based",
+    "task-control-architecture",
+    "service-mesh",
+    "event-driven",
+    "modular-monolith",
+    "hybrid-cloud"
+  ],
+  "design_principles": [
+    "Isolation is the base principle — divide the system into autonomous failure units so nothing can bring down everything, and choose the cut deliberately rather than by accident",
+    "Redundancy is a spectrum with a price — pick hot standby, warm standby, or active/active deliberately, and know the failover time you are buying versus paying for",
+    "Detection is a design decision with three distinct answers — checkpoints, an external controller, or mutual observation — and the choice determines what happens when the detector itself fails",
+    "Fence the partitioned side — quorum plus resource fencing is what makes failover safe; without it, failover converts an outage into data corruption",
+    "Automate detection and recovery — human reaction time is the binding constraint on any no-downtime commitment",
+    "Degrade by specification, not by accident — define what each feature does without its dependency, in business terms, before the failure happens",
+    "Quarantine rather than retry — a repeatedly failing payload belongs in isolation, not in an unbounded retry loop",
+    "Know what redundancy cannot fix — human error and bad change need process, not a second copy"
+  ],
+  "best_practices": [
+    "Identify single points of failure explicitly and remove or protect each one; an inventory beats an assumption that there are none",
+    "Choose the error detection mechanism per component: checkpoints for stateful pairs, a controller when you want centralized arbitration, mutual observation when you want to avoid a controller dependency",
+    "Implement fencing and quorum before implementing automatic failover, since unfenced failover is worse than downtime",
+    "Configure the quorum mode to match the topology — node majority for odd node counts, node-and-disk for shared storage, node-and-file for multi-site",
+    "Keep a copy of the cluster configuration on every node so an amnesia restart does not resurrect an old topology",
+    "Test the degraded path, not just the failover: confirm the service still answers correctly with the dependency blackholed rather than erroring",
+    "Exercise the standby on a schedule (failover drills, chaos experiments) so it is not an untested component",
+    "Budget for change control, testing, and training alongside the redundancy budget — they address the largest cause of downtime",
+    "Define degraded behaviour per feature with the business, and instrument it so degradation is visible rather than silent"
+  ],
+  "references": [
+    "SAP, Developing Resilient Apps on SAP BTP (isolation, supervisor, watchdog, quarantine, circuit breaker as error-detection and recovery patterns), https://help.sap.com/doc/6a87ef93fe554dde919548e9c4c86299/Cloud/en-US/resilient_apps.pdf",
+    "Hasso Plattner Institut, Fault Tolerance Patterns (redundancy configurations for failover, quorum and fencing, dual-master and split-brain, checkpointing), https://osm.hpi.de/depend/2010/07_patterns.pdf",
+    "Mike Ulrich, Addressing Cascading Failures: Reducing System Outage — Google Site Reliability Engineering, https://sre.google/sre-book/addressing-cascading-failures/",
+    "Alex Perry and Max Luebbe, Testing for Reliability — Google Site Reliability Engineering, https://sre.google/sre-book/testing-reliability/",
+    "Mattias Tichy et al., Design of self-managing dependable systems with UML and fault tolerance patterns, https://arxiv.org/abs/0809.4109",
+    "Matt Kangas, Architecting a high availability SAP NetWeaver infrastructure (SPOF identification and isolation), https://sapinsider.org/-/media/SAP%20Experts/Downloads/2007/March/SPJ-V09-I2-MarApr07-P031-Kangas.pdf"
+  ]
+}

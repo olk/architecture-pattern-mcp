@@ -1,0 +1,157 @@
+{
+  "name": "batch-processing",
+  "category": "dataflow",
+  "context": "Work arrives as a volume too large to hold in memory or finish inside a request: a nightly settlement run, a million-row import, media transcoding, a parameter sweep of 250,000 simulations, a reindex of a search corpus. Batch processing takes that volume and divides it into units that can be processed independently, each unit's completion recorded, so the job makes forward progress that survives failure. The canonical decomposition is chunk-oriented processing (Spring Batch): an ItemReader pulls items one at a time, an ItemProcessor transforms them, and once a chunk of N items has accumulated the ItemWriter writes the whole chunk in a single transaction and the job repository records the chunk's progress. That chunk boundary is the whole design: on failure only the current chunk is rolled back and the job restarts from the last committed chunk rather than from item zero. Beyond chunking, the pattern needs a unit of work — Azure Batch models this as a pool of compute nodes, a job bound to that pool, and tasks scheduled onto nodes, with the pool provisioned for the job and deleted afterwards so idle capacity is never paid for. Azure's background-jobs guidance makes the operational requirements explicit: make every job idempotent so the same input produces the same outcome when it runs twice, and use checkpointing so a restarted orchestration resumes from its last checkpoint. Partitioning is the scaling axis — split the input so multiple workers take disjoint ranges — and it changes the restart story: once chunks commit independently, a step cannot reliably checkpoint which chunks succeeded, so on restart the entire step re-runs from the beginning.",
+  "benefits": [
+    "Bounded memory: only a chunk is resident, so a 10-million-record job runs in the same footprint as a 100-record one",
+    "Restartability via checkpointing — a failure resumes from the last committed chunk instead of reprocessing the whole input, which is what makes long jobs operable",
+    "Chunk-level transactions give all-or-nothing per chunk, so a partial failure leaves a consistent database rather than half-written rows",
+    "Parallelism scales with partitioning, splitting the input across workers or nodes while each partition runs the same chunk loop",
+    "Intrinsically parallel workloads map cleanly: independent tasks need no communication and scale to whatever compute is available",
+    "Elastic capacity — a pool created for the job and deleted after it finishes means the system is not sized for the peak and never pays for idle nodes",
+    "Idempotent re-execution makes retry safe, so a transient failure costs a rerun rather than a support incident",
+    "Separating job orchestration from step execution means steps become reusable units that several jobs can share"
+  ],
+  "tradeoffs": [
+    "Chunking is a real trade: a larger chunk means fewer commits and better throughput but a larger rollback and less granular restart; a smaller chunk means more transaction overhead",
+    "Restart granularity is bounded by the chunking strategy, and parallel partitioning degrades it — with multiple threads committing chunks independently the job cannot reliably know which chunks succeeded, so the step re-runs from the start",
+    "Throughput cost of per-chunk transactions; a chunk size of 1 turns the job into millions of commits",
+    "Batch latency is the job duration, so anything user-facing must not sit behind it — the classic mistake is putting a synchronous request in the job's path",
+    "No incremental feedback: progress is only visible as 'chunk k of n done', and there is no streaming partial result",
+    "Elastic pools have cold-start cost, and a pool sized for the peak wastes money if jobs run most of the time",
+    "Requires the job to be designed for at-least-once execution, so downstream side effects (email, payment, webhook) need idempotency or a deduplication guard",
+    "Task submission itself has throughput limits — adding 20,000 tasks through a low-concurrency client is bounded by connection counts and payload size, not by the compute pool"
+  ],
+  "quality_attributes": {
+    "scalability": 9,
+    "maintainability": 7,
+    "reliability": 8,
+    "security": 6,
+    "performance": 8,
+    "simplicity": 7
+  },
+  "suitable_domains": [
+    "batch-processing",
+    "data-pipelines",
+    "data-processing",
+    "etl",
+    "big-data-analytics",
+    "batch-analytics-only",
+    "cpu-bound-computation",
+    "ml-training-pipelines-requiring-global-batch-processing",
+    "file-processing",
+    "stateful-compute-intensive-tasks",
+    "scheduled-tasks"
+  ],
+  "unsuitable_domains": [
+    "real-time-interactive-systems",
+    "hard-real-time-systems",
+    "ultra-low-latency-requirements",
+    "low-latency-required",
+    "purely-synchronous-workloads",
+    "payment-processing"
+  ],
+  "use_cases": [
+    "Nightly settlement or end-of-day posting that must complete within a window and be restartable if it fails",
+    "Spring Batch chunk-oriented job reading a CSV, transforming records, and writing chunks of 100 in one transaction",
+    "Azure Batch pool of compute nodes running 250,000 independent tasks submitted as a parametric sweep, with the pool deleted at completion",
+    "MultiTB data lake ETL: long-running jobs filtering, aggregating, and preparing files for analysis",
+    "Search index rebuild where reindexing to a new index and swapping is cheaper and safer than mutating the live index",
+    "Mainframe batch migration: high-volume independent transactions moved onto containerised workers reading from message queues",
+    "Parallel Monte Carlo risk simulation or CFD sweep where tasks are embarrassingly parallel and scale to available compute"
+  ],
+  "avoid_when": [
+    "A user or synchronous request is waiting on the result — batch latency is the job duration by definition",
+    "The data volume is small enough that a simple loop is clearer and the checkpointing machinery is pure overhead",
+    "The work is not partitionable into independent units and steps genuinely need shared mutable state",
+    "You cannot make the job idempotent — at-least-once execution without deduplication will duplicate side effects on retry",
+    "Strong per-item consistency across the whole run is required; chunk transactions deliberately give up job-wide atomicity",
+    "Step parallelism is needed for speed and you have not accepted that a failure re-runs the whole step from the beginning"
+  ],
+  "component_types": [
+    "Job: the top-level container naming the run and sequencing its steps, with a launcher that starts it",
+    "Step: a phase of the job (read, validate, transform, write) executed in order or conditionally",
+    "ItemReader: the component that pulls input items one at a time from a file, database, queue, or API",
+    "ItemProcessor: the component that transforms or filters each item",
+    "ItemWriter: the component that writes a whole chunk to the output in one transaction",
+    "Job Repository: the persistent metadata recording job and step execution — start time, status, progress — which is what makes restarts possible",
+    "Chunk Boundary: the transaction boundary and restart unit; the chunk size is the central tuning parameter",
+    "Partition Manager: the component that splits the input into disjoint ranges for parallel workers",
+    "Compute Pool: the ephemeral set of nodes a job runs on, provisioned for the job and torn down after it",
+    "Checkpoint Store: the durable orchestration state that lets a restarted job resume from its last checkpoint",
+    "Skip / Retry Policy: the per-item fault tolerance rules that decide whether a bad record is skipped, retried, or fatal"
+  ],
+  "technology_stack": [
+    "Spring Batch",
+    "Azure Batch",
+    "Apache Spark",
+    "AWS Batch",
+    "Google Cloud Batch",
+    "Kubernetes CronJob and Job",
+    "Airflow",
+    "dbt",
+    "Hadoop MapReduce",
+    "Slurm"
+  ],
+  "anti_patterns": [
+    "Chunk size of 1, turning a million-record job into a million transactions",
+    "Chunk size so large that a failure rolls back hours of work",
+    "Assuming a partitioned step checkpoints which chunks succeeded — with independent commits the step re-runs from the beginning",
+    "A synchronous request placed in the job's path, turning batch latency into user-facing latency",
+    "Non-idempotent side effects inside a job, so a legitimate retry duplicates emails, payments, or webhooks",
+    "Treating 'submitted' as 'finished' — no status polling or callback, so the pipeline advances before work actually completed",
+    "Permanent compute sized for the peak, paying for idle nodes between bursts",
+    "A giant monolithic job where the steps have no seam, so nothing can be re-run or reused in isolation"
+  ],
+  "migration_from": [
+    "monolithic",
+    "synchronous-request-processing",
+    "tightly-coupled",
+    "pipe-and-filter"
+  ],
+  "migration_to": [
+    "lambda-architecture",
+    "event-driven",
+    "master-slave",
+    "data-mesh"
+  ],
+  "related_patterns": [
+    "lambda-architecture",
+    "kappa-architecture",
+    "pipe-and-filter",
+    "master-slave",
+    "event-driven",
+    "data-mesh",
+    "enterprise-service-bus",
+    "task-control-architecture"
+  ],
+  "design_principles": [
+    "The chunk boundary is the design: it is simultaneously the transaction boundary and the restart unit, and its size trades throughput against rollback cost",
+    "Idempotency first — design every job so the same input produces the same outcome when it runs multiple times; this is what makes retry and restart safe",
+    "Checkpoint the work, not just the process — persist progress in a job repository so a restarted run knows where it stopped",
+    "Partition for parallelism, accept coarser restarts: parallelism buys throughput by giving up the ability to know exactly which partitions committed",
+    "Separate orchestration from execution: a job coordinates steps; each step is independently restartable, reusable, and testable",
+    "Elastic capacity, not permanent capacity — provision compute for the job and release it, so cost tracks the burst",
+    "Failure is expected, not exceptional: skip, retry, and quarantine policies are part of the job definition, not an operational afterthought",
+    "Prefer intrinsinsic parallelism — workloads whose units need no inter-communication scale far more cleanly than those that do"
+  ],
+  "best_practices": [
+    "Start chunk size from the transaction cost of the target, then tune it empirically against real data volume",
+    "Persist step progress in a job repository and verify restart behaviour before the first production run",
+    "Make every activity function idempotent, since Durable Functions and most schedulers will re-invoke after a retry",
+    "Choose partitioning only when throughput demands it, and document that a partitioned step re-runs from the beginning on failure",
+    "Decompose multi-step jobs into reusable steps rather than one monolithic job module",
+    "Use CloudEvents or a correlation identifier on every task so a failed unit can be traced back to its input record",
+    "Submit large task collections through the API that chunks and retries for you, and raise submission concurrency rather than issuing thousands of sequential adds",
+    "Alert on job completion, failure counts, and duration against the historical baseline — a silently slow batch is an operational failure"
+  ],
+  "references": [
+    "Microsoft, Best Practices for Background Jobs — Azure Architecture Center, https://learn.microsoft.com/en-us/azure/architecture/best-practices/background-jobs",
+    "Microsoft, High-volume batch transaction processing — Azure Architecture Center, https://learn.microsoft.com/en-us/azure/architecture/example-scenario/mainframe/process-batch-transactions",
+    "Microsoft, What is Azure Batch? — Azure Batch documentation, https://learn.microsoft.com/en-us/azure/batch/batch-technical-overview",
+    "Microsoft, Large numbers of tasks in Batch — Azure Batch documentation, https://learn.microsoft.com/en-us/azure/batch/large-number-tasks",
+    "Spring, Configuring a Step for Restart :: Spring Batch Reference, https://docs.spring.io/spring-batch/reference/step/chunk-oriented-processing/restart.html",
+    "NTT DATA, How to choose chunk model or tasklet model — Terasoluna Batch, https://terasoluna-batch.github.io/guideline/5.0.0.RELEASE/en/Ch03_ChunkOrTasklet.html",
+    "Microsoft, Choreography pattern — Azure Architecture Center (orchestration vs choreography for batch steps), https://learn.microsoft.com/en-us/azure/architecture/patterns/choreography"
+  ]
+}

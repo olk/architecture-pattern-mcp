@@ -1,0 +1,152 @@
+{
+  "category": "presentation",
+  "name": "responsive-design",
+  "aliases": ["adaptive-delivery", "multi-device-delivery-topology", "device-class-negotiation", "one-url-many-layouts", "adaptive-web"],
+  "context": "One product must be served to phones, tablets, laptops, televisions and embedded screens that differ in viewport width, pixel density, input modality, network class and CPU budget — and the decision is not whether to adapt, it is *where in the delivery path* adaptation happens. That placement is an architecture decision with hard, non-obvious consequences, because each option moves cost and risk to a different component. Adapting entirely in the client with CSS media queries keeps one cacheable document and one backend, but ships layout work and often an oversized hero image to a device that cannot use it. Adapting at the server (branching the render, or serving a separate m.example.com) lets you send only what the device class needs, but it multiplies rendered variants, multiplies the cache key, and makes the origin — not the CDN — pay for every request. Negotiating at the edge with HTTP Client Hints keeps the origin device-agnostic and pushes media transformation to a CDN tier, but only pays off if the cache is configured for it: a response that varies on Sec-CH-DPR without the URL carrying a file extension, or without Vary set correctly, will be served BYPASS or cached wrongly. The historical failure mode was User-Agent sniffing, which requires an ever-growing device database, misfires on every new browser, and is trivially spoofable — the platform answer (Client Hints) only partly fixes it, because MDN's own guidance is that changing site *functionality* on client hints is still a bad idea and capability detection should be preferred.",
+  "benefits": [
+    "One URL space and one codebase for every device class, so there is no m.example.com to keep in sync and no second front-end codebase to staff",
+    "Adaptation is placed deliberately — in the client, the origin, or the edge — instead of accumulating as ad-hoc UA checks scattered through rendering code",
+    "Client-hint negotiation moves per-variant media work (resize, format, DPR) to a CDN tier where it is cheap and cacheable, instead of to the origin on every request",
+    "A `Vary` on the negotiated hints multiplies the cache key deliberately rather than accidentally, so a cache hit rate can be measured and tuned instead of collapsing to a single shared entry",
+    "Container queries let a component adapt to the width of the slot it is placed in rather than to the viewport, which is what makes a shared design system reusable in a three-column desktop layout and a one-column phone layout",
+    "The same structure degrades: a viewport-width layout with breakpoints is a strict superset of the one-column mobile case, so a failed upgrade costs readability, not function"
+  ],
+  "tradeoffs": [
+    "Every dimension negotiated on the server adds a header, a cache variant and an origin render path — MDN notes server-driven negotiation 'doesn't scale well' because one header per feature is needed and each is sent on every request",
+    "Shared caches get less effective as representations multiply: MDN lists reduced shared-cache efficiency and more complex server implementations as the standing costs of content negotiation",
+    "Client-hint negotiation is opt-in and asymmetric: the server must send `Accept-CH` before the client will send hints, hints are available only on secure origins, and `DPR`/`Width`/`Viewport-Width` still do not cover every capability a decision might want",
+    "Adapting by rendering variant at the origin moves device-class branching into the render path, which reintroduces exactly the cache-miss and layout-duplication problem the single-document approach avoids",
+    "Container queries are broadly available but are a different mental model from media queries; a codebase half-migrated has two breakpoints systems that interact unpredictably",
+    "Responsive layouts multiply the states a design must be checked in — every breakpoint crossed with every orientation crossed with every input modality, which is a test-matrix cost, not just a design cost",
+    "Negotiated formats and DPR variants multiply stored objects and invalidate them on every source change, so a media pipeline becomes an operational concern with cache-busting rules"
+  ],
+  "quality_attributes": {
+    "scalability": 8,
+    "maintainability": 7,
+    "reliability": 7,
+    "security": 6,
+    "performance": 9,
+    "simplicity": 5
+  },
+  "suitable_domains": [
+    "mobile-applications",
+    "mobile-first-applications",
+    "web-applications",
+    "enterprise-web",
+    "server-side-rendering",
+    "content-management-systems",
+    "e-commerce-platforms",
+    "media-processing",
+    "highly-interactive-ui"
+  ],
+  "unsuitable_domains": [
+    "flat-screen-based-interfaces",
+    "internal-tools",
+    "api-gateways",
+    "batch-analytics-only",
+    "static-reference-data"
+  ],
+  "use_cases": [
+    "A single e-commerce or content site serving phones, tablets and desktops from one URL space with one render path",
+    "Media-heavy pages where hero and thumbnail images dominate transfer and belong to an edge transformation pipeline keyed on Sec-CH-DPR and Sec-CH-Width",
+    "Static or SSR sites that need an art-directed crop at a breakpoint, not only a resolution change",
+    "Design systems whose components are placed in slots of differing width (sidebar, main, card grid) and must adapt to the slot, not to the viewport",
+    "Progressive enhancement from a one-column phone layout upward, where no client-side JS is available on the smallest target",
+    "Migration off a separate mobile subdomain onto one URL set without losing the SEO equity or the mobile-specific content"
+  ],
+  "avoid_when": [
+    "The client is a known, fixed set of displays — kiosk, in-vehicle HMI, set-top box — where viewport negotiation adds cache variants for no variation",
+    "An internal tool with a single pinned browser and no mobile traffic; the negotiation machinery has no payoff",
+    "Pure API or data services with no presentation tier at all",
+    "Print-first or archival content where a fixed page geometry is the requirement",
+    "You cannot set `Vary` correctly at the caching layer — negotiation without correct cache keys is worse than no negotiation"
+  ],
+  "component_types": [
+    "Breakpoint ladder: the finite set of layout modes the design admits, chosen by viewport width or by container inline size",
+    "Media-query layer: viewport-condition CSS applied client-side with no second round trip and one cacheable document",
+    "Container-query context: a `container-type: inline-size` containment context plus `@container` rules, so a component adapts to its slot rather than to the window",
+    "Client-hint negotiator: the server's `Accept-CH` opt-in and the client's `Sec-CH-DPR`, `Sec-CH-Width`, `Sec-CH-Viewport-Width` request hints",
+    "Edge media transformer: a CDN or image service that derives resolution, format and crop variants on the fly from hints in the request",
+    "Adaptive origin / renderer: a server that renders a device-class-specific representation when the payload difference justifies leaving the document uncacheable",
+    "Representation cache: shared caches keyed on `Vary` over the negotiated hint headers, plus a URL scheme (file extension in the path) that the cache can key on",
+    "Capability-detection layer: feature probes and `@supports` used in preference to device identity when a decision is about capability rather than class",
+    "Design-system component set: the shared atoms/molecules/organisms that make one component library render correctly in every layout slot"
+  ],
+  "technology_stack": [
+    "CSS media queries",
+    "CSS container queries (@container, container-type, container-name)",
+    "HTTP Client Hints (Accept-CH, Sec-CH-DPR, Sec-CH-Width, Sec-CH-Viewport-Width)",
+    "srcset and sizes attributes",
+    "<picture> and <source> for art direction",
+    "Vary response header",
+    "User-Agent Client Hints JavaScript API (navigator.userAgentData)",
+    "Resize Observer",
+    "@supports feature queries",
+    "imgix / Cloudinary / Cloudflare Images edge transformation",
+    "CDN edge rendering (Cloudflare Workers, Lambda@Edge)",
+    "Server-Side Rendering with streaming",
+    "Design tokens"
+  ],
+  "anti_patterns": [
+    "Branching server behaviour on a parsed User-Agent string, which needs a device database maintained forever, misclassifies every new browser, and is trivially spoofable",
+    "Serving a separate m.example.com, which doubles every page, every front-end bug fix and every feature branch while the separate-sites guidance calls the approach conceptually simple but unmaintainable at any real feature-divergence point",
+    "Treating the User-Agent as an authorisation or security signal — it is client-supplied text and can be set to anything",
+    "Varying on a client hint without setting `Vary`, or with a `Vary` so wide that hit rate collapses; cache configuration is part of the pattern, not an afterthought",
+    "Using image URLs whose format is chosen by the query string rather than the path, which is the documented condition for a cache to bypass the response entirely",
+    "Shipping one large hero to every device because adaptation stopped at the layout layer and never reached the media layer",
+    "Writing media queries inside a reusable component, so the component's layout depends on the window instead of on the slot it was dropped into",
+    "Adapting layout with a JS resize listener that re-requests the document, when the same result is available in CSS with no network cost",
+    "Having three breakpoint systems — server branch, media query and container query — with no documented precedence between them"
+  ],
+  "migration_from": [
+    "server-rendered-html-only-delivery",
+    "unmanaged-user-agent-sniffing",
+    "separate-mobile-subdomain-delivery"
+  ],
+  "migration_to": [
+    "progressive-web-app",
+    "edge-computing",
+    "client-server"
+  ],
+  "related_patterns": [
+    "presentation-abstraction-control",
+    "model-view-controller",
+    "client-server",
+    "backend-for-frontend",
+    "api-gateway",
+    "edge-computing",
+    "microkernel-plugin",
+    "hexagonal",
+    "strangler-fig"
+  ],
+  "design_principles": [
+    "Adaptation is a delivery-topology decision: choose where it happens (client, origin, edge) and pay the resulting cache and duplication cost knowingly",
+    "One URL space and one codebase beat N device-specific sites, because the maintenance cost of divergence is paid on every feature, not once",
+    "Cache key cardinality is a design output — every negotiated dimension multiplies it, so the `Vary` header is part of the architecture",
+    "Prefer capability detection and progressive enhancement to device identity, because UA strings lie and client hints are still incomplete",
+    "Components adapt to the container they occupy, not to the viewport, which is what makes one component set reusable across every layout",
+    "Serve the smallest correct representation; adaptation that stops at layout leaves the dominant cost (media bytes) untouched"
+  ],
+  "best_practices": [
+    "Send `Accept-CH` for the hints you actually consume and set `Vary` on exactly those hints, nothing more",
+    "Put the file extension in the image path rather than the query string so edge caches can key on the URL",
+    "Verify end-to-end that the negotiated response is a cache HIT under each hint value, not just that the right image came back",
+    "Design mobile-first with a single-column base layout and add breakpoints upward, so the smallest device is the baseline rather than a special case",
+    "Prefer container queries for anything inside a layout slot and reserve media queries for page-level chrome",
+    "Transform media at the edge from a single stored original instead of pre-generating and storing every variant",
+    "Test across breakpoints crossed with orientation and input modality, and include a no-JS path",
+    "Keep an explicit record of which dimensions are negotiated where, so a new device class is a configuration change rather than an archaeology exercise"
+  ],
+  "references": [
+    "W3C, Device Adaptation — Roadmap of Web Applications on Mobile, https://www.w3.org/Mobile/roadmap/adaptation.html",
+    "W3C, Responsive Design (Richard Davis / W3C talk, 2013) — server-side vs client-side adaptation, device description repositories, image pre-scaling, https://www.w3.org/2013/Talks/responsive-design.pdf",
+    "MDN Web Docs, Content negotiation — the standing drawbacks of server-driven negotiation (shared-cache efficiency, complexity, one header per dimension), https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/Content_negotiation",
+    "MDN Web Docs, Browser detection using the user agent string (UA sniffing) — failure modes and the Client Hints alternative, https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/Browser_detection_using_the_user_agent",
+    "MDN Web Docs, @container — container queries and the containment context, https://developer.mozilla.org/en-US/docs/Web/CSS/Guides/Containment/Container_queries",
+    "MDN Web Docs, Sec-CH-DPR header — Accept-CH opt-in, Content-DPR, Vary requirement, https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Sec-CH-DPR",
+    "Cloudflare, Vary for images — file extension must be in the path or the cache bypasses the response, https://developers.cloudflare.com/cache/advanced-configuration/vary-for-images",
+    "Cloudinary, Responsive images using client hints — CDN-level adaptation and returning `Vary: Sec-CH-DPR`, https://cloudinary.com/documentation/responsive_server_side_client_hints.md",
+    "imgix, Next-Generation Responsive Images with Client Hints — Accept-CH meta tag and hint-driven resizing, https://docs.imgix.com/en-US/getting-started/tutorials/responsive-design/next-generation-responsive-images-with-client-hints",
+    "Brad Frost, Atomic Design — the component hierarchy that makes one library reusable across layout slots, https://atomicdesign.bradfrost.com/chapter-2"
+  ]
+}

@@ -1,0 +1,134 @@
+{
+  "category": "specialized",
+  "name": "blue-green-deployment",
+  "context": "A production workload must be upgraded to a new version with near-zero downtime and with a rollback that is a routing change rather than a redeployment. Two production environments that are as identical as possible exist at the same time: 'blue' serves live traffic, 'green' is a full-capacity copy that receives the new release and the final round of testing. Once green passes, a switch at the router, load balancer, DNS record or ingress layer moves all traffic to green; blue is then kept warm as the rollback target and becomes the staging target for the next release, so the two environments alternate roles every cycle. The two pools are kept logically separate so that a misconfiguration on green cannot damage the serving pool. The mechanism is deliberately the same one used for hot standby, which means every release also exercises the disaster-recovery failover path.",
+  "benefits": [
+    "Instant, near-zero-downtime cutover: the switch is a routing or VIP change, not a restart, so no request is served by a half-deployed application",
+    "Rollback that is as fast as the cutover: flipping the router back to blue restores the previous version, which is far cheaper and safer than rebuilding or redeploying",
+    "Full-capacity verification: green can carry 100% of production load, so load and soak testing happens on production-shaped infrastructure instead of a reduced staging environment",
+    "A disaster-recovery drill on every release: because the mechanism is the hot-standby switch, each deployment exercises the failover procedure rather than leaving it as untested runbook text",
+    "No version skew during the switch: blue and green are internally consistent deployments, unlike a rolling update where old and new pods interleave",
+    "Zero-downtime database migrations when paired with expand-and-contract refactoring: change the schema to support both versions first, deploy that, then deploy the code"
+  ],
+  "tradeoffs": [
+    "Double the infrastructure cost while both pools exist — Microsoft notes that a persistent staging deployment effectively doubles resource consumption",
+    "Database schema changes are the hard part: green and blue usually share state, so the schema must be backward compatible with both application versions or the pools need separate data stores",
+    "Stateful workloads need an explicit answer: sessions, caches and queues pinned to the old pool break at cutover unless they are externalized or replicated",
+    "Routing changes are themselves a failure mode: DNS TTL caching, client-side keep-alive and sticky sessions all make the switch less instantaneous than it looks",
+    "Both pools accumulate drift — configuration, secrets and infrastructure-as-code must be kept identical or green is not a valid rehearsal of production",
+    "Approval race conditions when pipelines deploy to a fixed alternating pair: a newer version can overwrite the pool that an older approval was granted for"
+  ],
+  "quality_attributes": {
+    "scalability": 7,
+    "maintainability": 6,
+    "reliability": 9,
+    "security": 7,
+    "performance": 8,
+    "simplicity": 6
+  },
+  "suitable_domains": [
+    "ci-cd-environments",
+    "cloud-native-applications",
+    "cloud-native-applications-on-kubernetes",
+    "high-traffic-systems",
+    "regulated-industries",
+    "e-commerce-platforms",
+    "financial-services",
+    "global-distribution"
+  ],
+  "unsuitable_domains": [
+    "low-budget",
+    "mvp",
+    "startups-early-stage",
+    "fixed-predictable-volumes",
+    "low-traffic-applications",
+    "simple-crud-applications",
+    "teams-without-distributed-systems-expertise"
+  ],
+  "use_cases": [
+    "Releasing a payment or booking service where a rollback must be complete within seconds and no window of mixed-version behaviour is acceptable",
+    "AKS cluster upgrades: build and validate the green cluster, sync Kubernetes state so green is backward compatible with blue, then switch at Azure Front Door or DNS",
+    "Releasing into environments that already maintain a running warm environment, so the standby costs nothing extra",
+    "A release that needs production-volume soak time before full exposure",
+    "Regulated deployments where the change must be fully validated and instantly revertible"
+  ],
+  "avoid_when": [
+    "The budget cannot sustain two full production environments",
+    "The system has heavy local state and no strategy for moving or replicating it at cutover",
+    "Release frequency is low and the second pool would sit idle for weeks",
+    "The database cannot be migrated with an expand-and-contract sequence, making the two pools mutually incompatible",
+    "The load balancer or ingress cannot perform an atomic weighted switch"
+  ],
+  "component_types": [
+    "Blue environment: the pool currently serving production traffic",
+    "Green environment: the standby pool running the candidate release at full capacity",
+    "Traffic router: load balancer, ingress, global load balancer, or DNS record performing the switch",
+    "Deployment pipeline: builds the artifact once and promotes the identical artifact to green",
+    "Verification suite: smoke, load and health checks run against green before the switch",
+    "Database migration step: expand-and-contract refactoring applied before the code cutover",
+    "Role-rotation controller: promotes the former blue to staging for the next cycle"
+  ],
+  "technology_stack": [
+    "Azure Front Door",
+    "Azure Application Gateway",
+    "Azure DNS",
+    "Azure Spring Apps named deployments",
+    "Azure Container Apps revisions and traffic weights",
+    "Kubernetes",
+    "AWS CodeDeploy",
+    "NGINX",
+    "Envoy",
+    "Google Cloud Traffic Director",
+    "Argo Rollouts"
+  ],
+  "anti_patterns": [
+    "Rebuild per environment: rebuilding the artifact for each pool means blue and green are never actually the same software",
+    "Green as a reduced staging clone: verifying on a smaller environment defeats the purpose of full-capacity rehearsal",
+    "Destructive schema change in the same release as the code: green then cannot start against the blue-era schema",
+    "Switch without warm-up: flipping traffic before green has served any real requests means the first users are the test",
+    "Deleting blue immediately after cutover: rollback capability must outlive the decision to keep the release",
+    "Hidden configuration drift between pools that makes the green validation unrepresentative"
+  ],
+  "migration_from": [
+    "monolithic",
+    "layered-monolith",
+    "canary-deployment"
+  ],
+  "migration_to": [
+    "canary-deployment",
+    "strangler-fig"
+  ],
+  "related_patterns": [
+    "canary-deployment",
+    "microservices",
+    "service-mesh",
+    "multi-cloud",
+    "hybrid-cloud",
+    "serverless",
+    "strangler-fig",
+    "master-slave"
+  ],
+  "design_principles": [
+    "Two identical production environments: identical capacity, configuration and infrastructure definition, so green is a faithful rehearsal of production",
+    "The switch is the deployment: cutover happens at the routing layer so no in-place mutation of the serving environment is required",
+    "Rollback is symmetric and cheap: the same switch in reverse restores the previous version",
+    "Expand-and-contract for state: schema changes are deployed in a form both application versions can run against",
+    "Role rotation: the pool that was just promoted becomes the next release's staging target, so neither pool is ever cold"
+  ],
+  "best_practices": [
+    "Deploy the identical artifact to both pools — build once, promote many; never rebuild per environment",
+    "Use named or revision-scoped deployments rather than two fixed slots to avoid the approval race condition where a newer pipeline run overwrites the pool an approval was granted for",
+    "Split schema migration from the application upgrade: make the schema backward compatible, deploy it, verify, then deploy code, and only then drop the old columns",
+    "Keep blue alive through a defined rollback window before destroying it",
+    "Give blue and green dedicated hostnames and dedicated gateway and load-balancer endpoints so validation happens through production-equivalent infrastructure",
+    "Automate the switch only once monitoring, SLOs and alerting are trustworthy; start with a manual trigger and graduate to automated",
+    "Externalize or replicate session state so the switch does not drop users"
+  ],
+  "sources": [
+    "Martin Fowler, Blue Green Deployment, https://martinfowler.com/bliki/BlueGreenDeployment.html",
+    "Microsoft, Architecture strategies for safe deployment practices — Azure Well-Architected Framework, https://learn.microsoft.com/en-us/azure/well-architected/operational-excellence/safe-deployments",
+    "Microsoft, Blue-green deployment for AKS clusters, https://learn.microsoft.com/en-us/azure/architecture/guide/aks/blue-green-deployment-for-aks",
+    "Microsoft, Blue-Green Deployment in Azure Container Apps, https://learn.microsoft.com/en-us/azure/container-apps/blue-green-deployment",
+    "Microsoft, Blue-green deployment strategies in Azure Spring Apps, https://learn.microsoft.com/en-us/azure/spring-apps/basic-standard/concepts-blue-green-deployment-strategies"
+  ]
+}

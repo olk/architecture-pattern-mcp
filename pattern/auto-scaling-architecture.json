@@ -1,0 +1,145 @@
+{
+  "category": "cloud",
+  "name": "auto-scaling",
+  "context": "Workload capacity must track demand instead of being fixed in advance. An automated control loop observes a metric — CPU or memory utilisation, a custom or per-pod metric, an external signal such as queue depth or QPS, or cluster size — and adjusts the deployed capacity to hold a target value: replica count horizontally, or per-instance resources vertically. In Kubernetes this is explicit and disaggregated: the HorizontalPodAutoscaler is a control-plane controller that periodically (default sync period 15s) reads metrics and writes the scale subresource of a Deployment or StatefulSet, applying scaling policies and a stabilization window so transient metric swings do not cause flapping; node autoscalers such as Cluster Autoscaler and Karpenter separately provision and consolidate capacity for pods that cannot be scheduled; event-driven scaling is delegated to KEDA, which watches a message broker or other event source and drives the HPA, including scale-to-zero when no events are pending. Correctness hinges on declared resource requests — the HPA computes utilisation as a percentage of the request, so an unset request makes the metric meaningless.",
+  "benefits": [
+    "Capacity matched to real demand, so a service can absorb traffic spikes without pre-provisioning for the worst case",
+    "Cost proportionality: nodes are provisioned when pods are unschedulable and consolidated when underutilised, so capacity is paid for only while it is needed",
+    "Removal of human scale-up latency — no ticket, no approval, no waiting for someone to notice the queue growing",
+    "Elastic handling of diurnal and event-driven load without resizing the fleet by hand",
+    "Per-workload policies: scale-up and scale-down can have different policies, stabilization windows and tolerances, since reacting to growth and shrinking is not symmetric",
+    "Metric flexibility beyond CPU — external metrics, per-pod metrics and event counts allow scaling on the resource that actually reflects demand",
+    "Scale to zero for spiky, intermittently used workloads where paying for idle capacity is the dominant cost"
+  ],
+  "tradeoffs": [
+    "Scaling is not instant: pod start-up, image pull, readiness probes and warm-up mean the autoscaler always reacts behind the spike, so it protects sustained load, not a sudden thundering herd",
+    "Good autoscaling depends entirely on good resource requests; wrong or missing requests produce oscillation or a fleet that scales far past the real need",
+    "Flapping risk when reacting to noisy or lagging metrics, mitigated only by stabilization windows and tolerance values that are themselves tuning",
+    "Vertical scaling and horizontal scaling are different mechanics with different failure modes — the HPA changes replica counts, the VPA changes requests and limits, and combining them naively can fight each other",
+    "Scaling a stateful workload means the new replicas need to catch up on state before serving, so scale-out latency is dominated by data movement",
+    "Cost unpredictability: an unbounded autoscaler reacting to a runaway loop can scale to the configured maximum at maximum speed",
+    "Metric plumbing is a real dependency — the resource metrics API, Metrics Server, Prometheus Adapter or KEDA must be installed and correct"
+  ],
+  "quality_attributes": {
+    "scalability": 10,
+    "maintainability": 6,
+    "reliability": 8,
+    "security": 6,
+    "performance": 8,
+    "simplicity": 5
+  },
+  "suitable_domains": [
+    "cloud-native-applications",
+    "cloud-native-applications-on-kubernetes",
+    "high-scaling-distributed",
+    "high-concurrency",
+    "high-traffic",
+    "high-traffic-systems",
+    "serverless",
+    "batch-processing",
+    "queue-processing",
+    "e-commerce-flash-sales",
+    "iot-data-ingestion"
+  ],
+  "unsuitable_domains": [
+    "fixed-predictable-volumes",
+    "steady-predictable-loads",
+    "low-traffic-applications",
+    "low-budget",
+    "low-latency-requirements-that-cannot-tolerate-additional-hop",
+    "hard-real-time-systems",
+    "single-service-applications"
+  ],
+  "use_cases": [
+    "A payments API scaling pods on CPU to absorb a promotion-driven spike, with separate fast scale-up and conservative scale-down policies",
+    "Queue consumers sized by backlog depth using KEDA on Kafka or RabbitMQ, scaling to zero overnight and back to a full fleet on the first message",
+    "Node autoscaling provisioning capacity when pods go Pending and consolidating idle nodes to keep utilisation and cost balanced",
+    "A stateless HTTP service holding average CPU at 70% so latency stays flat as request volume doubles",
+    "Cluster-proportional autoscaling of system components such as cluster DNS so they track node count",
+    "Cron-scheduled autoscaling that pre-warms capacity ahead of a known daily batch window"
+  ],
+  "avoid_when": [
+    "Demand is genuinely fixed and predictable — autoscaling adds machinery and tuning surface for no gain",
+    "The latency budget cannot absorb pod start-up and readiness delay",
+    "Hard real-time or embedded targets where deterministic capacity must exist before the load arrives",
+    "Resource requests are unknown or unset, making the utilisation metric the autoscaler depends on meaningless",
+    "The state required to serve a request is expensive to move, so new replicas are useless for the minutes they need to catch up",
+    "Cost predictability matters more than elasticity and no spending ceiling is enforced"
+  ],
+  "component_types": [
+    "Autoscaler controller: the HPA in the control plane, evaluating metrics on a sync period",
+    "Metrics source: resource metrics API, custom.metrics.k8s.io, external.metrics.k8s.io, or Metrics Server as the provider",
+    "Scale target: a Deployment, StatefulSet or other resource exposing the scale subresource",
+    "Scaling policy and stabilization window: rate limits and smoothing rules for scale-up and scale-down",
+    "Node autoscaler: Cluster Autoscaler or Karpenter, provisioning and consolidating nodes",
+    "Event-driven scaler: KEDA ScaledObject and its scalers bridging event sources to the HPA",
+    "Vertical Pod Autoscaler: adjusts container resource requests and limits",
+    "Budget guardrail: maximum replica count and cloud-level spend limits bounding runaway scaling"
+  ],
+  "technology_stack": [
+    "Kubernetes HorizontalPodAutoscaler (autoscaling/v2)",
+    "Kubernetes VerticalPodAutoscaler",
+    "Cluster Autoscaler",
+    "Karpenter",
+    "KEDA",
+    "Metrics Server",
+    "Prometheus Adapter",
+    "Cluster Proportional Autoscaler",
+    "Docker Swarm",
+    "AWS EC2 Auto Scaling",
+    "Azure Monitor autoscale"
+  ],
+  "anti_patterns": [
+    "No resource requests: the HPA divides observed usage by the request, so a missing request produces a meaningless ratio and erratic scaling",
+    "CPU-only scaling on I/O-bound services, which react to the wrong signal and scale on the wrong axis",
+    "Aggressive scale-down policies paired with aggressive scale-up: the fleet thrashes between states and pays pod start-up repeatedly",
+    "Multiple autoscalers writing to the same scale subresource, causing a fight over the replica count",
+    "No maximum: an autoscaler with an unbounded target turns a retry storm into a cost incident",
+    "Autoscaling a stateful workload while ignoring data movement latency, so new replicas join the load before they can serve it",
+    "Scaling on a metric with no relationship to demand — queue depth is right for a consumer, wrong for a synchronous API"
+  ],
+  "migration_from": [
+    "serverless",
+    "monolithic",
+    "space-based"
+  ],
+  "migration_to": [
+    "serverless",
+    "space-based"
+  ],
+  "related_patterns": [
+    "serverless",
+    "space-based",
+    "microservices",
+    "master-slave",
+    "event-driven",
+    "edge-computing",
+    "hybrid-cloud",
+    "multi-cloud"
+  ],
+  "design_principles": [
+    "Capacity is a control loop, not a configuration value: observe, compute a desired replica count, write it, repeat",
+    "Respond to the bottleneck, not to CPU by default: the metric must be the one that actually limits throughput for that workload",
+    "Asymmetric policies: growth should be aggressive and shrinkage conservative, because the cost of under-provisioning is downtime and the cost of over-provisioning is money",
+    "Smoothing over instant reaction: stabilization windows and tolerances exist because metric noise must not translate into replica churn",
+    "Explicit resource requests as the contract between the workload and the autoscaler",
+    "Bounds everywhere: max replicas, per-workload ceilings and cost guardrails turn an unbounded loop into a predictable one"
+  ],
+  "best_practices": [
+    "Always declare CPU and memory requests — without them the HPA target is not computable in a meaningful way",
+    "Use autoscaling/v2 and define separate behavior.scaleUp and behavior.scaleDown policies rather than relying on defaults",
+    "Set a stabilization window on scale-down (Kubernetes defaults to 300s) so brief dips do not tear down capacity you will immediately need",
+    "Choose the metric that reflects the bottleneck: queue depth or QPS for I/O and event-driven work, CPU for compute-bound work",
+    "Use KEDA when the scaling signal is an event source, and set minReplicas to 0 with an object or external metric to reach true scale-to-zero",
+    "Pair horizontal workload autoscaling with node autoscaling, and set correct requests so the node autoscaler can place pods without surprise",
+    "Combine the HPA with the VPA to keep requests accurate as real usage diverges from the initial guess",
+    "Test scale-out latency end to end and verify warm-up time fits the load profile you expect"
+  ],
+  "sources": [
+    "Kubernetes, Autoscaling Workloads, https://kubernetes.io/docs/concepts/workloads/autoscaling/",
+    "Kubernetes, Horizontal Pod Autoscaling, https://kubernetes.io/docs/concepts/workloads/autoscaling/horizontal-pod-autoscale/",
+    "Kubernetes, Node Autoscaling, https://kubernetes.io/docs/concepts/cluster-administration/node-autoscaling/",
+    "Kubernetes, HorizontalPodAutoscaler v2 API reference, https://kubernetes.io/docs/reference/kubernetes-api/autoscaling/horizontal-pod-autoscale-v2/",
+    "KEDA, Scaling Deployments, StatefulSets and Custom Resources, https://keda.sh/docs/2.17/concepts/scaling-deployments/"
+  ]
+}

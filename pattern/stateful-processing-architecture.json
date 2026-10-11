@@ -1,0 +1,109 @@
+{
+  "category": "data",
+  "name": "stateful-processing",
+  "context": "Aggregations, joins and windowed computations must remember what came before — a running count per key, the last N minutes of a join's other side, an accumulating session. This pattern keeps that memory local to the processing task, co-located with the partitions it serves, and makes it recoverable by writing every state change to a durable changelog before or atomically with committing the input offset. The changelog is the source of truth; the local store is a cache rebuilt from it.",
+  "benefits": [
+    "Enables joins and aggregations at scale without a remote query per record — lookups are local to the task",
+    "Fault tolerance comes from replay, not from checkpointing the whole working set: a failed task rebuilds its store from the changelog",
+    "Partitioning gives both parallelism and locality: the state for a key is only ever touched by the task owning that key's partition",
+    "Exactly-once becomes achievable end to end when input offsets, changelog writes and output records commit atomically",
+    "Named, stable state stores and changelog topics make rolling redeployment of an evolving topology safe"
+  ],
+  "tradeoffs": [
+    "State growth is unbounded unless retention is explicit — windowed aggregation keys are (key, window), so log compaction can never purge old entries",
+    "Local stores are caches with uncontrolled flush timing; a crash can leave the store holding writes never committed to the changelog",
+    "Under exactly-once semantics without transactional state stores, a crash wipes the entire local store and replays the changelog — observed delays have spanned days for high-cardinality tables",
+    "Every key-changing operation before a stateful operator injects a repartition topic, adding a hop and reordering the stream",
+    "State is queryable only from inside the application; serving it externally means adding interactive-query APIs or a second store"
+  ],
+  "quality_attributes": {
+    "scalability": 8,
+    "maintainability": 6,
+    "reliability": 9,
+    "security": 6,
+    "performance": 8,
+    "simplicity": 5
+  },
+  "suitable_domains": [
+    "stream-processing",
+    "event-driven-systems",
+    "real-time-analytics"
+  ],
+  "unsuitable_domains": [],
+  "use_cases": [
+    "Per-key counters and running aggregates maintained incrementally as records arrive",
+    "Stream-table enrichment where a compacted changelog supplies the latest reference value locally",
+    "Windowed aggregation with results emitted continuously and corrected as late data arrives",
+    "Exactly-once pipelines writing to Kafka and to external transactional sinks",
+    "Interactive queries served directly from the application's own state stores"
+  ],
+  "avoid_when": [
+    "The computation is a pure function of a single record — stateless processing has none of these costs",
+    "The key space is unbounded and no retention, windowing or compaction policy can be agreed",
+    "The team cannot operate long-running stateful processes with restart-and-replay semantics",
+    "Strong cross-key consistency is required — local per-key state cannot provide it"
+  ],
+  "component_types": [
+    "State store: local key-value or windowed store embedded in each task, backed by a cache (in-memory map or RocksDB)",
+    "Changelog topic: compacted durable log of state changes; the authoritative copy of the state",
+    "Cache layer: non-fault-tolerant local store used for lookups, rebuilt from the changelog",
+    "Commit protocol: periodic flush of stores plus offset commit, or a transaction spanning offsets, changelog and output",
+    "Transactional buffer: holds state writes until the corresponding changelog transaction commits",
+    "Repartition topic: internal topic inserted when a key-changing operator precedes a stateful one"
+  ],
+  "technology_stack": [
+    "Apache Kafka",
+    "Kafka Streams",
+    "Apache Flink",
+    "RocksDB",
+    "Debezium",
+    "PostgreSQL"
+  ],
+  "anti_patterns": [
+    "Relying on the local store for durability — the changelog is the source of truth and the local store is only a cache",
+    "Leaving state stores unnamed, so generated names shift when an operator is inserted earlier and a rolling redeployment becomes a topology-breaking change",
+    "Assuming exactly-once makes local state consistent: without transactional state stores a crash still wipes and replays the store",
+    "Applying a key-changing operator before every aggregation, silently doubling the network cost of the pipeline",
+    "Letting windowed state accumulate without retention, because log compaction can never purge (key, window) entries"
+  ],
+  "migration_from": [
+    "batch-aggregation-jobs",
+    "stateless-stream-topologies",
+    "remote-lookup-per-record"
+  ],
+  "migration_to": [
+    "event-sourcing",
+    "event-driven",
+    "master-slave"
+  ],
+  "related_patterns": [
+    "event-driven",
+    "event-sourcing",
+    "kappa-architecture",
+    "lambda-architecture",
+    "space-based",
+    "pipe-and-filter",
+    "actor-based"
+  ],
+  "design_principles": [
+    "The log is the source of truth; local state is a rebuildable cache",
+    "State locality: keep all state for a key on the single task that owns that key's partition",
+    "Atomicity across offsets, changelog and output, or the guarantee is not actually exactly-once",
+    "Explicit retention for every store — bounded by design, not by luck",
+    "Stable, user-supplied names for state stores and repartition topics so topology evolution is not a breaking change"
+  ],
+  "best_practices": [
+    "Always name state stores and repartition topics explicitly; unnamed internal topics shift when the topology changes",
+    "Size commit intervals against recovery cost — a longer interval replays more, a shorter one costs more throughput",
+    "Use segment-based local stores for windowed state so memory is bounded by retention rather than by key cardinality",
+    "Monitor changelog lag and local store size separately; they fail for different reasons",
+    "Assume the local store will be discarded — test recovery by killing tasks, not by reading the happy path"
+  ],
+  "references": [
+    "Apache Kafka, Core Concepts — States, Aggregations, Windowing and processing guarantees, https://kafka.apache.org/43/streams/core-concepts/",
+    "Apache Kafka, Streams Architecture — state stores, fault tolerance and recovery, https://kafka.apache.org/43/streams/architecture/",
+    "Matthias Sax, Kafka Streams Internal Data Management (changelog topic is the source of truth; RocksDB is a non-fault-tolerant cache), https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=65864917",
+    "KIP-844: Transactional State Stores — why crash failure wipes and replays state today, https://cwiki.apache.org/confluence/display/KAFKA/KIP-844%3A+Transactional+State+Stores",
+    "Apache Kafka, Naming Operators in a Streams DSL application — state store and changelog topic naming, https://kafka.apache.org/43/streams/developer-guide/dsl-topology-naming/"
+  ]
+}

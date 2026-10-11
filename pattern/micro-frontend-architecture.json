@@ -1,0 +1,152 @@
+{
+  "name": "micro-frontend",
+  "category": "presentation",
+  "context": "A backend decomposed into microservices still presents a single large frontend monolith: one browser application, one repository, one release train, and dozens of teams editing it. That frontend is where the decomposition stops paying off — the Thoughtworks Technology Radar put it plainly, teams 'create a front-end monolith — a large, entangled browser application that sits on top of the back-end services — largely neutralizing the benefits of microservices'. Micro frontends are the architectural style that fixes it: Cam Jackson's definition is 'an architectural style where independently deliverable frontend applications are composed into a greater whole'. The unit of decomposition is a vertical slice of product — a page or feature, owned end-to-end by one team, frontend through API and infrastructure — rather than a horizontal layer. Independence of deployment is the load-bearing criterion: each micro frontend has its own pipeline that builds, tests, and deploys it to production, and a ready micro frontend ships without regard to what the team next door has in master. Composition happens at runtime in the browser, through one of four integration mechanisms Fowler enumerates: build-time integration (the weakest — no independent deploys), server-side composition via routing (HTML includes), client-side composition via a JavaScript router loading bundles from URLs, and iframe integration. The client-side variant is why micro frontends need a module loader: webpack's Module Federation makes 'multiple separate builds form a single application', with each build acting as a container that exposes modules others consume at runtime, and a shared scope so a library like React loads once rather than being duplicated per build. Because deployments are not atomic, version drift between builds is the characteristic failure mode, which is why the set of shared singletons has to be chosen deliberately.",
+  "benefits": [
+    "Independent deployment: a ready micro frontend ships without a coordinated release with any other, shrinking both release scope and release risk",
+    "Teams own a vertical slice end-to-end rather than a horizontal layer, giving higher cohesion than splitting by styling, forms, or validation",
+    "Technology heterogeneity becomes viable — different micro frontends can use different frameworks, since they integrate at a defined runtime boundary rather than sharing a build",
+    "Codebase size per team shrinks, which improves both local comprehension and CI build times",
+    "Ownership of a feature is vertical, so the team that ships a feature also owns its API and infrastructure",
+    "A backend-for-frontend per micro frontend lets each frontend's data needs be served by a backend dedicated to it",
+    "Failure is partially contained — a micro frontend that fails to load does not necessarily take the whole page down, depending on the integration mechanism",
+    "Incremental adoption is practical: a feature can be extracted from the existing frontend one slice at a time without a rewrite"
+  ],
+  "tradeoffs": [
+    "Runtime overhead: each micro frontend brings its own bundle, and not sharing a library means downloading duplicate copies of it",
+    "Version drift is the defining failure mode — because deployments are not atomic, mismatched shared-library versions between builds are a leading cause of breakage",
+    "Shared core libraries reintroduce coupling: a change to a shared library affects every micro frontend and blocks their releases, so those changes must ship infrequently",
+    "No end-to-end type or API safety at the browser boundary — the compiler cannot check a contract between separately built applications, only between modules in one build",
+    "Cross-micro-frontend testing requires assembling the whole composed application, which a monorepo can automate in CI and independent repositories cannot",
+    "Integration is genuinely hard — build-time, server-side, client-side, and iframe composition each have different isolation, styling, and state-sharing trade-offs",
+    "Duplicated infrastructure: N deployment pipelines, N sets of build configuration, and N sets of observability for what the user experiences as one application",
+    "Operational and cognitive overhead: more moving parts to deploy, debug, and reason about, and a bundle waterfall that hurts time-to-interactive"
+  ],
+  "quality_attributes": {
+    "scalability": 7,
+    "maintainability": 7,
+    "reliability": 5,
+    "security": 5,
+    "performance": 4,
+    "simplicity": 3
+  },
+  "suitable_domains": [
+    "multi-team-organizations",
+    "large-teams",
+    "multi-team",
+    "web-applications",
+    "microservices-architectures-with-multiple-backend-services",
+    "organizations-with-separate-client-teams",
+    "microservices-ecosystem",
+    "highly-interactive-ui",
+    "multi-tenant-platforms",
+    "multi-client-systems"
+  ],
+  "unsuitable_domains": [
+    "small-teams",
+    "small-team-projects",
+    "small-applications",
+    "rapid-prototyping",
+    "mvp",
+    "prototypes",
+    "monolith-or-fewer-than-3-services",
+    "low-complexity-projects"
+  ],
+  "use_cases": [
+    "A large retail platform where checkout, search, and account are owned by separate teams, each deploying on its own cadence",
+    "Migrating away from a frontend monolith incrementally, extracting one page at a time into its own pipeline",
+    "A design-system-heavy product where a shared component library is itself federated as a container so it can be updated without redeploying every app",
+    "A micro frontend per page, with the application shell as a separate build that references each page as a remote module",
+    "Enabling a legacy Angular or React application and a modern framework rewrite to coexist in one product during a multi-year migration",
+    "Organizing teams around vertical slices of business functionality rather than technical capabilities"
+  ],
+  "avoid_when": [
+    "A single small team owns the whole frontend — independent deployment buys nothing and the runtime overhead is pure cost",
+    "You cannot yet agree on a minimal set of shared singletons, so every build carries a duplicate copy of the framework",
+    "Deployments are not genuinely independent in your release process — a monorepo release train means you have the coupling without the benefits",
+    "The application is a prototype or an MVP, where the integration complexity will dominate the actual feature work",
+    "There are fewer than about three independently-ownable feature slices, which is below the threshold where composition pays for itself",
+    "Time-to-interactive is already the binding constraint and the bundle waterfall the pattern introduces would make it worse",
+    "Shared-library changes are frequent, since every such change blocks every consuming micro frontend's release"
+  ],
+  "component_types": [
+    "Host / Container: the application shell that owns routing and composes the micro frontends at runtime",
+    "Remote / Micro Frontend: an independently built and deployed frontend module exposing its exports through a container",
+    "Shared Scope: the runtime registry through which containers provide and consume shared modules, so a library loads once rather than per build",
+    "remoteEntry: the container entry point a host loads to reach a remote's exposed modules",
+    "Integration Mechanism: build-time, server-side routing, client-side JS router, or iframe — the choice that determines isolation and independence",
+    "Shared Component Library: the design system consumed by every micro frontend, itself a container so it can change without redeploying consumers",
+    "Deployment Pipeline: the per-micro-frontend build, test, and deploy path that makes independent release real rather than nominal",
+    "Cross-Application Communication Layer: the shared module through which micro frontends exchange events, kept as an explicit singleton"
+  ],
+  "technology_stack": [
+    "webpack Module Federation",
+    "Module Federation Runtime",
+    "Nx Module Federation",
+    "Angular",
+    "React",
+    "Vue",
+    "Single-SPA",
+    "qiankun",
+    "Vite",
+    "systemjs"
+  ],
+  "anti_patterns": [
+    "Micro frontends introduced with a single team and no independent release process — all of the complexity, none of the benefit",
+    "Sharing every library to avoid duplication, which turns the shared scope into a global coupling point and forces a coordinated release of everything",
+    "Sharing nothing, so React or the design system is downloaded once per micro frontend and the page gets heavy",
+    "output.uniqueName collisions from two builds inheriting the same package.json name, which silently makes the runtime unable to tell whose shared copy wins",
+    "Treating micro frontends as the answer to build speed alone, without the independent-deployment requirement the pattern is for",
+    "No cross-application integration tests, so a composition break is only found by users after deployment",
+    "Iframe integration chosen purely for isolation without budgeting for the styling, communication, and accessibility costs it introduces",
+    "A shared component library changed weekly, blocking every micro frontend's release and recreating the release train the pattern was meant to dissolve"
+  ],
+  "migration_from": [
+    "presentation-abstraction-control",
+    "model-view-controller",
+    "microservices",
+    "monolithic"
+  ],
+  "migration_to": [
+    "backend-for-frontend",
+    "microservices",
+    "edge-computing"
+  ],
+  "related_patterns": [
+    "microservices",
+    "backend-for-frontend",
+    "api-gateway",
+    "modular-monolith",
+    "microkernel-plugin",
+    "presentation-abstraction-control",
+    "layered-monolith",
+    "serverless"
+  ],
+  "design_principles": [
+    "Independent deployability is the criterion — if a micro frontend cannot ship without coordinating with another, it is a module, not a micro frontend",
+    "Decompose by vertical slice — split by what end users see, so each piece is a self-contained domain concept owned by one team end to end",
+    "Compose at runtime, not at build time — build-time integration forfeits the independence that justifies the pattern",
+    "Be explicit about dependencies — the value comes from slicing large things up and then making the dependencies between the pieces explicit rather than implicit",
+    "Share the minimum — mark only libraries that must be singletons as shared, and accept measured duplication for everything else",
+    "Treat shared libraries as a change-control boundary — changes to them affect every consumer, so they ship infrequently and deliberately",
+    "Contain failure — a micro frontend that fails to load or throws should degrade the page, not blank it"
+  ],
+  "best_practices": [
+    "Use micro frontends when independent deployment is a hard requirement and waiting on a shared release train costs more than the added complexity",
+    "Give every federated build a globally unique output.uniqueName; derive it from a distinct package.json name or set it explicitly in every webpack config",
+    "Share only what must be a singleton — the UI framework and any cross-app communication layer — and bundle the rest per app until duplication is measurable",
+    "Keep deployments automated with automatic deployment to staging on every merge and promotion to production on a set schedule",
+    "Agree a release process for shared core libraries, since those changes block every consuming application",
+    "Consider a monorepo to eliminate shared-dependency drift and enable composed-application CI, while keeping deployments independent",
+    "Integrate testing by running against the merged composition in CI before any team deploys",
+    "Pick the integration mechanism deliberately: server-side for full-page routes, client-side for in-app composition, iframes only when isolation is genuinely required",
+    "Give each micro frontend its own standalone entry so it can be developed and run outside the container"
+  ],
+  "references": [
+    "Cam Jackson, Micro Frontends — martinfowler.com, 2019, https://martinfowler.com/articles/micro-frontends.html",
+    "Thoughtworks Technology Radar, Micro frontends (blip), https://www.thoughtworks.com/radar/techniques/micro-frontends",
+    "webpack, Module Federation concepts, https://webpack.js.org/concepts/module-federation/",
+    "Module Federation, Glossary of Terms (Micro-frontend definition, container/manifest/snapshot model), https://module-federation.io/guide/start/glossary.html",
+    "Nx, Micro Frontend Architecture (Module Federation shared dependencies and deployment strategies), https://master.nx.dev/docs/technologies/module-federation/concepts/micro-frontend-architecture"
+  ]
+}

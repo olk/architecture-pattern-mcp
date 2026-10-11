@@ -1,0 +1,108 @@
+{
+  "category": "data",
+  "name": "time-series-iot",
+  "context": "Thousands of devices emit millions of timestamped samples on periodic schedules, into a schema that is defined by the fleet rather than by a single designer, where series are strongly correlated, records arrive late, and the dominant queries are range aggregations rather than point lookups. The pattern stores data in a time-oriented model with a tree/path identity, columnar chunks grouped so that one device's chunks sit together, multi-level statistics so an aggregation can be answered without scanning raw points, and a tiered rollup structure so a multi-year archive costs gigabytes rather than the tens of terabytes of raw retention.",
+  "benefits": [
+    "Columnar, chunk-per-time-range layout makes time-range scans cheap and lets closed chunks be compressed aggressively",
+    "Chunk groups co-locate one device's chunks in contiguous disk space because those chunks are almost always queried together",
+    "Page, chunk and file-level statistics let an aggregation answer from metadata alone when the data is immutable",
+    "A tree/path data model absorbs device-defined, ever-evolving schema without a migration per fleet",
+    "Tiered rollups with per-tier retention keep long-range history cheap while the raw window stays short"
+  ],
+  "tradeoffs": [
+    "Rollup correctness depends on the raw retention window strictly exceeding the widest aggregate's refresh reach, or buckets materialise empty and the history is gone",
+    "Aggregate storage scales with series cardinality, not with the raw sample rate — cardinality is the cost driver",
+    "Late and out-of-order arrivals complicate ingestion ordering and force write paths that tolerate delayed data",
+    "High-frequency ingestion demands a specialised write path; general-purpose databases pay for generality",
+    "Aggregates introduce lag: recent data is only in the rollup once the refresh job has run"
+  ],
+  "quality_attributes": {
+    "scalability": 9,
+    "maintainability": 6,
+    "reliability": 8,
+    "security": 6,
+    "performance": 10,
+    "simplicity": 5
+  },
+  "suitable_domains": [
+    "iot",
+    "iot-sensor-data",
+    "iot-sensor-processing"
+  ],
+  "unsuitable_domains": [],
+  "use_cases": [
+    "Industrial sensor fleets with thousands of devices and millions of correlated measurements",
+    "Fleet telemetry for vehicles, meters and machines emitting on a fixed sampling schedule",
+    "Long-horizon trend analysis where raw retention is expensive and rollups answer the query",
+    "IoT analytics requiring both real-time queries over recent data and batch analysis over years",
+    "Edge deployments that collect locally, synchronise files, and query the same model in the cloud"
+  ],
+  "avoid_when": [
+    "The data is not time-ordered in any meaningful way, so the time axis buys nothing",
+    "Point lookups by primary key dominate rather than range aggregations",
+    "Cardinality is unbounded (a tag value per reading) and no cardinality budget can be enforced",
+    "The workload is small and a general-purpose relational database with partitioning is sufficient"
+  ],
+  "component_types": [
+    "Time-series model: tree or path identity so schema evolves with the fleet rather than through migrations",
+    "Columnar chunk: time-ordered, encoded and compressed block of data points for one series",
+    "Chunk group: chunks of one or more series of a device written in the same period, stored contiguously",
+    "Statistics tiers: page, chunk and file level summaries used to skip raw reads in aggregation",
+    "Downsampling / continuous aggregate: coarser rollup refreshed incrementally in the background",
+    "Retention policy: per-tier drop boundary that discards expired chunks automatically",
+    "Cardinality guard: control over the number of distinct series a measurement and tag set creates"
+  ],
+  "technology_stack": [
+    "Apache IoTDB / TsFile",
+    "TimescaleDB hypertables and continuous aggregates",
+    "InfluxDB (measurements, tags, fields, buckets)",
+    "Apache Druid",
+    "ClickHouse",
+    "Prometheus remote write"
+  ],
+  "anti_patterns": [
+    "Putting an unbounded value (a user id, a request id) in an indexed tag, causing runaway series cardinality",
+    "Setting the raw retention window shorter than an aggregate's refresh start_offset, so rollups materialise empty buckets",
+    "Aggregating averages of averages, which silently corrupts the result when bucket populations differ",
+    "Attaching one global retention policy to data with genuinely different retention requirements per tenant",
+    "Treating the raw store as the only tier, then paying full raw storage cost for a five-year archive"
+  ],
+  "migration_from": [
+    "relational-tables-for-time-series",
+    "flat-files-of-samples",
+    "single-bucket-no-rollup-storage"
+  ],
+  "migration_to": [
+    "lambda-architecture",
+    "data-mesh",
+    "edge-computing"
+  ],
+  "related_patterns": [
+    "edge-computing",
+    "event-driven",
+    "data-mesh",
+    "lambda-architecture",
+    "kappa-architecture",
+    "space-based"
+  ],
+  "design_principles": [
+    "Time is the primary axis of both storage and query",
+    "Store statistics alongside data so aggregates do not have to read it",
+    "Aggregate storage cost is governed by cardinality, not volume",
+    "Retention is layered: raw is short, rollups are long, and the boundary follows the query horizon",
+    "Schemas belong to the fleet, so the data model must tolerate unknown series appearing"
+  ],
+  "best_practices": [
+    "Compute cardinality before modelling: worst case is tag keys times tag values times field keys",
+    "Keep the raw retention window several times wider than the widest aggregate refresh reach, with margin for scheduler lag",
+    "Re-aggregate sums and counts at every level and derive averages from them rather than averaging rollups",
+    "Give each tier its own retention policy and verify the oldest surviving data matches the horizon",
+    "Compress closed chunks on a schedule; typical sensor data compresses by an order of magnitude"
+  ],
+  "references": [
+    "InfluxData, Designing Your Schema — measurements, tags, fields, buckets, retention and cardinality, https://awesome.influxdata.com/docs/part-2/designing-your-schema/",
+    "Apache IoTDB, Time-Series Data Model — device-defined evolving schema and correlated series, https://iotdb.apache.org/UserGuide/latest/Basic-Concept/Time-Series-Model.html",
+    "TimescaleDB, Hypertables — automatic time-based chunking, compression and retention, https://docs.timescale.com/use-timescale/latest/hypertables/",
+    "Apache Kafka, Core Concepts — event time as the clock for late-arriving IoT records, https://kafka.apache.org/43/streams/core-concepts/"
+  ]
+}

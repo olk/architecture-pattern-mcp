@@ -1,0 +1,167 @@
+{
+  "name": "feature-engineering-pipeline",
+  "category": "ai_cognitive",
+  "context": "A model is trained on a table built by one code path and served features produced by another, and the model works offline and fails in production. The two causes are always the same: the feature definitions drifted between the paths (training-serving skew), and the training join was not point-in-time correct, so the training set contained feature values that would not have existed at prediction time (data leakage). The feature engineering pipeline is the architectural component that closes both gaps by making feature definitions a versioned, declared artefact with two materialisation targets. The declaration is the feature view: 'a logical group of time-series feature data as it is found in a data source', existing in two modes — online it is 'a stateful collection of features that are read when the get_online_features method is called', offline it is 'a stateless collection of features that are created when the get_historical_features method is called'. The same definition drives both, which is what removes skew by construction. Leakage is prevented by the retrieval contract, which is precise enough to state as an invariant: get_historical_features requires an entity dataframe carrying an event_timestamp, and Feast performs a point-in-time join that takes, for each entity row, 'the latest feature values with a timestamp at or before the entity row's event_timestamp'. The same timestamp discipline governs serving, where event timestamps 'are also used to ensure that old feature values aren't served to models during online serving'. Between the definition and the model sits materialization: the job that loads feature values into the online store, historically recorded in the registry so the choice of window can be as simple as cron. The push model matters for freshness: 'the feature store pushes feature values to the online store, which reduces the latency of feature retrieval', and the streaming setup is a five-step chain ending with periodic materialization 'for decreased training-serving skew'. The pipeline is therefore explicitly incomplete without a delta: the recommended production pattern subtracts an hour from the start of the interval — 'Add 1 hr overlap to account for late data' — because a feature pipeline whose freshness ignores late data is a feature pipeline that trains on values production never had.",
+  "benefits": [
+    "Training-serving skew is removed structurally rather than by convention: one feature definition feeds both the offline training retrieval and the online store, so the transformation cannot diverge",
+    "Leakage is prevented by an enforceable invariant — the point-in-time join takes the latest value at or before the entity row's event timestamp, so no future value can reach the training set",
+    "Point-in-time correctness is also a serving guarantee, since event timestamps bound which feature values may be served, not just which may be trained on",
+    "Feature definitions become a reviewable artefact in the repository, promoted through branches and pull requests like code, rather than SQL buried in a notebook",
+    "Serving latency becomes a structural property of the definition: features sharing an entity key and materialization schedule can live in one feature view, which turns N online-store reads into 1",
+    "Model/feature contract is explicit through feature services — 'one feature service per model version', so it is answerable which features a given model consumes",
+    "Freshness is decoupled from batch cadence: streaming sources push values into the online store while periodic materialization fills gaps, giving both low staleness and a reconciliation path",
+    "Storage engines are abstracted behind the definition, so moving from a file offline store to Snowflake or BigQuery does not touch model code",
+    "Scalability of materialization is tunable: write batches can be chunked so a millions-of-rows materialisation does not convert the whole Arrow table into protobuf in one pass",
+    "Feature definitions carry a TTL, so serving a value older than the feature's own validity window is a definable decision rather than an accident"
+  ],
+  "tradeoffs": [
+    "The online store is now a serving dependency with its own latency, availability and consistency characteristics, and it is a new thing to page on",
+    "Read amplification is structural: the server issues one store read per feature view in a request, so a service spanning many views is dominated by round-trip count — 'no amount of runtime tuning can fix after the fact'",
+    "Materialisation is a second data path with its own latency, and its freshness is bounded by the interval between runs unless streaming push is used",
+    "Push and pull are different consistency stories: push gives low read latency but makes the online store a write-through target that must tolerate out-of-order and duplicate pushes",
+    "On-demand transformations are usually computed at read time, which scales fine for serving and 'does not scale well to offline retrieval', so the same definition has different performance at the two ends",
+    "The registry becomes critical infrastructure — 'the default registry configuration uses synchronous cache refresh', and when the TTL expires the next call blocks while the registry is re-downloaded, adding tens of milliseconds of latency",
+    "Point-in-time correctness is expensive on large offline stores: the historical join must find, per entity row, the value as of that row's timestamp, which is not a plain equi-join",
+    "A pipeline that does not overlap its windows silently trains on a snapshot of data that production has not yet seen; overlap costs compute and is easy to omit",
+    "Feature definitions are a compatibility surface: changing a feature's semantics without changing its name silently breaks every model that consumes it",
+    "Version pinning on reads is narrow in practice — qualified feature references are supported only on the SQLite online store in current versions, so the escape hatch for pinning is not universally available"
+  ],
+  "quality_attributes": {
+    "scalability": 7,
+    "maintainability": 9,
+    "reliability": 8,
+    "security": 6,
+    "performance": 7,
+    "simplicity": 5
+  },
+  "suitable_domains": [
+    "ml-engineering",
+    "artificial-intelligence",
+    "ai-products",
+    "recommendation-systems",
+    "recommendation-engines",
+    "fraud-detection",
+    "real-time-analytics",
+    "data-science-platforms",
+    "data-intensive-workloads",
+    "pattern-recognition",
+    "anomaly-detection",
+    "decision-support-systems",
+    "enterprise"
+  ],
+  "unsuitable_domains": [
+    "low-ml-requirements",
+    "prototypes",
+    "startup-pocs",
+    "single-algorithm",
+    "simple-crud-applications",
+    "batch-analytics-only",
+    "hard-real-time-systems",
+    "small-applications"
+  ],
+  "use_cases": [
+    "Feast offline/online store split with feature views over a warehouse table, materialised into Redis or DynamoDB for low-latency online retrieval",
+    "Point-in-time-correct training set generation for a churn model using an entity dataframe of (entity, event_timestamp) rows and get_historical_features",
+    "Streaming features computed in an existing Spark pipeline and pushed into the online store with the Push API, plus a periodic materialisation pass to reduce skew",
+    "A feature service per model version so the exact feature set a model consumes is declared, versioned and reviewable",
+    "Runtime dictionary-style enrichment (user id to integer id) executed as a streaming transformation before aggregation, feeding both the training and serving paths",
+    "Batch scoring alongside real-time serving from the same registry, where offline retrieval uses the historical path and online retrieval uses the online store",
+    "Feature quality monitoring computing null rates, distributions and percentiles across batch data and serving logs to detect drift before it degrades the model"
+  ],
+  "avoid_when": [
+    "The system has no learned component — a feature store is infrastructure in search of a problem for a rules-based application",
+    "The model is trained once and abandoned, with no serving path to keep consistent",
+    "The offline store cannot support point-in-time retrieval, which means leakage cannot be prevented by the architecture and only by manual discipline",
+    "Serving latency budget cannot absorb an online-store round trip, which rules out online retrieval entirely",
+    "The feature set is a handful of columns computed inline from the request, where a pipeline and a registry are pure overhead",
+    "Team ownership of definitions is unresolved — a shared definition with no owner drifts faster than a duplicated one",
+    "Features are not reusable across models, in which case a per-model pipeline is simpler and the shared registry adds coupling without benefit",
+    "You need strict version pinning of online features today, which current qualified-reference support does not provide across stores"
+  ],
+  "component_types": [
+    "Feature definition: the declarative schema of a feature view — entity, columns, types, TTL, event timestamp — applied to produce a versioned registry entry",
+    "Feature view: the logical group of time-series features, stateful online and stateless offline, driving both materialisation and retrieval",
+    "Feature service: the named collection of features consumed by one model version, giving a stable serving contract",
+    "Entity dataframe: the (entity key, event_timestamp) input to historical retrieval; the event timestamp is the upper bound that makes the join leakage-free",
+    "Offline store: the historical system queried with the point-in-time join to build training datasets and run batch scoring",
+    "Online store: the low-latency key-value store holding the latest feature values per entity for serving",
+    "Feature registry: the versioned metadata store — feature definitions, feature services, data source configs — read by both training and serving",
+    "Materialisation job: the batch process that loads feature values from the offline store into the online store, recording its history so windows can be incremental",
+    "Streaming transformation / push source: the path that writes freshly computed feature values to the online store (and optionally the offline store) between materialisations",
+    "On-demand transformation: request-time feature computation defined in Python and executed on both the historical and online retrieval paths",
+    "Point-in-time join implementation: the operator that, per entity row, selects the latest feature value with timestamp at or before the row's event timestamp"
+  ],
+  "technology_stack": [
+    "Feast",
+    "Apache Spark streaming feature jobs",
+    "Apache Flink",
+    "Apache Beam",
+    "dbt",
+    "Apache Airflow",
+    "Snowflake and BigQuery offline stores",
+    "Redis, DynamoDB and PostgreSQL online stores",
+    "TFX and Kubeflow for orchestration",
+    "Kubernetes Jobs for materialisation"
+  ],
+  "anti_patterns": [
+    "Recomputing features inside the serving code path separately from the training pipeline, which is the direct cause of training-serving skew",
+    "Building the training set with a plain join to the current feature table, so rows carry feature values that post-date the prediction they are meant to train",
+    "Using ingestion time instead of event timestamp as the point-in-time bound, which silently makes the training set point-in-time wrong",
+    "Materialising the online store with a window that ends exactly at the source cutoff and no overlap, so late features are missing in production but present in training",
+    "Loading every feature view into one service, multiplying online-store round trips and making latency a function of feature count",
+    "Mutating a feature's meaning while keeping its name, breaking every downstream model with no diff to review",
+    "Serving features with an unbounded TTL, so a stale value is as acceptable as a fresh one and staleness becomes undetectable",
+    "Running the materialisation engine unpaginated in-process, converting the entire offline-store result to protobuf in memory before writing",
+    "Using synchronous registry refresh without accounting for the re-download on the read path, adding a latency spike to the first request after each expiry",
+    "Treating the feature pipeline as a data pipeline and skipping the definition review, so feature logic lives in notebooks and is not promotable"
+  ],
+  "migration_from": [
+    "lambda-architecture",
+    "data-mesh",
+    "monolithic"
+  ],
+  "migration_to": [
+    "data-mesh",
+    "event-driven",
+    "command-query-responsibility-segregation"
+  ],
+  "related_patterns": [
+    "data-mesh",
+    "lambda-architecture",
+    "kappa-architecture",
+    "command-query-responsibility-segregation",
+    "event-driven",
+    "space-based",
+    "service-mesh",
+    "event-sourcing"
+  ],
+  "design_principles": [
+    "One definition, two materialisations — offline and online are renderings of the same declared feature view, never two implementations",
+    "Point-in-time correctness is an invariant enforced by the retrieval contract, not a property the data scientist is trusted to preserve",
+    "Feature definitions are code — versioned, reviewed, promoted through branches, and applied to mutate the registry",
+    "Freshness has two mechanisms on purpose: streaming push for latency, periodic materialisation for reconciliation and skew reduction",
+    "Round-trip count is a design decision made at definition time, not a tuning problem discovered at serving time",
+    "Overlap the materialisation window for late data — a window that ends exactly at the cutoff trains on values production never had",
+    "Bind validity to the feature's own TTL, so 'too old to use' is representable rather than undefined",
+    "Keep the registry read-only for training and serving clients so a consuming pipeline cannot mutate what it reads"
+  ],
+  "best_practices": [
+    "Require an event timestamp on every feature view and use it as the point-in-time bound for both historical retrieval and online freshness",
+    "Start materialisation windows with a deliberate overlap (an hour or the source's measured p99 lateness) and record that choice in the job",
+    "Group features into feature views by entity key and by materialisation schedule, not by which team wrote them, to hold online-store round trips down",
+    "Define one feature service per model version so the model's input contract is reviewable and diffable",
+    "Chunk materialisation writes with a configured write batch size instead of converting the whole offline-store result in memory",
+    "Orchestrate materialisation per feature view with a job orchestrator so several views materialise in parallel rather than sequentially in one process",
+    "Refresh the registry in the background rather than synchronously on read, and expose registry-refresh latency as a metric",
+    "Run feature quality monitoring over both batch data and serving logs, and treat drift as an alerting condition rather than a periodic review item",
+    "Promote feature changes through a staging environment that mirrors production before applying them to the live registry"
+  ],
+  "references": [
+    "Feast documentation, Introduction — offline store for historical extraction, online store for low-latency serving, point-in-time correctness to avoid data leakage, and the push model for online serving — https://docs.feast.dev/",
+    "Feast documentation, Feature view — online view as a stateful collection read by get_online_features and offline view as a stateless collection created by get_historical_features, TTL and schema validation, on-demand and stream feature views — https://docs.feast.dev/master/getting-started/concepts/feature-view",
+    "Feast documentation, Feature retrieval — the point-in-time join rule (latest feature value with a timestamp at or before the entity row's event_timestamp), feature services per model version, pre-computed online vectors reducing store reads from O(N feature views) to O(1), and the current scope of version-qualified reads — https://docs.feast.dev/master/getting-started/concepts/feature-retrieval",
+    "Feast documentation, Running Feast in production — materialisation from offline to online store, in-process engine memory limits and write batching, materialisation history in the registry allowing cron-level simplicity, and the one-hour interval overlap to account for late data — https://docs.feast.dev/master/how-to-guides/running-feast-in-production",
+    "Feast documentation, Online server performance tuning — one online_store read per feature view in a request as a structural latency property, synchronous registry refresh spikes, and online store selection guidance — https://docs.feast.dev/master/how-to-guides/online-server-performance-tuning",
+    "Feast project README — feature store scope boundaries (not a general pipelining system, not an orchestrator, not a data warehouse), push-source streaming ingestion, and the documented feature engineering and streaming capability matrix — https://github.com/feast-dev/feast/"
+  ]
+}

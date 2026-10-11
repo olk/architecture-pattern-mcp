@@ -1,0 +1,105 @@
+{
+  "category": "dataflow",
+  "name": "watermark-pattern",
+  "context": "Events arrive out of order, so an operator cannot tell when it is safe to close a window. The watermark pattern carries a progress marker through the stream: a watermark at time t declares that no further element with a timestamp at or before t is expected. Watermarks are generated at or immediately after sources, flow with the data, advance each operator's event-time clock, and are re-emitted downstream as that operator's clock advances. An operator with several inputs takes the minimum of its inputs' watermarks.",
+  "benefits": [
+    "Gives a deterministic basis for window closure under out-of-order data, independent of arrival jitter",
+    "Bounds correctness loss explicitly: the tolerated lateness is a declared number rather than an accident of network timing",
+    "Propagates through the whole topology, so every downstream stage agrees on the current event time",
+    "Enables reprocessing of history fast: a job can fast-forward weeks of event time with seconds of processing",
+    "Works with late data instead of for it — records inside the bound correct results rather than being dropped"
+  ],
+  "tradeoffs": [
+    "Waiting for out-of-orderness adds latency to every windowed result — the lateness bound is paid in wall-clock time",
+    "An operator combining several inputs is only as advanced as its slowest input, so one idle partition stalls the pipeline",
+    "An over-aggressive watermark silently drops data; there is no error, only missing records",
+    "Watermarks must be monotonic and cannot be corrected after emission",
+    "Each operator maintains its own event-time clock, so debugging 'why did this window close early' means reasoning across several of them"
+  ],
+  "quality_attributes": {
+    "scalability": 7,
+    "maintainability": 6,
+    "reliability": 8,
+    "security": 5,
+    "performance": 8,
+    "simplicity": 6
+  },
+  "suitable_domains": [
+    "stream-processing",
+    "event-driven-systems",
+    "real-time-analytics"
+  ],
+  "unsuitable_domains": [],
+  "use_cases": [
+    "Event-time windows over a stream where records can arrive minutes out of order",
+    "Late-data handling with a declared grace or allowed-lateness bound",
+    "Detecting an idle partition or a silent upstream so window firing does not stall",
+    "Aligning multiple input streams so a join sees a consistent event-time frontier on both sides",
+    "Replaying historical data into a live pipeline where event time must advance far faster than wall clock"
+  ],
+  "avoid_when": [
+    "The input is strictly ordered by event time and produced by a single trusted source",
+    "The computation is stateless — no window, no timer, nothing that needs to know time has passed",
+    "Processing-time semantics are acceptable and the simpler wall clock will do",
+    "The lateness bound cannot be estimated, which makes any watermark choice arbitrary"
+  ],
+  "component_types": [
+    "Watermark generator: attaches or produces a timestamp marker at the source, bounded-out-of-orderness or generator-based",
+    "Watermark propagation: marker travels with records through the topology",
+    "Event-time clock: per-operator current event time, advanced when a watermark arrives",
+    "Watermark minimiser: for multi-input operators, the minimum across inputs",
+    "Idleness detector: marks an idle input so it stops holding the frontier back",
+    "Window trigger and grace: uses the advanced clock to fire windows and bound late arrivals"
+  ],
+  "technology_stack": [
+    "Apache Flink watermark strategies",
+    "Apache Kafka Streams (max.task.idle.ms, grace periods)",
+    "Apache Beam (event-time triggers)",
+    "Apache Spark Structured Streaming (event-time watermark)",
+    "Google Cloud Dataflow"
+  ],
+  "anti_patterns": [
+    "Failing to mark idle sources, so one silent partition freezes window firing across the whole job",
+    "Generating watermarks from wall-clock time while using event-time windows, which converts network jitter into dropped data",
+    "Setting an unbounded lateness bound and holding partial state indefinitely",
+    "Assuming a watermark means results are final — results can still be corrected inside the lateness bound",
+    "Comparing timestamps from different input streams that have never been aligned on a common frontier"
+  ],
+  "best_practices": [
+    "Bound out-of-orderness from a measured distribution of event-time to arrival-time delay, not from a guess",
+    "Mark idle inputs explicitly rather than waiting for a timeout to unblock the pipeline",
+    "Expose the current watermark per operator as a metric — a stalled watermark is the first symptom of a stalled pipeline",
+    "Keep the lateness bound and the grace period consistent with each other and with the retention policy",
+    "Log dropped-late-record counts; a silent drop is the characteristic failure of this pattern"
+  ],
+  "related_patterns": [
+    "pipe-and-filter",
+    "event-driven",
+    "reactive-architecture",
+    "space-based",
+    "kappa-architecture",
+    "event-sourcing"
+  ],
+  "design_principles": [
+    "Watermarks are generated at the source and nowhere else — downstream operators only re-emit what they received",
+    "The frontier of a multi-input operator is the minimum over its inputs, never the average",
+    "Idleness is information: an input that stopped must be marked so it stops holding the frontier back",
+    "The lateness bound is declared, not discovered — a watermark without a bound is a guess",
+    "Watermarks are monotonic; a mistake is corrected downstream, never by rewinding the marker"
+  ],
+  "migration_from": [
+    "processing-time-windowing",
+    "wall-clock-timers-over-event-data",
+    "unbounded-lateness-windowing"
+  ],
+  "migration_to": [
+    "windowing-pattern",
+    "pipe-and-filter"
+  ],
+  "references": [
+    "Apache Flink, Timely Stream Processing — Watermarks in parallel streams and the minimum-over-inputs rule, https://nightlies.apache.org/flink/flink-docs-master/docs/concepts/time/",
+    "Apache Kafka, Configuring a Streams Application — max.task.idle.ms and related idle-handling settings, https://kafka.apache.org/43/streams/developer-guide/config-streams/",
+    "Apache Kafka, Core Concepts — grace period, window close and out-of-order handling, https://kafka.apache.org/43/streams/core-concepts/",
+    "Apache Flink, Generating Watermarks, https://nightlies.apache.org/flink/flink-docs-master/docs/dev/datastream/event-time/generating_watermarks/"
+  ]
+}

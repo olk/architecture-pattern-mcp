@@ -217,7 +217,7 @@ Call evaluate_architecture with:
   architecture: { ... paste a design dict here ... }
   criteria: "scalability, reliability"
 
-Call list_architecture_patterns()  # all 40 patterns
+Call list_architecture_patterns()  # all 128 patterns
 Call list_architecture_patterns(category="messaging")  # filter by category
 Call get_architecture_pattern(name="event-driven")   # full pattern JSON
 ```
@@ -317,7 +317,7 @@ Show me details about the event-driven architecture pattern.
 | `submit_architecture_design_job` | Start a background design job and return a `job_id` immediately. **ONLY for clients with short request timeouts** (Cursor, Claude Desktop, TS-SDK). For other clients use `design_architecture`. Poll `get_architecture_design_status` every 10–30 s. |
 | `get_architecture_design_status` | Poll job status. Returns the current status, progress message, and the full design output when `completed`. |
 | `cancel_architecture_design` | Cancel a running job (best-effort; takes effect at the next pipeline stage boundary; may take up to one LLM call). |
-| `list_architecture_patterns` | List all 40 patterns; filter by `category` and/or `domain` |
+| `list_architecture_patterns` | List all 128 patterns; filter by `category` and/or `domain` |
 | `get_architecture_pattern` | Get full JSON for a specific pattern by name |
 
 
@@ -374,7 +374,7 @@ Clients that only support the tools protocol (no native `prompts/list` or `promp
 ### Via MCP tools (recommended — works in all clients)
 
 ```
-list_architecture_patterns()                                  # all 40 patterns
+list_architecture_patterns()                                  # all 128 patterns
 list_architecture_patterns(category="messaging")               # filter by category
 list_architecture_patterns(domain="microservices")            # filter by domain
 get_architecture_pattern(name="event-driven")                 # full pattern JSON

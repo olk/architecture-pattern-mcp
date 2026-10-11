@@ -1,0 +1,137 @@
+{
+  "name": "zero-trust-architecture",
+  "category": "structural",
+  "context": "An organization whose assets no longer sit behind one boundary: remote users, bring-your-own-device, SaaS tenants, and cloud workloads outside the enterprise-owned network. NIST SP 800-207 defines the resulting architecture explicitly - zero trust assumes no implicit trust is granted to assets or user accounts based solely on physical or network location or on asset ownership, and it makes authentication and authorization of both subject and device discrete functions performed before a session to a resource is established. The reference design decomposes the decision into a policy decision point (a policy engine that decides and logs, plus a policy administrator that opens or tears down the path) and one or more policy enforcement points, and it requires the control plane those components use to be logically separate from the data plane that carries application traffic.",
+  "benefits": [
+    "A laptop on the corporate VPN and a workload in the cluster are evaluated by the same policy, because network location is no longer an input to the trust decision",
+    "Splitting the policy engine from the policy administrator lets policy change centrally without editing every enforcement point: the engine decides and logs, the administrator executes",
+    "The separate control plane gives enforcement points a channel that enterprise assets cannot reach directly, so an asset cannot negotiate itself more access",
+    "Continuous evaluation rather than continuous connection: the policy engine can consume CDM and threat-intelligence signals and revoke a session that was correctly granted a minute earlier",
+    "Device and subject are authenticated separately, so a valid user on a non-compliant device is denied for a reason the audit trail records",
+    "Every grant and denial is logged by the policy engine as a side effect of making the decision, which produces compliance evidence without a second instrumentation project"
+  ],
+  "tradeoffs": [
+    "The abstract model maps onto materially different deployment models - enhanced identity governance, micro-segmentation, and software-defined perimeter / SASE - with different cost, maturity and failure modes. 'Adopt zero trust' is not a single decision",
+    "Everything becomes an access decision, including monitoring, management and backup paths that were previously implicit. The surface is much larger than it looks",
+    "Policy distribution is now critical infrastructure: a stale, unreachable or badly written PDP can lock out legitimate traffic, and the failure is a total outage rather than a degraded feature",
+    "Per-request authorization adds a decision point where the network had none, with a latency cost on paths that were previously free",
+    "The model needs identity governance data that many organizations do not have: who this person or device is, and what is its current posture. Zero trust consumes that data, it does not create it",
+    "Adoption is necessarily incremental. NIST's own implementation builds start from ICAM with no separate PE/PA and add dedicated components in a later phase",
+    "Policy expressed in application code is not zero trust - the protected code can skip it, which is the condition the reference monitor principle exists to prevent"
+  ],
+  "quality_attributes": {
+    "performance": 6,
+    "scalability": 6,
+    "reliability": 6,
+    "maintainability": 5,
+    "security": 10,
+    "simplicity": 3
+  },
+  "suitable_domains": [
+    "government-systems",
+    "government",
+    "financial-services",
+    "healthcare",
+    "regulated-industries",
+    "enterprise-systems-needing-centralized-governance",
+    "compliance",
+    "audit-regulatory",
+    "multi-tenant-platforms",
+    "cross-organizational",
+    "multi-cluster",
+    "cloud-native",
+    "microservices"
+  ],
+  "unsuitable_domains": [
+    "prototypes",
+    "simple-applications",
+    "low-complexity-projects",
+    "static-requirements",
+    "direct-network-access-sufficient",
+    "teams-lacking-operational-expertise",
+    "small-teams",
+    "low-traffic-applications"
+  ],
+  "use_cases": [
+    "Flattening a perimeter into micro-segmented per-workload policy after lateral movement crossed an internal boundary",
+    "Granting third-party and contractor access to internal tooling without standing VPN accounts",
+    "Enforcing device posture as a gate on session establishment, not as a warning in a dashboard",
+    "Running a multi-cluster or multi-cloud estate where no single network boundary is authoritative"
+  ],
+  "avoid_when": [
+    "The estate is a single team on one network with no external or third-party participants",
+    "There is no identity governance data to evaluate, so the policy engine would be guessing",
+    "The organization cannot operate a control plane reliably enough for a policy outage to be survivable",
+    "The goal is a single high-value flow - that is a targeted control, not a zero trust architecture"
+  ],
+  "component_types": [
+    "Policy engine (PE)",
+    "Policy administrator (PA)",
+    "Policy enforcement point (PEP) - client agent, resource gateway, or portal",
+    "Control plane",
+    "Data plane",
+    "Identity, credential and access management (ICAM)",
+    "Security analytics / threat intelligence",
+    "Device inventory and compliance (CDM)",
+    "Data security components"
+  ],
+  "technology_stack": [
+    "NIST SP 800-207",
+    "OIDC / OAuth 2.0",
+    "SPIFFE / SPIRE",
+    "Envoy or Istio AuthorizationPolicy as PEP",
+    "SAML / FIDO2 for subject authentication",
+    "SASE / SDP gateways",
+    "Kubernetes NetworkPolicy or micro-segmentation firewalls"
+  ],
+  "anti_patterns": [
+    "Placing the PDP on the data plane so enterprise assets can reach it directly. SP 800-207 requires the control plane to be logically separate and not directly accessible by assets and resources",
+    "Rebranding a perimeter VPN as zero trust while device authentication and authorization remain folded into connection establishment",
+    "Permissive authorization policies in the mesh that accept anything not explicitly denied - the same class of hole that made perimeter models fail",
+    "Computing the access decision inside the protected code path, so the dependency the check constrains can skip it",
+    "Granting long-lived standing access and describing the resulting log as continuous evaluation",
+    "Running ZTA with no asset or device inventory, so the policy engine has nothing to evaluate and degrades to allow-all by default",
+    "Decomposing PE and PA but not giving the administrator a reliable way to tear a session down, leaving revocation slower than compromise"
+  ],
+  "design_principles": [
+    "Never infer trust from network location; verify explicitly on every access",
+    "Verify all available communications and compute access per session, not per network",
+    "Assume the network is hostile and the data plane is compromised",
+    "Grant the least privilege and the narrowest scope that lets the subject complete the task",
+    "Keep the decision (engine) separate from the execution (administrator) and from enforcement (PEP), so none of the three can be bypassed by the others",
+    "Collect as much information as possible about the current state to improve security posture; posture and identity are both inputs"
+  ],
+  "best_practices": [
+    "Enumerate the logical components - PE, PA, PEP, control plane, data plane - explicitly before buying tooling; the reference design is the checklist",
+    "Start from existing ICAM for identity governance, then add dedicated PE/PA components as a distinct later phase, which is the sequence NIST validated",
+    "Make PEPs able to send and receive on both the data plane and the control plane, or the architecture cannot set up or tear down a path",
+    "Keep the control plane network unreachable from workload networks by construction, not by policy",
+    "Log every allow and deny at the policy engine with the inputs used, and treat that log as the audit artefact",
+    "Express policy centrally and version it, so that changing a rule does not require touching every protected service"
+  ],
+  "related_patterns": [
+    "service-mesh",
+    "api-gateway",
+    "microservices",
+    "hybrid-cloud",
+    "edge-computing",
+    "multi-cloud",
+    "broker",
+    "event-driven",
+    "master-slave"
+  ],
+  "migration_from": [
+    "hybrid-cloud",
+    "multi-cloud"
+  ],
+  "migration_to": [
+    "service-mesh",
+    "microservices"
+  ],
+  "references": [
+    "Rose, Borchert, Mitchell, Connelly, Zero Trust Architecture, NIST SP 800-207 (final, 2020-08-11) - https://csrc.nist.gov/pubs/sp/800/207/final",
+    "NIST SP 800-207 full text (abstract model, PE/PA/PEP, control plane vs data plane, tenets) - https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-207.pdf",
+    "NIST SP 800-207 second draft (logical component definitions) - https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-207-draft2.pdf",
+    "NIST Cybersecurity Practice Guide, Build Implementation Instructions (general ZTA reference design, EIG/SDP/SASE phases) - https://pages.nist.gov/zero-trust-architecture/VolumeC/index.html"
+  ]
+}

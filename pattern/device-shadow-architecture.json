@@ -1,0 +1,103 @@
+{
+  "category": "cloud",
+  "name": "device-shadow",
+  "context": "A constrained or intermittently connected device must be controllable and observable from apps and cloud services even while it is offline. The shadow is a cloud-held JSON document per device that separates what a controller wants (desired) from what the device last reported (reported), plus a computed difference (delta). Because the document lives in the cloud, an app can query and command a device that is not connected; because it carries versions and deltas, the device can reconcile on reconnect rather than replay everything.",
+  "benefits": [
+    "Decouples control from connectivity — apps read and change device state whether or not the device is online",
+    "The delta is computed by the service, so each device receives only the attributes that actually differ",
+    "Versioning makes out-of-order delivery safe: a device discards any message carrying a version older than the one it tracks",
+    "Cloud services keep writing the device's state while it is offline, so the document stays accurate for the next reader",
+    "Persistent sessions deliver delta messages on reconnect for devices that are frequently offline"
+  ],
+  "tradeoffs": [
+    "A shadow is a control-plane document, not a telemetry buffer — high-rate samples belong on the message path, not in a state document",
+    "Delta messages can be large; a whole-state delta over a constrained link is expensive unless filtered before delivery",
+    "Concurrent conflicting updates resolve by version, not by transaction — a lost update is possible without explicit version checks",
+    "The control plane becomes a runtime dependency of every read and write to device state",
+    "Wildcard subscriptions to shadow topics are unsafe because the service reserves the right to add topics to the hierarchy"
+  ],
+  "quality_attributes": {
+    "scalability": 8,
+    "maintainability": 8,
+    "reliability": 8,
+    "security": 8,
+    "performance": 6,
+    "simplicity": 7
+  },
+  "suitable_domains": [
+    "iot",
+    "iot-device-management",
+    "edge-computing-bandwidth"
+  ],
+  "unsuitable_domains": [],
+  "use_cases": [
+    "Desired-state configuration pushed to devices that reconnect rarely or on cellular links",
+    "Mobile apps showing live device state without opening a session to the device",
+    "Fleet dashboards reading the last reported state of thousands of devices",
+    "Device twins that must survive firmware rollback, with the previous desired state re-applied",
+    "Multiple logical shadows per device, separating anonymous telemetry aggregation from operator commands"
+  ],
+  "avoid_when": [
+    "Data is high-rate telemetry — a state document is the wrong shape and will be constantly rewritten",
+    "The device is always connected and the control path is a persistent session — the shadow adds a round trip",
+    "Exactly-once command delivery to the device is required, which a versioned document cannot guarantee",
+    "Regulatory or operational rules forbid a cloud copy of device state"
+  ],
+  "component_types": [
+    "Shadow document: JSON with desired, reported and a virtual delta section plus per-attribute metadata timestamps",
+    "Shadow type: one unnamed classic shadow, any number of named shadows, plus a reserved named shadow",
+    "Reserved MQTT topics: get, update, delete with accepted, rejected, update/delta and update/documents response topics",
+    "REST API: the equivalent HTTPS surface, with the same version and clientToken semantics",
+    "Client token: a caller-supplied correlation id matching a request to its response over MQTT",
+    "Reconnect procedure: apply all deltas, then publish current state as reported"
+  ],
+  "technology_stack": [
+    "AWS IoT Device Shadow service",
+    "MQTT",
+    "AWS IoT Rules (filter and republish deltas)",
+    "Persistent MQTT sessions",
+    "AWS IoT Greengrass"
+  ],
+  "anti_patterns": [
+    "Writing to reported from an app or writing to desired from a device, which breaks the single-writer discipline",
+    "Subscribing with a wildcard over shadow topics and being flooded when the service adds new topic stubs",
+    "Putting telemetry streams into the shadow document and rewriting the whole document per sample",
+    "Applying updates without version preconditions, so a concurrent write silently wins",
+    "Not resynchronising on reconnect — a device that never publishes reported state leaves the delta permanently non-empty"
+  ],
+  "related_patterns": [
+    "edge-computing",
+    "event-driven",
+    "client-server",
+    "master-slave"
+  ],
+  "design_principles": [
+    "Desired and reported are written by different actors and never by the same one",
+    "The delta is derived, never written — it is the difference between desired and reported",
+    "Version every update and treat it as a precondition when concurrent writers are possible",
+    "The shadow is the last known state, not a live channel",
+    "Filter delta payloads to the attributes the device needs before they cross the link"
+  ],
+  "best_practices": [
+    "Subscribe to response topics before publishing a request, so accepted/rejected/delta are never missed",
+    "Use clientToken to correlate requests and responses in MQTT where delivery order is not guaranteed",
+    "On reconnect, read every pending delta and then publish reported state in a single pass",
+    "Add a rules-based filter that selects only needed fields and republishes to a device-specific topic",
+    "Use named shadows to separate operator commands from anonymous aggregate state"
+  ],
+  "migration_from": [
+    "session-based-device-control",
+    "polling-device-state-apis"
+  ],
+  "migration_to": [
+    "edge-computing",
+    "master-slave"
+  ],
+  "references": [
+    "AWS IoT, Device Shadow service — desired, reported, delta and named vs classic shadows, https://docs.aws.amazon.com/iot/latest/developerguide/iot-device-shadows.html",
+    "AWS IoT, Device Shadow MQTT topics — reserved topics, delta semantics and wildcard guidance, https://docs.aws.amazon.com/iot/latest/developerguide/device-shadow-mqtt.html",
+    "AWS IoT, Device Shadow data flow — update and delta protocol, offline behaviour and persistent sessions, https://docs.aws.amazon.com/iot/latest/developerguide/device-shadow-data-flow.html",
+    "AWS IoT, Shadow document — request and response documents, versioning, clientToken and delta state, https://docs.aws.amazon.com/iot/latest/developerguide/device-shadow-document.html",
+    "AWS IoT, Device communications with shadows — reconnect and resynchronisation procedure, https://docs.aws.amazon.com/iot/latest/developerguide/device-shadow-comms-device.html"
+  ]
+}

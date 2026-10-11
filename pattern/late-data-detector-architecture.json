@@ -1,0 +1,167 @@
+{
+  "name": "late-data-detector",
+  "category": "data",
+  "context": "A late-data detector is an instrument, not a repair mechanism — that distinction is the whole pattern. The dynamic late data integrator decides what to do about records that arrived after their window closed; the late-data detector's only job is to establish, continuously and per source, that this is happening and to say how badly. It exists because late arrival fails silently. Nothing throws, nothing retries, no job goes red. Spark makes the guarantee precise and the failure precise: a watermark delay of two hours 'guarantees that the engine will never drop any data that is less than 2 hours delayed', but 'the guarantee is strict only in one direction. Data delayed by more than 2 hours is not guaranteed to be dropped; it may or may not get aggregated.' Beyond the tolerance the behaviour is unspecified, which means a pipeline can be quietly under-counting for weeks with every task green. Flink's default is the sharpest edge: allowed lateness defaults to 0, so 'elements that arrive behind the watermark will be dropped', and the only way to see them is to configure it — `sideOutputLateData(OutputTag)` routes the discarded records to a separate stream, which is what turns an invisible loss into an observable count. Kafka Streams draws the same line in the form of a grace period: a record 'is discarded if its timestamp dictates it belongs to a window, but the current stream time is greater than the end of the window plus the grace period', with delay defined as stream_time minus record_timestamp. The detector's real work is therefore measurement at the boundary: count records per source whose arrival delay exceeds the configured tolerance, bucket that delay distribution, and compare it against the assumption that was used to set the tolerance in the first place. The batch side has the same disease with a different symptom. A dbt incremental model's cutoff is typically `updated_at > (select max(updated_at) from this)`, so a handful of rows that land two days after the rest of the partition are excluded by the filter forever — the best-practice guidance names the failure directly: such rows 'will never make it to our model', and the remedy on the ingest side is either a lookback window subtracted from the cutoff or an interval overlap ('Add 1 hr overlap to account for late data'). Both remedies assume you can see how late your data actually is. That is the detector's product.",
+  "benefits": [
+    "Converts a silent correctness failure into an observable metric — records dropped past the watermark are otherwise invisible in every dashboard because the pipeline stays green",
+    "Validates the assumption behind the tolerance rather than the tolerance itself: the detector measures the lateness distribution that the configured bound was estimated from",
+    "Provides the input needed to set the bound at all — Spark requires a watermark delay to be chosen, and choosing it without measurement is how pipelines end up either dropping data or holding unbounded state",
+    "Captures late records to a side channel so the repair path has data even before you need it, rather than reconstructing it from source after the fact",
+    "Per-source attribution makes the action specific: a late-arriving internal event and a late-arriving third-party feed need different tolerance and different fixes",
+    "Surfaces the batch-side failure the incremental filter creates, where late rows are excluded by the cutoff permanently and no engine metric can see it",
+    "Guards the one-directional watermark contract, since past the threshold behaviour is unspecified and only measurement tells you whether you are in that region in practice",
+    "Protects downstream consumers who act on published numbers, because a silently under-counted aggregate is often acted on long before anyone suspects a timing problem",
+    "Provides the evidence for widening tolerance deliberately rather than reflexively, including the state cost the widening implies",
+    "Feeds directly into the integrator's interval resolver — the measured delay determines which partitions a late record contaminates"
+  ],
+  "tradeoffs": [
+    "Measurement overhead on the hot path: computing and exporting a per-record delay decision costs CPU in exactly the operator that is already the bottleneck",
+    "Routing discarded records to a side output is an explicit opt-in — without `sideOutputLateData` the data is dropped with no observable trace, so the detector's coverage depends on configuration that is easy to omit",
+    "The tail is what matters and tails are noisy: a detector reporting the mean lateness will report a healthy pipeline while one source is six hours late on one percent of records",
+    "A late-data detector can itself cause harm if the team responds by widening tolerance globally, turning a measurement problem into an unbounded state and latency problem",
+    "Upstream timestamp quality is outside the detector's control: a producer stamping ingestion time makes every record look perfectly on-time and the detector reads clean",
+    "Beyond the tolerance the engine's behaviour is genuinely unspecified, so a detector that only observes 'record not aggregated' cannot distinguish a drop from an unexpected inclusion",
+    "High-cardinality attribution (per source, per partition, per key) multiplies metric cost exactly when volume is highest",
+    "In batch incremental pipelines the late rows are excluded by the filter, not dropped by the engine, so there is no runtime event to hook — detection requires a separate reconciliation query",
+    "Threshold alerts on late rate are noisy during catch-up after an outage, when nearly everything is late and the detector is technically correct and operationally useless",
+    "A detector reports a rate, not a correction, so an alert alone leaves the data wrong; without a consumer of the signal it is telemetry nobody acts on"
+  ],
+  "quality_attributes": {
+    "scalability": 7,
+    "maintainability": 8,
+    "reliability": 8,
+    "security": 5,
+    "performance": 6,
+    "simplicity": 6
+  },
+  "suitable_domains": [
+    "stream-processing",
+    "streaming",
+    "data-pipelines",
+    "distributed-data-pipelines",
+    "data-processing",
+    "real-time-analytics",
+    "event-driven-workloads",
+    "iot-data-processing",
+    "clickstream-analytics",
+    "log-analysis",
+    "batch-processing",
+    "data-intensive-workloads",
+    "financial-systems"
+  ],
+  "unsuitable_domains": [
+    "purely-synchronous-workloads",
+    "simple-request-response",
+    "request-response-apis",
+    "static-requirements",
+    "batch-analytics-only",
+    "real-time-deterministic",
+    "prototypes",
+    "simple-domains"
+  ],
+  "use_cases": [
+    "Flink windows with allowed lateness set and `sideOutputLateData` configured, counting what would otherwise be silently discarded after the grace",
+    "Spark Structured Streaming with `withWatermark` set from an assumed delay, tracking how many records fall beyond the threshold since the engine no longer guarantees either behaviour",
+    "Kafka Streams windowed aggregations with an explicit grace period, measuring how often records arrive past windowEnd plus grace and are rejected",
+    "A dbt incremental model whose cutoff is `max(updated_at)`, reconciled nightly against a count of source rows newer than the target's maximum to catch rows the filter excluded forever",
+    "Per-source lateness histograms in a CDC pipeline where one upstream system batches its writes overnight and legitimately arrives late",
+    "Feeding the measured p99 lateness into the interval overlap of the downstream materialisation window instead of a guessed constant",
+    "Validating that a newly onboarded event source respects the existing tolerance before its data is allowed into shared aggregations",
+    "Alerting when late rate for a source exceeds its historical baseline, distinguishing a genuine upstream regression from routine jitter"
+  ],
+  "avoid_when": [
+    "The source is a single-writer, single-partition feed with a contractual ordering guarantee — there is nothing late to detect",
+    "Records carry ingestion time only, making every record look on-time and the detector structurally blind",
+    "You are prepared to always allow unbounded tolerance anyway, in which case the measurement has no decision attached to it",
+    "The pipeline drops late data by design and nobody consumes the results, so counting the drops changes nothing",
+    "Latency requirements are so tight that any tolerance is unacceptable — then late data must be rejected, and the volume of rejection is a business metric rather than a pipeline-health one",
+    "Alerting on late rate during a known catch-up window, where every record is late and the detector is right and useless",
+    "The batch pipeline has no reconciliation path — detecting excluded rows with nobody to fix them produces permanent, permanent noise"
+  ],
+  "component_types": [
+    "Tolerance / grace configuration: the declared bound late arrival is measured against — Flink's allowed lateness, Spark's watermark delay, Kafka Streams' grace period, the incremental filter's lookback",
+    "Late-classification point: the operator position where arrival delay is compared to the tolerance; in windowed operators this is where records are dropped or admitted",
+    "Side-output late channel: the separate stream receiving records discarded as late, enabled explicitly so the loss becomes a countable event",
+    "Delay histogram: the per-source distribution of stream_time minus record_timestamp, with buckets chosen around the tolerance boundary",
+    "Late-rate counter: records per interval exceeding the tolerance, per source and per partition, the metric that turns invisible loss into a dashboard",
+    "Boundary-band counter: records arriving late but inside tolerance, which are the ones that will cause re-firing and whose volume predicts state and latency cost",
+    "Upstream timestamp-quality check: validation that the embedded timestamp represents event time rather than ingestion time, without which the whole detector is measuring the wrong quantity",
+    "Batch reconciliation query: the nightly comparison of source rows newer than the target's maximum against the target's contents, catching rows the incremental cutoff excluded",
+    "Baseline and anomaly rule: comparison against the source's historical lateness distribution so a genuine regression is separated from routine jitter",
+    "Routing to the integrator: the hand-off of the measured delay and the affected intervals to the repair path, without which the signal is telemetry only"
+  ],
+  "technology_stack": [
+    "Apache Flink allowed lateness and side outputs",
+    "Apache Spark Structured Streaming withWatermark",
+    "Kafka Streams window grace periods",
+    "Apache Kafka record timestamps",
+    "dbt incremental models and lookback configuration",
+    "Feast materialisation interval overlap",
+    "Prometheus histograms and counters",
+    "Apache Airflow for batch reconciliation",
+    "OpenLineage run facets",
+    "Grafana dashboards"
+  ],
+  "anti_patterns": [
+    "Not configuring a late-data side output and assuming late records are visible — without it they are dropped with no trace",
+    "Setting a watermark delay or grace period from a round number with no measured distribution behind it",
+    "Reading the engine's guarantee as symmetric: it only guarantees that records inside the threshold are never dropped, not that records outside are always dropped",
+    "Alerting on mean lateness, where a healthy average hides one source that is hours late on a small fraction of its data",
+    "Firing during a legitimate catch-up after an outage, when the detector is accurate and the alert is noise",
+    "Widening tolerance globally in response to a single bad source, turning a measurement into unbounded state and delayed emission",
+    "Trusting ingestion timestamps and concluding that a source is perfectly punctual when it is stamping on receive",
+    "Checking only that a window fired and never counting how many records were excluded from it",
+    "Assuming late rows that miss an incremental cutoff will appear on the next run — the cutoff excludes them permanently",
+    "Leaving the detector's output unconsumed, so the count is published and no correction is ever made"
+  ],
+  "migration_from": [
+    "batch-processing",
+    "lambda-architecture"
+  ],
+  "migration_to": [
+    "kappa-architecture",
+    "event-driven"
+  ],
+  "related_patterns": [
+    "kappa-architecture",
+    "lambda-architecture",
+    "event-driven",
+    "event-sourcing",
+    "reactive-architecture",
+    "data-mesh",
+    "task-control-architecture",
+    "pipe-and-filter"
+  ],
+  "design_principles": [
+    "Measure the distribution, not the average — the tail is what breaks the pipeline and what tolerance must cover",
+    "Instrument the boundary, because that is the only place lateness is decidable; everywhere else it is invisible",
+    "Attribution per source — 'late' is a property of a producer, and only per-source attribution leads to a specific fix",
+    "Validate timestamp semantics before measuring delay, or the detector is measuring the transport rather than the data",
+    "Separate 'late but admitted' from 'late and discarded': the first costs latency and state, the second costs correctness, and they need different thresholds",
+    "Treat the watermark contract as one-directional and treat the region beyond it as unknown rather than as lossy",
+    "Batch late data needs its own detector — an incremental filter excludes rows silently and leaves no runtime event to hook",
+    "The detector's output is an input to a decision; a measurement with no consumer is telemetry"
+  ],
+  "best_practices": [
+    "Enable the late-data side output from the start, on every windowed operator, so the counts exist before you need them",
+    "Measure per source and per partition, not globally, and set the alert threshold from that source's historical distribution",
+    "Set the tolerance from a measured high percentile of the observed distribution, and re-measure when a source's delivery pattern changes",
+    "Track a boundary band — records late but inside tolerance — because its growth predicts state growth and emission delay before anything breaks",
+    "Add a timestamp-semantics check to onboarding for each new source, confirming the embedded timestamp is event time rather than create time",
+    "For incremental batch models, run a nightly reconciliation comparing source rows newer than the target's max against target contents",
+    "Suppress late-rate alerts during declared catch-up windows so real regressions stay visible",
+    "Give each source its own tolerance rather than a global one, and cap it so one pathological producer cannot inflate global state",
+    "Feed the measured tail directly into the downstream materialisation overlap so the repair path is sized by data",
+    "Alert with the affected intervals and the source, so the response is a scoped fix rather than a reproduction of the measurement"
+  ],
+  "references": [
+    "Apache Flink, Windows — allowed lateness default of zero with elements behind the watermark dropped, `sideOutputLateData(OutputTag)` as the way to retrieve the discarded stream, and late firings when tolerance is greater than zero — https://nightlies.apache.org/flink/flink-docs-stable/docs/dev/datastream/operators/windows/",
+    "Apache Flink, Timely Stream Processing — lateness defined relative to the watermark, elements that violate the watermark condition, and why in many real setups delays are unbounded so no time can be specified by which all elements have occurred — https://nightlies.apache.org/flink/flink-docs-stable/docs/concepts/time/",
+    "Apache Flink, Streaming Analytics — late events dropped by default, the two optional controls (side outputs and allowed lateness), and the default zero allowed lateness meaning elements behind the watermark are dropped or sent to the side output — https://nightlies.apache.org/flink/flink-docs-stable/docs/learn-flink/streaming_analytics/",
+    "Apache Spark, Structured Streaming Programming Guide — the one-directional watermark guarantee (never drop data under the threshold; data beyond it may or may not be aggregated), and the conditions under which watermarking may clean aggregation state — https://spark.apache.org/docs/3.5.8/structured-streaming-programming-guide.html",
+    "Apache Kafka, Kafka Streams Core Concepts — grace period as how long the runtime waits for out-of-order records for a window, and records discarded once stream time exceeds window end plus grace — https://kafka.apache.org/43/streams/core-concepts/",
+    "Apache Kafka, JoinWindows Javadoc — delay defined as (stream_time - record_timestamp), gracePeriodMs as the time to admit out-of-order events after window end, and the rejection rule for events delayed beyond afterWindowEnd — https://kafka.apache.org/39/javadoc/org/apache/kafka/streams/kstream/JoinWindows.html",
+    "dbt, Incremental models in-depth — the max(updated_at) cutoff and the explicit consequence that rows landing days after their partition are filtered out and 'will never make it to our model', with the lookback window as the mitigation — https://docs.getdbt.com/best-practices/materializations/4-incremental-models",
+    "Feast documentation, Running Feast in production — subtracting an hour of overlap from the materialisation interval start to account for late data, as the freshness analogue of the same problem — https://docs.feast.dev/master/how-to-guides/running-feast-in-production"
+  ]
+}

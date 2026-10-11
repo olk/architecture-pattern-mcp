@@ -1,0 +1,148 @@
+{
+  "category": "coordination",
+  "name": "failover",
+  "context": "A running service has a designated active instance serving all traffic and one or more passive instances that are replicated, standby-ready and not serving. When the active instance, availability zone or region fails, a failover process shifts production traffic to a passive instance and promotes it to active, and later a failback returns traffic once the original primary is healthy again. The passive instance may be hot (ready at any time), warm (partially provisioned, may need scaling), pilot light (minimally deployed, significant preparation needed) or cold (not deployed at all) — each choice trades RTO against cost. What makes failover safe rather than dangerous is that promotion must be exclusive: two active instances writing to the same data is split brain. Cluster implementations solve this with quorum plus fencing — STONITH, 'Shoot The Other Node In The Head' — which makes a node unable to run resources even when it is unresponsive to cluster commands, usually by cutting power or cutting its access to shared storage or the network. Microsoft's guidance is that recovery design should be chosen at architecture time and documented as explicit runbooks with owners and criteria, not discovered during the incident.",
+  "benefits": [
+    "Availability without paying for double capacity: only the active instance serves, while the passive instance costs only its standby footprint",
+    "RTO and RPO are tunable per workload by choosing hot, warm, pilot-light or cold standby — Tier 1 workloads get near-zero RPO with active-active, Tier 3 workloads tolerate hours",
+    "Data protection: synchronous or asynchronous replication to the passive instance bounds data loss, and the promotion process is what makes the replica usable",
+    "A rehearsable recovery procedure: because promotion is a defined transition, it can be tested on a schedule rather than discovered during a real outage",
+    "Applies at every scope — database replica, availability zone or whole region — with the same mechanism and progressively different requirements",
+    "Workloads can be deliberately placed in standby for planned maintenance, turning a maintenance window into a controlled, tested transition"
+  ],
+  "tradeoffs": [
+    "Cost of the standby even when unused; a warm standby shortens RTO but must still be paid for, and hot standby approaches double the bill",
+    "Split brain is the defining hazard: a network partition can leave both sides believing they are primary, and without fencing that produces data divergence or corruption — Red Hat treats stonith-enabled=false as an unsupported configuration",
+    "Promotion is not free for stateful workloads: a new primary must be elected, its role updated in the cluster's configuration, and clients must learn the new address",
+    "Application and database often have to fail over together; failing over only the application tier against a stale database in the secondary region is a common and serious mistake",
+    "Failback is a second, riskier event that is routinely under-planned; the recovered primary may hold stale data and must be resynchronised before traffic returns",
+    "Fencing itself can fail — the fence agent must reach the target's BMC or network fabric, and if that management plane is down too, automatic recovery cannot proceed",
+    "Fencing loops: in two-node clusters, a partition plus a recovering node can make the two nodes fence each other indefinitely unless wait_for_all and fencing delays are configured correctly",
+    "Manual runbooks are slower and less reliable than automation, but fully automated failover adds substantial operational complexity"
+  ],
+  "quality_attributes": {
+    "scalability": 6,
+    "maintainability": 5,
+    "reliability": 10,
+    "security": 7,
+    "performance": 7,
+    "simplicity": 4
+  },
+  "suitable_domains": [
+    "disaster-recovery",
+    "backup-and-disaster-recovery-scenarios",
+    "financial-services",
+    "banking-and-finance",
+    "financial-trading",
+    "healthcare",
+    "telecom-and-real-time-messaging",
+    "regulated-industries",
+    "global-distribution",
+    "enterprise-saas"
+  ],
+  "unsuitable_domains": [
+    "low-budget",
+    "startups-early-stage",
+    "low-traffic-applications",
+    "prototypes",
+    "mvp",
+    "static-reference-data",
+    "low-concurrency-single-node-apps"
+  ],
+  "use_cases": [
+    "A regional failover for a payment platform: Front Door health probes detect the failed origin, traffic moves to the secondary region, and the database replica there is promoted",
+    "An active-active database serving a financial trading platform, where continuity of service matters more than the doubled cost",
+    "A warm standby with autoscale rules configured in the secondary region so the sudden influx of requests triggers scale-out the moment traffic is redirected",
+    "Planned maintenance: moving a database to the standby for an upgrade, exercising the same promotion path as an unplanned failure",
+    "A five-node cluster where only the partition holding quorum may initiate fencing, which avoids both nodes fencing each other simultaneously"
+  ],
+  "avoid_when": [
+    "The cost of standby capacity exceeds the business value of the availability guarantee",
+    "Fencing hardware or a fence agent cannot be provisioned — an unfenced failover is indistinguishable from data corruption",
+    "Application and data cannot be failed over atomically, so a half-failed-over state is worse than an outage",
+    "The workload is trivially restartable and stateless, making a redundant instance simpler than a promoted replica",
+    "The team cannot commit to rehearsing failover on a schedule; an untested runbook is an assumption, not a procedure"
+  ],
+  "component_types": [
+    "Active/primary instance: currently serving all production traffic",
+    "Passive/standby instance: replicated and ready to be promoted",
+    "Fencing device: IPMI/BMC, intelligent power switch or fabric fence capable of disabling a node",
+    "Cluster membership and quorum layer: Corosync, providing reliable messaging and quorum",
+    "Resource manager: Pacemaker, which schedules resources onto nodes given cluster state",
+    "Fencer daemon: pacemaker-fenced, which selects which node executes which fence device",
+    "Traffic manager: global load balancer or DNS performing the cutover",
+    "Runbook and orchestrator: the documented, owned procedure for initiating failover and failback"
+  ],
+  "technology_stack": [
+    "Pacemaker",
+    "Corosync",
+    "DRBD",
+    "sbd watchdog fencing",
+    "IPMI",
+    "Azure Front Door",
+    "Azure Traffic Manager",
+    "Azure Site Recovery",
+    "Azure SQL Database automatic failover",
+    "Amazon Route 53",
+    "PostgreSQL streaming replication",
+    "Patroni",
+    "Keepalived"
+  ],
+  "anti_patterns": [
+    "Failover without fencing: promoting a second primary on a suspected network partition, guaranteeing split brain and data corruption",
+    "Fencing simulated by disabling the network interface, which does not reproduce a real failure — Red Hat explicitly rejects this as a fencing test",
+    "Application-tier failover without failing over the database, leaving the application talking to stale or unreachable state",
+    "Unplanned failback: returning traffic to the original primary without resynchronising it, discarding writes made in the secondary",
+    "Fencing loops in two-node clusters caused by omitting wait_for_all, leaving two rebooting nodes fencing each other forever",
+    "Assuming FIPS mode is enough: a fencing configuration that cannot reach the BMC cannot recover, and no amount of policy helps",
+    "Undocumented failover: no runbook, no named owner, no decision criteria, so the first execution happens during the incident",
+    "Treating hot standby as identical to active-active: a passive instance that is never exercised fails at exactly the moment it is needed"
+  ],
+  "migration_from": [
+    "monolithic",
+    "master-slave",
+    "space-based"
+  ],
+  "migration_to": [
+    "master-slave",
+    "multi-cloud",
+    "hybrid-cloud"
+  ],
+  "related_patterns": [
+    "master-slave",
+    "multi-cloud",
+    "hybrid-cloud",
+    "microservices",
+    "blue-green-deployment",
+    "space-based",
+    "event-driven",
+    "saga",
+    "service-mesh"
+  ],
+  "design_principles": [
+    "Exactly one active instance: promotion must be exclusive, and exclusivity is enforced by quorum plus fencing rather than by hope",
+    "Fencing is mandatory, not optional: an unresponsive node may still be writing, so the only safe recovery is to make it unable to run at all",
+    "Failover and failback are symmetric, distinct events: returning traffic requires its own criteria, resynchronisation and coordination",
+    "Recovery requirements drive architecture: RTO and RPO chosen per workload determine hot, warm, pilot-light or cold standby",
+    "Quorum governs action: only the partition holding quorum may promote or fence, which prevents dual-primary states",
+    "Rehearse it: the promotion path is executed on a schedule, so a real outage is a repetition rather than an improvisation"
+  ],
+  "best_practices": [
+    "Enable STONITH/fencing and configure at least one fence device per node — treat stonith-enabled=false as unsupported",
+    "Define the failover trigger, the authority who declares it, and the traffic cutover step in a written runbook with named owners",
+    "Fail over the application tier and the database tier together, verifying that the promoted replica is consistent with the RPO before traffic arrives",
+    "Warm-standby the secondary at reduced capacity with autoscale rules in place, so the redirected load does not immediately overwhelm it",
+    "In two-node clusters set two_node: 1 with wait_for_all and configure fencing delays so a rebooting node cannot fence its healthy peer",
+    "Test failover and failback on a schedule under realistic conditions, including a full cluster outage with a single surviving node",
+    "Monitor replication lag explicitly and alert on it — a failover is only as good as the standby's freshness",
+    "Automate only once the manual runbook is proven; automation that has never been exercised is a new failure mode"
+  ],
+  "sources": [
+    "Microsoft, Failover and failback concepts — Azure Reliability, https://learn.microsoft.com/en-us/azure/reliability/concept-failover-failback",
+    "Microsoft, Reliability/redundancy — Azure Well-Architected Framework, https://learn.microsoft.com/en-us/azure/well-architected/reliability/redundancy",
+    "Microsoft, Develop a disaster recovery plan for multi-region deployments — Azure Well-Architected Framework, https://learn.microsoft.com/en-us/azure/well-architected/design-guides/disaster-recovery",
+    "ClusterLabs, Fencing — Pacemaker Explained, https://clusterlabs.org/projects/pacemaker/doc/2.1/Pacemaker_Explained/epub/fencing.xhtml",
+    "Red Hat, Configuring fencing in a Red Hat High Availability cluster, https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/8/html/system_design_guide/assembly_configuring-fencing-system-design-guide",
+    "LINBIT, 2-node Pacemaker Clusters: Quorum, Fencing, and Recovery Considerations, https://kb.linbit.com/pacemaker-stack/two-node-pacemaker-cluster-behavior/"
+  ]
+}

@@ -1,0 +1,148 @@
+{
+  "category": "specialized",
+  "name": "multi-stage-deployment",
+  "context": "A deployment pipeline is structured as an ordered sequence of stages — build, test, deploy to development, deploy to staging, deploy to production — where each stage is a logical boundary that can succeed or fail independently, can carry its own conditions, and can be gated by approvals and checks. Azure Pipelines models this precisely: a stage is a logical boundary grouping jobs, stages run in sequence by default or can be arranged into a dependency graph, and Azure DevOps pauses execution before each stage until all pending checks on every resource that stage consumes are satisfied. AWS CodePipeline frames it as a pipeline of stages, each a logical unit isolating an environment and limiting concurrent changes in it, made up of serial or parallel actions of type source, build, test, deploy, approval or invoke. The distinguishing property versus a single-stage pipeline is that the same immutable artifact is promoted stage by stage through progressively more production-like environments, each stage adding verification rather than rebuilding — the deployment-test environment, for example, receives exactly the packages production will receive so a successful run there guarantees a successful production deployment.",
+  "benefits": [
+    "Progressive validation: each stage isolates a different class of failure — unit tests in build, integration and end-to-end in test, production-mirroring smoke tests in staging — so a failure is attributable",
+    "Build once, promote many: the identical artifact moves through every stage, so staging validates the exact bytes that reach production rather than a rebuild of the same source",
+    "Independent failure and retry: a stage that fails blocks promotion without discarding the work of the stages that already passed",
+    "Explicit governance: approvals and checks attached to environments mean the person or system allowed to promote to production is recorded and cannot be changed by editing pipeline YAML",
+    "Clearer visibility and blast radius: each stage owns its environment, its concurrency and its history, so a team can see exactly what is deployed where",
+    "Conditional promotion: stages can run only on specific branches, so release-branch content reaches production while feature branches stop earlier",
+    "Disaster-recovery rehearsal: keeping a warm alternate production environment as its own stage makes failover a pipeline operation rather than an ad-hoc one"
+  ],
+  "tradeoffs": [
+    "Environment sprawl: development, test, deployment-test and production all drift unless their configuration is generated from the same source of truth",
+    "Staging is not production — data volume, cardinality and dependency behaviour differ, so defects that only appear at production scale still reach users",
+    "Approval latency: every manual gate adds elapsed time to the release, and gates that nobody monitors become rubber stamps",
+    "Sequential stage time dominates lead time; long soak stages make the pipeline slow even when the change is trivial",
+    "Cost of maintaining faithful non-production environments, especially when each requires its own data, secrets and third-party sandboxes",
+    "Credential and configuration management across stages is a security surface in its own right, and shared secrets across environments defeat the isolation the stages were meant to create",
+    "Stateful changes (schema, queues, caches) cannot simply be replayed across stages without expand-and-contract sequences",
+    "Superpipeline: a single pipeline spanning every team and environment becomes a bottleneck whose failure blocks unrelated releases"
+  ],
+  "quality_attributes": {
+    "scalability": 5,
+    "maintainability": 7,
+    "reliability": 9,
+    "security": 8,
+    "performance": 4,
+    "simplicity": 6
+  },
+  "suitable_domains": [
+    "ci-cd-environments",
+    "enterprise-applications",
+    "regulated-industries",
+    "financial-services",
+    "healthcare",
+    "multi-team-organizations",
+    "platform-ecosystems",
+    "greenfield-projects-with-no-legacy-constraints"
+  ],
+  "unsuitable_domains": [
+    "mvp",
+    "startups-early-stage",
+    "prototypes",
+    "rapid-prototyping",
+    "low-budget",
+    "simple-single-task-automation",
+    "internal-tools"
+  ],
+  "use_cases": [
+    "A regulated payments platform where the production promotion carries a named approval and a branch-protection check that only the release branch can satisfy",
+    "A staging environment that receives byte-identical packages to production, so a successful staging deployment guarantees the production deployment",
+    "A pipeline that deploys automatically to development, automatically to staging after automated tests, and requires a manual gate before production",
+    "A deployment pipeline with dedicated rollback and alternate-production stages, both manually triggered, giving a rehearsed route back to a stable state",
+    "A regulated deployment where post-deployment checks (compliance scans, business-hours windows, Azure Monitor alert queries) gate promotion without any human present",
+    "A pipeline that promotes a change through several regions in sequence, each region gated on its own validation"
+  ],
+  "avoid_when": [
+    "The project is a prototype where the pipeline ceremony costs more than the release itself",
+    "There are not enough environments to make the staging genuine — duplicating production everywhere defeats the point",
+    "Non-production environments cannot be kept faithful, making the stages a chain of assertions rather than evidence",
+    "The team cannot keep up with the approval gates, which then become rubber stamps and provide no control",
+    "A single pipeline would span unrelated teams and products, becoming a global bottleneck on every release"
+  ],
+  "component_types": [
+    "Stage: the logical boundary in the pipeline (build, test, deploy to staging, deploy to production)",
+    "Deployment job: the job type that provides deployment history and environment tracking for a target",
+    "Environment: the deployment target that carries approvals and checks, e.g. production",
+    "Approval/check: a pre- or post-deployment gate — branch control, approval, business hours, invoked function, exclusive lock",
+    "Artifact: the immutable build output promoted unchanged between stages",
+    "Variable group / secret store: environment-scoped configuration injected at deploy time rather than baked into the artifact",
+    "Rollback and alternate-production stages: manually triggered recovery paths",
+    "Promotion condition: the rule (branch, change request, tag) deciding whether a stage runs at all"
+  ],
+  "technology_stack": [
+    "Azure Pipelines multi-stage YAML",
+    "Azure DevOps Environments and approvals",
+    "AWS CodePipeline",
+    "AWS CodeBuild",
+    "AWS CodeDeploy",
+    "Jenkins",
+    "GitHub Actions",
+    "Argo CD",
+    "Harness",
+    "Appian deployment pipeline",
+    "GitLab CI/CD"
+  ],
+  "anti_patterns": [
+    "Rebuild per stage: compiling again for each environment means staging never validated what production will run",
+    "Gates that self-approve: allowing the requester to approve their own release turns a control into theatre",
+    "Staging that is smaller than production in every dimension, so load and data-shape defects survive to production",
+    "A single superpipeline spanning all teams, products and environments, serialising unrelated releases",
+    "Approvals nobody monitors, where an expired timeout silently marks a stage skipped or leaves releases queued",
+    "Configuration copied per environment by hand, so staging validates a configuration production never sees",
+    "Treating the pipeline as the rollback strategy instead of keeping a rehearsed rollback stage",
+    "Running every test in every stage, so the pipeline takes hours and engineers start bypassing it"
+  ],
+  "migration_from": [
+    "monolithic",
+    "layered-monolith",
+    "modular-monolith"
+  ],
+  "migration_to": [
+    "blue-green-deployment",
+    "canary-deployment",
+    "failover"
+  ],
+  "related_patterns": [
+    "blue-green-deployment",
+    "canary-deployment",
+    "failover",
+    "microservices",
+    "monolithic",
+    "modular-monolith",
+    "strangler-fig",
+    "service-mesh",
+    "multi-cloud"
+  ],
+  "design_principles": [
+    "One artifact, promoted: the same immutable output moves through every stage, so earlier stages are genuine evidence about the later one",
+    "Stages as failure boundaries: each stage can fail independently, which makes a failure attributable and a retry cheap",
+    "Progressive fidelity: environments become more production-like stage by stage, each adding verification rather than merely adding delay",
+    "Gates are owned by the resource, not the pipeline: approvals live on the environment so editing YAML cannot bypass them",
+    "Conditional promotion: branch and change-request rules decide what is even eligible to reach a given stage",
+    "Rollback is a first-class stage, manually triggered and rehearsed, not an improvisation during an incident"
+  ],
+  "best_practices": [
+    "Build the artifact once and promote that exact package through every stage — never rebuild per environment",
+    "Make staging mirror production in configuration, instance sizes and topology, differing only in scale and data",
+    "Attach approvals and checks to the environment rather than to pipeline YAML, so a pipeline author cannot remove them",
+    "Disable self-approval and require domain-responsible approvers on production environments",
+    "Use branch-protection checks in the stage conditions so only release-branch builds are eligible for production",
+    "Keep secrets out of the artifact and pipeline definitions — inject them from a secret store per environment",
+    "Add an explicitly triggered rollback stage and an alternate-production stage, and exercise both on a schedule",
+    "Set timeouts and conditions on approval tasks deliberately, so a timed-out gate fails loudly rather than skipping silently",
+    "Extract deployment steps into shared templates so stages differ only by environment and parameters"
+  ],
+  "sources": [
+    "Microsoft, Use multistage pipelines in Azure Pipelines, https://learn.microsoft.com/en-us/azure/devops/pipelines/process/create-multistage-pipeline",
+    "Microsoft, Stages in Azure Pipelines, https://learn.microsoft.com/en-us/azure/devops/pipelines/process/stages",
+    "Microsoft, Build a YAML pipeline with stages, https://learn.microsoft.com/en-us/azure/devops/pipelines/process/run-stages",
+    "Microsoft, Pipeline deployment approvals and checks, https://learn.microsoft.com/en-us/azure/devops/pipelines/process/approvals",
+    "AWS, CodePipeline concepts, https://docs.aws.amazon.com/codepipeline/latest/userguide/concepts.html",
+    "Appian, DevOps in Appian, https://docs.appian.com/suite/help/26.9/devops-with-appian.html",
+    "Appian, Application Deployment Guide, https://community.appian.com/success/w/guide/3062/application-deployment-guide"
+  ]
+}

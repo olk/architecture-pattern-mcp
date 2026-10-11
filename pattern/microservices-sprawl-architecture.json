@@ -1,0 +1,103 @@
+{
+  "category": "structural",
+  "name": "microservices-sprawl",
+  "context": "ANTI-PATTERN. A system is decomposed into far more services than its complexity warrants — service counts ranging from a team of 60 with 20 services to a team of 4 with 200 — because the 'micro' was taken literally, because decomposition was driven by a normalised database view rather than by a domain boundary, or because every new hire triggered an extraction. Defining more services moves complexity from inside services to between them: each additional service makes development, testing and deployment harder, and diminishing returns set in once services are already small and fast to test. The result is a distributed monolith that lost the one thing distribution was supposed to buy.",
+  "benefits": [
+    "Naming the failure mode precisely separates it from the microservices pattern itself, which is legitimate under real complexity",
+    "The diagnostic signals are concrete: a team of four owning two hundred services, CRUD-shaped services with no behaviour, coordinated releases, and a debug story that spans every service",
+    "The remedy is measurable — one service per team is the floor, and further splits should follow team growth, not table counts",
+    "Starting larger around a bounded context is explicitly the advised counter-move, so the anti-pattern has a constructive exit"
+  ],
+  "tradeoffs": [
+    "Documenting an anti-pattern does not prevent it — the incentives that produce it (independence per unit, per-team ownership) are the same ones the pattern sells",
+    "Pulling services back together is expensive and often politically impossible once contracts and deployments are coordinated across them",
+    "Severity is invisible until independent deployment fails, which is usually discovered during an incident rather than in review",
+    "The style is not wrong in the large-system limit, so the pattern must be argued from complexity, not from dogma"
+  ],
+  "quality_attributes": {
+    "scalability": 3,
+    "maintainability": 2,
+    "reliability": 4,
+    "security": 4,
+    "performance": 4,
+    "simplicity": 2
+  },
+  "suitable_domains": [
+    "microservices",
+    "enterprise-applications"
+  ],
+  "unsuitable_domains": [],
+  "use_cases": [
+    "Recognising an existing estate that needs consolidation back into a modular monolith or a smaller service set",
+    "Architecture review of a proposed decomposition before pipelines and per-service teams exist",
+    "Evaluating whether a candidate service boundary is a business capability or a database table",
+    "Planning a rollback or an inverted-extraction when services must be merged to restore independent deployment",
+    "Setting an explicit budget for service count against organisational capacity"
+  ],
+  "avoid_when": [
+    "The team is large, the domain genuinely bounded, and each service is owned and released by a durable team",
+    "Services are shaped around business capabilities rather than around CRUD resources",
+    "Deployments are demonstrably independent — a suite of services whose releases must be coordinated is not microservices",
+    "The operational platform (CI/CD, observability, on-call, service discovery) already exists and is exercised"
+  ],
+  "component_types": [
+    "Excess services: an order or magnitude more deployables than the team structure supports",
+    "Anemic CRUD services: one per entity or table, carrying no behaviour and all the coordination cost",
+    "Coordinated release train: services that must be deployed in lockstep, which negates independent deployment",
+    "Distributed monolith: technically separate, logically intertwined through synchronous calls and shared data",
+    "Coupling fabric: chatty inter-service calls whose failure and latency paths multiply with service count",
+    "Operational tax: the per-service pipeline, monitoring, alerting and on-call burden"
+  ],
+  "technology_stack": [
+    "Service mesh (retries and timeouts amplifying with call count)",
+    "CI/CD per service",
+    "Distributed tracing",
+    "API gateway",
+    "Shared database schemas"
+  ],
+  "anti_patterns": [
+    "One service per database table or CRUD resource — the normalised view of the data is not a domain boundary",
+    "Splitting on team-size arithmetic before the teams exist, producing services nobody owns end to end",
+    "Coordinated multi-service releases, which means the deployment independence the architecture was bought for does not exist",
+    "Chatty synchronous call chains where half a dozen services call another half a dozen, and latencies compound",
+    "Creating services in a greenfield project rather than by splitting one that demonstrably outgrew a monolith"
+  ],
+  "migration_from": [
+    "microservices",
+    "service-oriented-architecture"
+  ],
+  "migration_to": [
+    "modular-monolith",
+    "layered-monolith"
+  ],
+  "related_patterns": [
+    "microservices",
+    "modular-monolith",
+    "monolithic",
+    "layered-monolith",
+    "strangler-fig",
+    "service-mesh",
+    "service-oriented-architecture"
+  ],
+  "design_principles": [
+    "Complexity of the system must justify the complexity distribution introduces",
+    "A service must be a business capability, not a table",
+    "One service per team is the floor, not the target",
+    "If releases need coordinating, it is not a microservice architecture",
+    "Complexity is moved into the interconnections, not removed"
+  ],
+  "best_practices": [
+    "Do not start a greenfield project with microservices; split a monolith that has actually outgrown itself",
+    "Size services by what the delivery and operations teams can independently release, monitor and operate",
+    "Before adding a service, ask what problem it clearly solves for maintainability or testability",
+    "Merge services that always deploy together until independent deployment is real, not aspirational",
+    "Keep module boundaries inside a modular monolith strong enough that the split stays unnecessary"
+  ],
+  "references": [
+    "Martin Fowler, MicroservicePremium, https://www.martinfowler.com/bliki/MicroservicePremium.html",
+    "Martin Fowler, Microservice Trade-Offs — complexity shifted to the interconnections between services, https://martinfowler.com/articles/microservice-trade-offs.html",
+    "Chris Richardson, Microservices adoption anti-pattern: More the merrier, https://microservices.io/post/antipatterns/2019/05/21/antipattern-more-the-merrier.html",
+    "Zhamak Dehghani, How to break a Monolith into Microservices — cambrian explosion of anemic services for CRUD resources, https://martinfowler.com/articles/break-monolith-into-microservices.html",
+    "Martin Fowler, Microservices Guide — Monolith First and baseline operational competencies, https://martinfowler.com/microservices/"
+  ]
+}

@@ -1,0 +1,162 @@
+{
+  "name": "dataset-tracker",
+  "category": "data",
+  "context": "A dataset is a thing that changes under you. The column a dashboard groups by gets dropped by an upstream deploy; the row count that a freshness check compares against last week is computed by a job that silently started filtering a segment; the table a report depends on is rebuilt by two different pipelines on different schedules, so 'yesterday's numbers' are not reproducible. Lineage alone answers 'what produced this'; it does not answer 'what does this dataset look like right now, and did it change underneath me'. The dataset tracker is the component that maintains a versioned record per dataset — its identity, its current shape, its freshness, and the ordered set of runs that produced each version — so that consumers can detect change instead of assuming stability. The design follows a strict separation of static and per-run metadata, which is the part people get wrong when they build this by hand. OpenLineage makes it explicit: a Dataset is an abstract representation of discrete data (a table, an object in a bucket, a directory), the Job is what produces it, and what does NOT change from run to run (schema, ownership, documentation) lives in a DatasetFacet, while what DOES change every run (which time partition was read or written) lives in an InputFacet or OutputFacet. Marquez implements the storage side of that split with two kinds of event: RunEvent is emitted at runtime and carries a run ID plus the run's state transition, and DatasetEvent is design-time metadata about a dataset emitted outside the context of any run. Storage is by version pointer — 'each immutable dataset version is mapped to a metadata change and the run ID that modified the dataset', so the schema a consumer read last Tuesday is still addressable after Tuesday's job overwrote it. The tracker is what makes impact analysis possible: given a column-level or dataset-level edge, it answers which downstream assets are at risk before you ship the breaking change.",
+  "benefits": [
+    "Detects breaking change before the consumer discovers it — a tracked schema version diff turns 'the dashboard is wrong' into a build failure or a targeted warning",
+    "Makes impact analysis answerable: given a lineage edge, the set of downstream jobs, models and dashboards at risk is a graph walk, not a phone call",
+    "Preserves history — because each dataset version maps to the metadata change and the run ID that produced it, an old definition remains addressable for audit and debugging",
+    "Separates design-time from run-time metadata, so schema and ownership do not churn on every run and per-run volume does not overwrite the definition",
+    "Enables data-aware scheduling — Airflow asset events mark an asset updated only if the producing task completed successfully, so a failed producer is visible as a missing update rather than a silent green pipeline",
+    "Supports freshness and completeness as tracked properties rather than one-off queries scattered across dashboards",
+    "Centralises the contract so every producer reports against one vocabulary instead of each team inventing its own dataset naming",
+    "Provides the join key for cost and performance attribution: you cannot attribute a slow query or an expensive run to an upstream stage without stable dataset identity",
+    "Cheap to consume: once edges exist, consumers query the graph rather than re-deriving lineage by parsing SQL in their own tooling"
+  ],
+  "tradeoffs": [
+    "Instrumentation is the cost — lineage only exists where a job actually emits events, and an uninstrumented producer silently contributes a disconnected node",
+    "Naming discipline is mandatory: the graph is stitched together by name and namespace, so two spellings of the same dataset create two entities and a broken edge",
+    "Automatically inferred column-level lineage is a heuristic. SQL parsers resolve straightforward queries well and break on dynamic SQL, templated identifiers, or computed column expressions",
+    "Hand-authored edges and machine-ingested edges conflict — DataHub's guidance is that hand and programmatic lineage may overwrite each other, so hand edits need `incremental_lineage` or time-based filtering to survive",
+    "Metadata volume grows with run frequency, and a job running every minute with many outputs produces a lot of run events for an operator to reason about",
+    "Tracking is not enforcement: a tracker that emits a schema-change event after the fact does not stop a breaking deploy; that requires a gate in the delivery path",
+    "Cross-platform stitching is imperfect — manually added edges may point at entities the automatic ingestion also creates under different URNs, producing orphans rather than connections",
+    "There is a real privacy and governance cost to recording column names and sample values; a tracker is an inventory of your data, which is sensitive in a regulated estate",
+    "Airflow's own asset model shows the failure mode of an event-driven trigger: a job that has not run in seven days still exists in the catalogue but does not appear in the asset view until a run occurs, so absence of evidence needs its own detector"
+  ],
+  "quality_attributes": {
+    "scalability": 8,
+    "maintainability": 9,
+    "reliability": 7,
+    "security": 6,
+    "performance": 7,
+    "simplicity": 6
+  },
+  "suitable_domains": [
+    "data-pipelines",
+    "data-processing",
+    "data-intensive-workloads",
+    "data-science-platforms",
+    "big-data-analytics",
+    "enterprise",
+    "enterprise-systems-needing-centralized-governance",
+    "regulatory-compliance",
+    "audit-trail-requirements",
+    "distributed-data-pipelines",
+    "clickstream-analytics",
+    "etl",
+    "multi-team-organizations",
+    "polyglot-persistence-needs"
+  ],
+  "unsuitable_domains": [
+    "prototypes",
+    "startup-pocs",
+    "single-service-applications",
+    "small-applications",
+    "low-concurrency-single-node-apps",
+    "static-requirements",
+    "limited-operational-maturity",
+    "real-time-deterministic",
+    "ultra-low-latency-requirements"
+  ],
+  "use_cases": [
+    "Airflow DAGs whose operators declare inlets and outlets, emitting lineage automatically on every run so the downstream DAG only schedules when the upstream completed",
+    "A governed warehouse where each table's schema version, owner and last-modified timestamp are tracked, and a schema-change event opens a ticket naming every downstream consumer",
+    "Column-level lineage added on top of table-level edges so a renamed dimension key is traced to the specific report columns it feeds",
+    "Impact analysis before a breaking migration: query the downstream closure of a dataset to decide which teams to notify",
+    "Freshness tracked as a first-class dataset property so 'stale' is visible in the catalogue rather than discovered when a user screenshots an empty dashboard",
+    "Multi-team organisation where each team's pipelines are stitched into one graph so a shared upstream table has a single owner and a single list of dependents",
+    "Audit and regulatory reporting that must reconstruct which definition of a table was in force during a given period"
+  ],
+  "avoid_when": [
+    "The estate is a single dataset with one producer and one consumer and no governance requirement — the tracker is pure overhead",
+    "You need enforcement rather than observation; a tracker reports change after the fact and must be paired with a gate to block anything",
+    "Producers cannot be modified to emit events; an uninstrumented pipeline yields a disconnected node and the graph is quietly wrong",
+    "The data is highly sensitive and there is no governance decision on what column-level metadata may be recorded",
+    "Naming is not agreed across teams yet — a tracker built before the naming convention is a tracker full of duplicate entities",
+    "You need real-time guarantees; metadata ingestion is asynchronous and the tracker is always eventually consistent with the warehouse",
+    "You want sample data values captured; that is a different problem with a different approval process"
+  ],
+  "component_types": [
+    "Dataset entity: the abstract representation of discrete data — a table, an object, a directory — identified by namespace and name",
+    "Job / DataFlow entity: the producer, with its source location and declared inputs and outputs",
+    "Run entity: a single execution with a unique run ID (UUIDv7 recommended), its code version, arguments, inputs, outputs and state transitions",
+    "RunEvent: the runtime event emitted at start, complete and fail, carrying the run's input and output dataset facets",
+    "DatasetEvent: the design-time event carrying schema, ownership and documentation, explicitly not associated with any run",
+    "DatasetFacet: metadata stable across runs (schema, description, lifecycle state such as create, alter, drop, overwrite, rename)",
+    "InputFacet / OutputFacet: metadata that changes every run, such as the time partition read or written",
+    "Version pointer: the durable link from a dataset to its current version and back through the immutable history of metadata changes and the runs that caused them",
+    "Lineage graph store: the backend holding dataset-to-job and job-to-dataset edges, queryable by upstream, downstream and column-level traversal",
+    "Impact-analysis query: the downstream closure computation used to enumerate consumers of a changed dataset or column"
+  ],
+  "technology_stack": [
+    "OpenLineage",
+    "Marquez",
+    "DataHub",
+    "OpenMetadata",
+    "Apache Airflow assets and data-aware scheduling",
+    "dbt",
+    "Apache Spark event listeners",
+    "Snowflake and BigQuery query logs",
+    "PostgreSQL metadata stores",
+    "REST and GraphQL lineage APIs"
+  ],
+  "anti_patterns": [
+    "Building a lineage graph from one hand-written YAML file that nobody updates, so it is correct on day one and wrong forever",
+    "Treating 'the pipeline ran green' as equivalent to 'the data arrived' — asset events mark updated only on successful task completion, and a skipped or failed producer is a missing update",
+    "Storing per-run metadata inside the dataset definition, so each run overwrites the schema and the previous shape is unrecoverable",
+    "No version pointer on datasets, making the definition in force last month unreconstructable for audit",
+    "Splitting naming conventions between platforms so the same logical table becomes two entities with no edge between them",
+    "Auto-inferring column-level lineage for dynamic SQL and trusting the result without spot-checking the parse",
+    "Allowing hand-authored lineage to be silently overwritten by the next automatic ingestion run",
+    "Skipping declaration of outlets on operators that do write data, which is the most common source of a disconnected downstream node",
+    "Using the tracker's presence as an enforcement mechanism — an observed schema break has already reached every consumer that reads between detection and response"
+  ],
+  "migration_from": [
+    "monolithic",
+    "layered-monolith"
+  ],
+  "migration_to": [
+    "data-mesh",
+    "event-driven",
+    "command-query-responsibility-segregation"
+  ],
+  "related_patterns": [
+    "data-mesh",
+    "event-driven",
+    "command-query-responsibility-segregation",
+    "event-sourcing",
+    "pipe-and-filter",
+    "lambda-architecture",
+    "kappa-architecture",
+    "layered-monolith"
+  ],
+  "design_principles": [
+    "Separate design-time from run-time metadata — schema and ownership are dataset facets, partition coverage is a per-run input/output facet, and conflating them makes history unrecoverable",
+    "Version everything, never overwrite — an immutable dataset version mapped to the metadata change and run ID that caused it is what makes audit and replay possible",
+    "Identity before metadata — the graph is stitched by namespace and name, so naming discipline is a prerequisite, not a cleanup task",
+    "Observe at the point of production — lineage emitted by the job that touches the data is accurate; lineage re-derived later by parsing SQL is a heuristic",
+    "Absence is a signal — a dataset with no successful run since its last run is itself an observable event, not a silent state",
+    "Track the smallest useful unit — table-level edges are cheap and reliable, column-level edges are valuable and inferred, and the gap should be a conscious choice",
+    "Enforcement belongs downstream of tracking; the tracker makes change visible, a gate makes it consequential"
+  ],
+  "best_practices": [
+    "Emit a stable run ID per execution (UUIDv7) and reuse it across the run's START, COMPLETE and FAIL events so run-level history stitches correctly",
+    "Register datasets on first production rather than requiring pre-registration, and reconcile the created entity against the declared input on the completing event",
+    "Declare inlets and outlets explicitly on any operator whose automatic extraction is incomplete, accepting the risk of overwrite by setting incremental ingestion where available",
+    "Partition large registries by domain on the ingestion endpoint when the tool supports it, so a consumer can filter lineage by business domain",
+    "Run a periodic reconciliation that compares the tracked entity list against the warehouse's actual table list, and treat orphans in both directions as defects",
+    "Adopt one naming convention centrally and enforce it in the ingestion layer rather than in documentation",
+    "Feed freshness from the same event stream that carries the run, so freshness is a property of the dataset record and needs no separate query",
+    "Alert on lineage gaps (a dataset with a producing job but no edges, or a consuming job with undeclared inputs) as a pipeline defect with an owner"
+  ],
+  "references": [
+    "OpenLineage, Object Model (Dataset vs Job vs Run; DatasetFacet vs InputFacet/OutputFacet; RunEvent, JobEvent and DatasetEvent as runtime vs design-time lineage) — https://openlineage.io/docs/spec/object-model",
+    "OpenLineage, Getting Started (run ID as UUIDv7, /lineage endpoint, START and COMPLETE events, Marquez as the reference HTTP backend) — https://openlineage.io/getting-started/",
+    "Marquez, Quickstart (centralised data model, dataset version pointers, immutable dataset versions mapped to a metadata change and the run ID that modified it, schema-change history queries) — https://marquezproject.ai/docs/quickstart/",
+    "DataHub, Lineage feature guide (table-level vs column-level lineage, impact analysis, hand-edited vs automatically ingested lineage and the overwrite caveat) — https://docs.datahub.com/docs/features/feature-guides/lineage",
+    "DataHub, OpenLineage integration (REST endpoint, Spark listener plugin, domain assignment at the endpoint because the event carries no domain facet, incremental lineage flags) — https://docs.datahub.com/docs/lineage/openlineage",
+    "DataHub, Airflow integration (automatic column-level lineage from SQL operators, manual inlets/outlets annotation, native Airflow assets used for data-aware scheduling) — https://docs.datahub.com/docs/lineage/airflow",
+    "Apache Airflow, Asset-Aware Scheduling (an asset is marked updated only if the producing task completes successfully; failed or skipped producers emit no update) — https://airflow.apache.org/docs/apache-airflow/stable/authoring-and-scheduling/asset-scheduling.html"
+  ]
+}

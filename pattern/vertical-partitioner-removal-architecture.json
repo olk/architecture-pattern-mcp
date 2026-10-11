@@ -1,0 +1,105 @@
+{
+  "category": "data",
+  "name": "vertical-partitioner-removal",
+  "context": "The vertical split is designed specifically so a whole field group, subject or segment can be removed independently while everything around it stays intact — a right-to-erasure request against an append-only event store, a retention obligation for one data class, or a tenant offboarding. The mechanics differ from ordinary vertical partitioning: deletion must be provable, must not require rewriting unrelated data, and must be provably propagated to every replica, aggregate and backup that could still re-identify the subject.",
+  "benefits": [
+    "Makes erasure feasible at a granularity that undifferentiated storage cannot offer — the target group is a deletable unit",
+    "Destroys data without rewriting history, so immutable audit trails and append-only logs stay intact and verifiable",
+    "Key destruction is bit-level final: the ciphertext remains everywhere but becomes permanently unrecoverable, including in replicas and backups",
+    "Leaves a tombstone behind so referential integrity survives and an append-only ledger keeps a valid, if dangling, pointer",
+    "Allows completeness to be proven from live state rather than asserted — a queryable predicate over key state, orphan counts and preserved facts"
+  ],
+  "tradeoffs": [
+    "Key-based erasure is only as good as key coverage: any directly identifying column stored in plaintext outside the shredded key survives and re-identifies the subject",
+    "Per-subject or per-tenant key separation has a real storage, latency and key-management cost, and the key inventory itself becomes critical infrastructure",
+    "Derived stores, search indexes, caches and aggregate rollups are outside the shredded envelope unless they are enumerated explicitly",
+    "A wrong key deletion is irreversible and may take out data that retention required you to keep",
+    "Undeleting becomes impossible by construction, which conflicts with any requirement to reverse an erroneous erasure"
+  ],
+  "quality_attributes": {
+    "scalability": 6,
+    "maintainability": 5,
+    "reliability": 8,
+    "security": 10,
+    "performance": 6,
+    "simplicity": 4
+  },
+  "suitable_domains": [
+    "audit-regulatory",
+    "regulatory-compliance",
+    "data-pipelines"
+  ],
+  "unsuitable_domains": [],
+  "use_cases": [
+    "GDPR Article 17 erasure against an append-only event store that must keep its audit guarantees",
+    "Erasing one tenant from a multi-tenant store without rewriting shared history",
+    "Retaining medical or financial identifiers in a separately shreddable group while keeping de-identified aggregates",
+    "Destroys a compromised device's credentials and per-device payload group on revocation",
+    "Dropping a time range from an append-only time-series store by destroying the segment's key or dropping the chunk"
+  ],
+  "avoid_when": [
+    "The data is not segmented per subject, per tenant or per field group — without a boundary there is nothing to delete",
+    "The obligation permits a retention window and a forward-going delete, which is far cheaper than immediate shredding",
+    "Aggregates or rollups already contain the value in a form that cannot be attributed to the subject, and destroying keys will not remove it",
+    "The system must be able to undo an erasure, which key destruction makes impossible"
+  ],
+  "component_types": [
+    "Per-subject key record: stable non-secret reference plus destroyable key material; null key material is the canonical erased state",
+    "Tombstone: surviving identifier row that keeps append-only references structurally valid after shredding",
+    "Erasable-field group: the vertically split partition whose payload is sealed under the subject key",
+    "Purge manifest: explicit enumeration of every plaintext surface that must also be cleared, with per-surface counts captured before the write",
+    "Immutability guard: trigger-enforced append-only enforcement on ledgers that must survive the erasure",
+    "Completeness predicate: queryable check that the key is destroyed, no enumerated surface retains personal data, and the erasure fact is preserved"
+  ],
+  "technology_stack": [
+    "Per-subject DEK wrapped by a KEK",
+    "AWS KMS / GCP Cloud KMS / Vault Transit",
+    "Apache Kafka (null-value tombstones and log compaction)",
+    "TimescaleDB chunk drops",
+    "Column-level encryption libraries"
+  ],
+  "anti_patterns": [
+    "Issuing a DELETE against the live table while replicas, backups, search indexes and rollups still hold the subject",
+    "Deriving the subject key from a global key-encryption key, which yields revocation, not erasure — the ciphertext remains re-derivable",
+    "Shredding without an explicit manifest, so plaintext columns outside the sealed envelope silently survive",
+    "Dropping the tombstone row, breaking every append-only record that referenced it",
+    "Claiming erasure from the absence of a key with no completeness predicate re-derived from live state"
+  ],
+  "migration_from": [
+    "single-blob-per-subject-storage",
+    "row-deletion-as-compliance",
+    "no-design-for-erasure"
+  ],
+  "migration_to": [
+    "vertical-partitioner",
+    "command-query-responsibility-segregation"
+  ],
+  "related_patterns": [
+    "event-sourcing",
+    "data-mesh",
+    "command-query-responsibility-segregation",
+    "event-driven",
+    "master-slave"
+  ],
+  "design_principles": [
+    "Deletability is a design property of the layout, not a runtime operation",
+    "Immutable structures survive erasure; the payload becomes unreadable rather than being rewritten",
+    "Completeness is provable from live state, not asserted in a ticket",
+    "Every surface holding personal data is enumerated; unenumerated surfaces are presumed to survive",
+    "Key material is independent of any key that could re-derive it"
+  ],
+  "best_practices": [
+    "Capture per-surface row counts before the destructive write, since a pointer-only surface counts as data",
+    "Perform key shred, plaintext purge and the erasure-fact append in a single transaction so a crash cannot leave a shredded key with un-purged surfaces",
+    "Use per-subject keys that are random and independent, not derived from a master key",
+    "Keep an append-only erasure ledger recording who, what, when and scope — ids and counts only, never the payload",
+    "Test the completeness predicate against a synthetic subject after every schema change that adds a surface"
+  ],
+  "references": [
+    "halleyhq/crypto-shredder — GDPR-safe erasure for event-sourced systems by per-subject key destruction, https://github.com/halleyhq/crypto-shredder",
+    "cqrs-es-crypto, key_store.rs — per-subject DEK management and atomic shredding within a transaction, https://docs.rs/cqrs-es-crypto/latest/src/cqrs_es_crypto/key_store.rs.html",
+    "Ink & Switch, Local-first software — local-first data ownership and the tension between immutability and erasure, https://www.inkandswitch.com/essay/local-first/",
+    "Apache Kafka, Core Concepts — KTable null values as delete tombstones and log compaction, https://kafka.apache.org/43/streams/core-concepts/",
+    "TimescaleDB, Hypertables — time-partitioned chunks as independently droppable segments, https://docs.timescale.com/use-timescale/latest/hypertables/"
+  ]
+}

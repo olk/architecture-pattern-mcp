@@ -1,0 +1,167 @@
+{
+  "name": "lag-detector",
+  "category": "data",
+  "context": "This pattern is a measurement instrument, not a repair mechanism, and it is not the same as a flow interruption detector. A lag detector answers one quantitative question continuously: how far is the consumed position behind the produced position? In Kafka's terms, offset lag is 'the difference between the latest offset available in a Kafka topic partition and the offset that a consumer group has consumed', and consumer latency is 'the time delay between production and consumption'. Both exist, and using them together is the point, because together they separate a consumer that is slow from a consumer that is stopped — the Cloud guidance is explicit that offset lag and consumer latency 'help you distinguish between slow consumers and stuck consumers'. Every major Kafka distribution exposes the same measurement under different names, which tells you what the canonical instrument is: AWS MSK publishes EstimatedMaxTimeLag, EstimatedTimeLag, MaxOffsetLag, OffsetLag and SumOffsetLag through CloudWatch or Prometheus open monitoring; Confluent Platform exposes a `consumer-lag-offset` MBean giving the difference between the last offset stored by the broker and the last committed offset, gated behind `confluent.consumer.lag.emitter.enabled` with a 60-second default interval, and it warns that the emitter 'does not take latency, meaning the time since the last record was fetched, into account but provides the consumer lag in offsets only'. That last sentence is the detector's most important design constraint: a lag number in records is not comparable across topics with different record sizes or produce rates, so a threshold expressed in records is meaningless without context, and the offset and high-water marks do not even update atomically — one exporter notes that because 'the offset and high-water metrics are updated separately the offset value can be more up-to-date than the high-water, resulting in a negative lag'. The detector's job is to normalise, trend and threshold this signal — and the single most important behaviour is to alert on the rate of change rather than on an absolute value, because a fixed record threshold fires constantly during legitimate catch-up after a restart and never fires for a small topic that is stuck permanently.",
+  "benefits": [
+    "Turns an invisible condition into an SLO measure: 'we are N minutes behind' is a number with a threshold, a trend and an owner, not a feeling",
+    "Rate-of-change alerting beats absolute thresholds in practice — a growing-lag rule fires only when lag is genuinely increasing, not during normal catch-up after a consumer restart",
+    "Offset lag and consumer latency together classify the fault: one points to throughput, the other points to a stopped or absent consumer, so the response differs",
+    "Cheap and universal: exporters read consumer group offsets and the partition high-water mark through the Admin API, with no JMX access to brokers required",
+    "Works for batch freshness as well as stream lag — the same lag-versus-now comparison expresses pipeline delay in seconds when the produced side is a timestamped record",
+    "Per-partition granularity localises the problem: total lag hides that one partition of twenty is stuck while the others are caught up",
+    "Supports predictive capacity decisions, since a stable lag-to-throughput relationship is what tells you how many consumers you need before the peak",
+    "Rebaunching and rebalance events are separable from genuine slowness when rebalance metrics are monitored alongside lag, since frequent or long rebalances cause lag spikes",
+    "Summed and max-aggregated variants let you alert once per consumer group instead of paging once per partition",
+    "Feeds the freshness SLA that downstream consumers actually care about, which is time-based and far more meaningful to a stakeholder than a record count"
+  ],
+  "tradeoffs": [
+    "The metric set is absent rather than zero when a consumer group has no active members and no committed offsets, so 'no data' must be handled explicitly in the alerting rule",
+    "A group with zero lag is ambiguous: it means either caught up or nobody is consuming, and distinguishing them requires checking that the committed offset is actually moving",
+    "Record-count lag is not comparable across topics with different record sizes, so a single global threshold is meaningless and thresholds have to be per topic or expressed in time",
+    "Consumer lag in offsets ignores latency — the Confluent emitter 'does not take latency ... into account', so a time-based estimate and an offset value can disagree materially",
+    "Exporter-derived lag can be transiently negative because the offset and high-water marks are updated separately, which needs a clamp or an alert filter to avoid nonsense pages",
+    "A consumer that has been stopped for a day reports enormous lag that looks identical to a slow consumer, and the threshold calibrated for one is wrong for the other",
+    "Reading offsets through the Admin API is not free; a scrape interval that is too aggressive loads the cluster for precision nobody uses",
+    "Rebalance storms create lag spikes that look like capacity problems and send the team to scale when the fix is in consumer configuration",
+    "Per-partition metrics multiplied by hundreds of partitions produce alert storms unless the rules group by consumer group and topic",
+    "Lag is a property of the transport, not of the business — it cannot tell you whether the delayed data mattered, so it cannot be the only freshness signal"
+  ],
+  "quality_attributes": {
+    "scalability": 8,
+    "maintainability": 8,
+    "reliability": 8,
+    "security": 5,
+    "performance": 9,
+    "simplicity": 7
+  },
+  "suitable_domains": [
+    "stream-processing",
+    "streaming",
+    "data-pipelines",
+    "distributed-data-pipelines",
+    "messaging-systems",
+    "high-throughput-streaming",
+    "event-driven-workloads",
+    "real-time-analytics",
+    "batch-processing",
+    "data-intensive-workloads",
+    "queue-processing",
+    "log-analysis",
+    "clickstream-analytics",
+    "enterprise"
+  ],
+  "unsuitable_domains": [
+    "prototypes",
+    "startup-pocs",
+    "simple-request-response",
+    "purely-synchronous-workloads",
+    "static-requirements",
+    "simple-crud-applications",
+    "low-concurrency-single-node-apps",
+    "small-applications"
+  ],
+  "use_cases": [
+    "Kafka consumer groups scraped by a lag exporter every 30 seconds, with an alert on `rate(lag[10m]) > 0` sustained for 15 minutes rather than on an absolute record count",
+    "Amazon MSK clusters exposing EstimatedTimeLag and OffsetLag through CloudWatch, with a freshness SLO expressed in seconds rather than records",
+    "Confluent Platform with the consumer lag emitter enabled and the `consumer-lag-offset` MBean scraped, monitored alongside max pending rebalance time to separate rebalance spikes from real slowness",
+    "A pipeline where lag is expressed as the age of the newest processed record versus wall clock, making the metric directly interpretable as data staleness",
+    "Per-partition lag dashboards that reveal a single hot partition skewing the group's total, with alerting grouped by consumer group and topic to avoid per-partition storms",
+    "Consumer scaling decisions driven by the relationship between lag, consumer count and observed throughput during peak hours",
+    "A detector that alerts when a non-empty partition has no tracking consumer group at all, using the produced offset present with no matching committed offset",
+    "Event-driven orchestrators monitoring downstream queue depth as an arrival-age metric feeding a freshness SLO for downstream Datasets"
+  ],
+  "avoid_when": [
+    "The system is synchronous request/response with no queue between stages — there is no lag to measure",
+    "The flow has stopped entirely rather than fallen behind; that is a flow interruption detector with an expectation-based check, and lag alone reports it as zero or missing",
+    "Records are large and heterogeneous, making an offset difference a poor proxy for time behind — use a timestamp-based freshness measure instead",
+    "The dataset has no arrival expectation and a paused stream is legitimate — the detector will page on every planned outage",
+    "You need per-record latency inside processing rather than queue position — that is a tracing problem, not a lag problem",
+    "The producer is idle and the consumer is correct; a shared dashboard then shows zero lag while the business data is stale, which is a different detector's job",
+    "The monitoring stack cannot distinguish missing series from zero values, in which case the most important failure mode is invisible"
+  ],
+  "component_types": [
+    "Offset collector: reads committed consumer group offsets and partition log-end offsets, via the Kafka Admin API, JMX emitter, or by consuming `__consumer_offsets` directly",
+    "Lag calculator: derives offset lag (log-end minus committed) and separately consumer latency (production to consumption delay), keeping the two distinct",
+    "Time-normalised estimator: converts a record-count lag into an estimated seconds-behind using observed produce rate, since raw offset values are not comparable across topics",
+    "Exporter: publishes the series to a metric store — Prometheus endpoints, CloudWatch, or a vendor metrics API",
+    "Grouping and aggregation layer: per-partition series rolled up into per-topic and per-consumer-group totals, with sum versus max as an explicit choice",
+    "Rate-of-change rule: the growing-lag alert that fires on sustained positive derivative rather than on an absolute threshold",
+    "Progress rule: the check that the committed offset is actually advancing, which disambiguates zero lag from an absent consumer",
+    "Rebalance and consumer-instance metrics: max pending rebalance time and fetch rates, which explain lag spikes that are not capacity problems",
+    "Freshness SLO definition: the threshold in seconds, per topic, derived from the business requirement rather than from historical averages",
+    "Alert grouping and routing: grouping by consumer group and topic so a fan-out across partitions becomes one notification"
+  ],
+  "technology_stack": [
+    "Apache Kafka Admin API and consumer groups CLI",
+    "Prometheus and Alertmanager",
+    "kafka-lag-exporter",
+    "prometheus-kafka-consumer-group-exporter",
+    "kafka_exporter",
+    "Amazon MSK CloudWatch consumer lag metrics",
+    "Amazon MSK open monitoring with Prometheus",
+    "Confluent Platform consumer lag emitter and JMX",
+    "Confluent Cloud Metrics API",
+    "Grafana dashboards"
+  ],
+  "anti_patterns": [
+    "Alerting on an absolute record threshold, which fires constantly during legitimate catch-up after a restart and misses a permanently stuck low-volume topic",
+    "Treating a zero-lag reading as 'healthy' without checking that the committed offset is moving, since a consumer group with no members reports zero",
+    "Ignoring that the metric series disappears when a group has no active members and no committed offsets, so the alert rule needs an explicit absence branch",
+    "Using one global record threshold across topics of different record sizes and produce rates",
+    "Paging on per-partition lag, producing hundreds of notifications for one stuck consumer",
+    "Scaling the consumer fleet in response to a rebalance-driven lag spike instead of fixing the consumer configuration",
+    "Scrape intervals of a few seconds to buy precision nobody uses while loading the cluster's Admin API",
+    "Alerting on time-estimated lag from an offset-only emitter as if it were latency, since the emitter explicitly does not account for time since last fetch",
+    "Failing to clamp negative lag derived from separately updated offset and high-water series",
+    "Treating queue lag as the only freshness signal, when a healthy consumer on an empty topic reports zero while the business data is hours old"
+  ],
+  "migration_from": [
+    "batch-processing",
+    "monolithic"
+  ],
+  "migration_to": [
+    "kappa-architecture",
+    "event-driven",
+    "reactive-architecture"
+  ],
+  "related_patterns": [
+    "event-driven",
+    "kappa-architecture",
+    "lambda-architecture",
+    "reactive-architecture",
+    "enterprise-service-bus",
+    "broker",
+    "task-control-architecture",
+    "event-sourcing"
+  ],
+  "design_principles": [
+    "Alert on the derivative, not the level — a growing lag is a fault; a large lag during catch-up is not",
+    "Keep offset lag and consumer latency as separate signals because they have different causes and different remedies",
+    "Normalise before thresholding: a record count is meaningless without the produce rate that gives it meaning in seconds",
+    "Handle missing as a first-class value — an absent series means an absent consumer and must not be read as zero",
+    "Verify progress, not just position — a committed offset that is not advancing is stuck regardless of how small the lag is",
+    "Group the alert by consumer group and topic; the partition is a diagnostic, the consumer group is the unit of remediation",
+    "Express the threshold in seconds and derive it from the business freshness requirement, because that is what stakeholders consume",
+    "Correlate with rebalance metrics so capacity signals are not confused with configuration signals"
+  ],
+  "best_practices": [
+    "Set the alert on `rate(lag[10m]) > 0` sustained for 15 minutes as the baseline, and derive absolute thresholds from the freshness SLA times the observed write rate",
+    "Add a separate rule for a partition with messages but no tracking consumer group, and for a group whose committed offset has not advanced over a window",
+    "Expose both `group_lag` in records and the time-estimated lag in seconds, and label them distinctly so the offset-only caveat stays visible",
+    "Scrape on a 30-second interval unless you have a measured reason not to; faster adds Admin API load without useful precision",
+    "Group alerts by consumer group and topic so a partition fan-out produces one notification",
+    "Monitor max pending rebalance time next to lag and treat a correlated spike as a consumer configuration problem",
+    "Track the exporter's own health (for example the poll duration metric) so a broken exporter is not mistaken for a healthy pipeline",
+    "Clamp or filter negative lag values produced by separately updated offset and high-water series",
+    "Correlate lag with end-to-end freshness in the same dashboard, since a caught-up consumer on a stalled producer reports a reassuring zero",
+    "Review thresholds after every traffic-shape change; a threshold calibrated in a quiet month is wrong in the first busy one"
+  ],
+  "references": [
+    "AWS, Monitor consumer lags — consumer lag definition, EstimatedMaxTimeLag / EstimatedTimeLag / MaxOffsetLag / OffsetLag / SumOffsetLag, CloudWatch and Prometheus open monitoring, and the point that lag monitoring identifies slow or stuck consumers — https://docs.aws.amazon.com/msk/latest/developerguide/consumer-lag.html",
+    "Confluent, Monitor Kafka Consumer Lag in Confluent Cloud — offset lag definition, the metrics API and console surfaces, best practice to alert on sustained growth, using offset lag and consumer latency together to separate slow from stuck consumers, and rebalance monitoring with max_pending_rebalance_time_milliseconds — https://docs.confluent.io/cloud/current/monitoring/monitor-lag.html",
+    "Confluent, Monitor Consumer Lag in Confluent Platform — enabling the consumer lag emitter with confluent.consumer.lag.emitter.enabled and its default 60s interval, the consumer-lag-offset MBean definition, and the explicit caveat that the emitter does not account for consumer latency — https://docs.confluent.io/platform/current/monitor/monitor-consumer-lag.html",
+    "kafka-lag-exporter — Prometheus metrics kafka_consumergroup_group_lag (records) and kafka_consumergroup_group_lag_seconds (estimated time lag) plus kafka_partition_latest_offset, poll interval default, and the exporter poll-duration metric used as a health check — https://seglo.github.io/kafka-lag-exporter/",
+    "prometheus-kafka-consumer-group-exporter — consuming `__consumer_offsets` to publish kafka_consumer_group_offset, kafka_consumer_group_lag and kafka_topic_highwater, and the note that offset and high-water are updated separately so a computed lag can be transiently negative — https://github.com/braedon/prometheus-kafka-consumer-group-exporter",
+    "CubeAPM, How to Set Up a Kafka Consumer Lag Alert with Prometheus — growing-lag versus absolute-threshold alerting, the lag==0 ambiguity between caught-up and no consumer, the stalled-consumer rule combining non-zero lag with no offset movement, the no-consumer-group rule, per-partition versus summed lag, and grouping to prevent alert storms — https://cubeapm.com/faqs/kafka-consumer-lag-alert-setup/"
+  ]
+}

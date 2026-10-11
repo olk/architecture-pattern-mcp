@@ -1,0 +1,104 @@
+{
+  "category": "data",
+  "name": "skew-detector",
+  "context": "Aggregate throughput and cluster utilisation look healthy, yet one key, tenant, partition or worker carries a disproportionate share of the work and caps total throughput. Because parallelism in a partitioned system is bounded by the partition count and a partition is consumed by exactly one worker, no amount of consumer capacity fixes skew — the detector exists to make the unevenness visible before it is diagnosed as 'the pipeline is slow'. It measures per-partition distribution (records, bytes, latency, lag) rather than group aggregates, compares it against the median, and names the responsible key.",
+  "benefits": [
+    "Separates a skew diagnosis from a throughput diagnosis: evenly spread lag means capacity, concentrated lag means key distribution",
+    "Converts an opaque 'consumers are busy' signal into a named hot key or hot partition that can be fixed in the data model",
+    "Runs continuously, so skew is caught at design time and before a replay or a connector snapshot turns a balanced workload into a spike",
+    "Provides the evidence needed to justify an irreversible change such as re-keying, splitting a topic, or moving a whale tenant",
+    "Surfaces skew that aggregate dashboards hide, including leader concentration across brokers, zones and storage paths"
+  ],
+  "tradeoffs": [
+    "Detection only observes what the runtime already reports — if per-partition or per-key metrics are not exported, there is nothing to detect on",
+    "Cheap counters on every partition and every key are expensive at high cardinality and are themselves a source of load",
+    "A detector that fires on transient bursts (backfills, compaction, rebalances) trains the team to ignore it unless it separates live traffic from replay traffic",
+    "Static skew thresholds based on a multiple of the median miss genuine skew in low-volume windows where the median is tiny",
+    "Diagnosis is cheap; remediation changes keying, which can alter ordering, compaction and downstream state semantics"
+  ],
+  "quality_attributes": {
+    "scalability": 6,
+    "maintainability": 7,
+    "reliability": 8,
+    "security": 5,
+    "performance": 5,
+    "simplicity": 6
+  },
+  "suitable_domains": [
+    "stream-processing",
+    "real-time-analytics",
+    "iot-sensor-processing"
+  ],
+  "unsuitable_domains": [],
+  "use_cases": [
+    "Kafka: one tenant is 40% of traffic, so its key pins a single partition to a single consumer",
+    "Spark: a sort-merge join whose skewed partition exceeds 5x the median partition size and 256 MB",
+    "Clickstream: a null or constant record key falls back to round-robin, destroying per-key ordering",
+    "Flink: a single keyed subtask dominating total processing time across an otherwise even deployment",
+    "Pre-migration rehearsal: proving a proposed re-keying actually balances load before applying it to production"
+  ],
+  "avoid_when": [
+    "The workload is naturally uniform and the per-partition metrics cost more than the risk they retire",
+    "Partition count is already the only parallelism bound and the key space cannot be changed",
+    "Replays, connector snapshots and partition reassignments dominate the measurement window — shape the workload, do not diagnose it",
+    "The system is request/response with no partitioned key space to skew"
+  ],
+  "component_types": [
+    "Distribution sampler: collects per-partition record counts, byte rates and produce/fetch latency",
+    "Lag comparator: compares per-partition consumer lag against the group aggregate and the per-group median",
+    "Key profiler: counts records per key over a sample window to name the hot key rather than just the hot partition",
+    "Skew classifier: marks a partition skewed when it exceeds both a size factor of the median and an absolute byte threshold",
+    "Remediation advisor: maps the observed bottleneck to a mitigation and states its hidden risk"
+  ],
+  "technology_stack": [
+    "Apache Kafka",
+    "Apache Spark Adaptive Query Execution",
+    "Apache Flink",
+    "Prometheus",
+    "Grafana",
+    "Kafka Exporter"
+  ],
+  "anti_patterns": [
+    "Alerting on group-aggregate lag, which reads as moderate whether 400k records are spread evenly or 399k sit on one partition",
+    "Adding consumers beyond the partition count and concluding the fix failed — the extras idle by construction",
+    "Increasing the partition count to fix a single hot key — the key still hashes to one partition, while the key-to-partition mapping changes for every existing key",
+    "Salting a hot key without a downstream de-salting merge, so results stay fragmented forever",
+    "Measuring only at the broker and never at the producer, missing that key choice is the root cause"
+  ],
+  "migration_from": [
+    "aggregate-throughput-dashboards",
+    "reactive-consumer-scaling",
+    "topic-partition-count-tuning"
+  ],
+  "migration_to": [
+    "pipe-and-filter",
+    "event-driven"
+  ],
+  "related_patterns": [
+    "space-based",
+    "event-driven",
+    "data-mesh",
+    "actor-based",
+    "microservices"
+  ],
+  "design_principles": [
+    "Measure the distribution, never the mean — a healthy average is the normal symptom of skew",
+    "Name the key, not just the partition — a partition symptom has a key cause",
+    "Separate live traffic from replay traffic before classifying skew",
+    "Report the mitigation's hidden risk alongside its benefit",
+    "Detection must be continuous and cheap enough to leave running"
+  ],
+  "best_practices": [
+    "Convert lag to age in seconds before reading it; count-based thresholds are meaningless across workloads",
+    "Compare every partition to the median, never to the mean, because the skew distorts the mean",
+    "Classify with two conditions — a factor of the median AND an absolute floor — so small partitions are not flagged",
+    "Confirm a hot partition's log-end-offset growth before blaming the consumer",
+    "Treat keying changes as a contract change: ordering, compaction and idempotency guarantees all move with them"
+  ],
+  "references": [
+    "Apache Spark, SQL Performance Tuning — Optimizing Skew Join (skewedPartitionFactor 5.0, skewedPartitionThresholdInBytes 256MB), https://spark.apache.org/docs/latest/sql-performance-tuning.html",
+    "Apache Kafka, Streams DSL — GroupByKey, GroupBy, Repartition and co-partitioning rules, https://kafka.apache.org/43/streams/developer-guide/dsl-api/",
+    "Apache Kafka, Core Concepts — partitioning model and stream parallelism, https://kafka.apache.org/43/streams/core-concepts/",
+    "Apache Kafka, Operations — Monitoring and consumer rebalance protocol, https://kafka.apache.org/43/operations/monitoring/"
+  ]
+}

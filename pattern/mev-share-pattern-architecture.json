@@ -1,0 +1,108 @@
+{
+  "name": "mev-share-pattern",
+  "category": "coordination",
+  "context": "On Ethereum-like chains a user swap creates backrunnable value (arbitrage, liquidation) that public-mempool searchers capture in full, with the user keeping none and often suffering sandwich slippage. MEV-Share turns that orderflow into a sealed-bid backrun auction: the user sends the transaction privately to a MEV-Share node with selective-disclosure hints and a refund split; the node streams only the approved hints to competing searchers, who bid partial backrun bundles referencing the pending hash; the node simulates the bids, merges the winner atomically behind the user transaction, and forwards the merged bundle to block builders with an enforceable kickback predicate returning most extracted value to the originator.",
+  "benefits": [
+    "User-captured MEV: backrun value created by user orderflow is split with the originator (default 90% kickback) instead of fully captured by searchers",
+    "Programmable privacy: per-transaction hints (calldata, logs, function_selector, contract_address, hash) let users price disclosure against expected refund",
+    "Frontrun/sandwich resistance: only redacted hints leave the node, so searchers bid on backruns without ever seeing full transaction data",
+    "Permissionless searcher side: any searcher can subscribe to the SSE event stream and bid partial bundles without allowlisting",
+    "No entrenched builder: the node fans merged bundles out to a builder allowlist (intersection rule) instead of enshrining one builder",
+    "Composable backruns: searcher bundles can publish hints and be nested inside other bundles, enabling collaborative multi-leg extraction"
+  ],
+  "tradeoffs": [
+    "Trusted-auctioneer risk: the node sees full plaintext orderflow pre-redaction and can leak, frontrun, or censor it",
+    "Hint breadth vs privacy tension: richer hints attract higher backrun bids but widen pre-inclusion exposure of user intent",
+    "One-slot auction latency: bid collection, simulation, and merge must resolve before the next block or the opportunity expires",
+    "Backruns only: frontrun-style or multi-block strategies cannot be expressed in the current protocol",
+    "Builder-enforced honesty: kickback payment depends on builders faithfully checking refund predicates, adding a second trust hop",
+    "Searcher strategy cost: redacted hints force probabilistic or on-chain-computation bidding, which costs more gas per unit of captured MEV"
+  ],
+  "quality_attributes": {
+    "scalability": 6,
+    "maintainability": 6,
+    "reliability": 6,
+    "security": 7,
+    "performance": 5,
+    "simplicity": 5
+  },
+  "suitable_domains": [
+    "financial-services",
+    "fintech",
+    "financial-trading",
+    "high-frequency-trading",
+    "banking-and-finance",
+    "payment-processing",
+    "cross-organizational"
+  ],
+  "unsuitable_domains": [
+    "simple-local-communication",
+    "ultra-low-latency-requirements",
+    "batch-processing",
+    "systems-requiring-strong-consistency"
+  ],
+  "use_cases": [
+    "Wallet DEX swaps that generate arbitrageable price impact the user wants a 90%-style kickback on",
+    "Liquidation transactions shared with tx_hash hints so arbitrage searchers backrun them and the liquidator earns a cut",
+    "Searcher bundles that publish hints to invite second-leg backruns and collect enveloped-bundle refunds",
+    "Dapp orderflow (aggregators, routers) monetizing backrun value across user trades via refundConfig splits",
+    "Private limit-order bots that backrun streamed price-moving orderflow with revert-safe conditional trades"
+  ],
+  "avoid_when": [
+    "The transaction creates no backrunnable value (plain transfer, approval): there is nothing to auction and the private path alone suffices",
+    "Sub-second deterministic inclusion is required: the bid-collect/simulate/merge round must resolve within one slot and can miss",
+    "No trusted intermediary is acceptable: the node sees plaintext orderflow before hint redaction",
+    "Only frontrun-style (pre-position) extraction applies: the protocol currently accepts backruns only, not frontruns",
+    "The chain has no builder market to enforce refund predicates: kickbacks need builder-side validity checks"
+  ],
+  "component_types": [
+    "Orderflow Originator: wallet/dapp/user submitting signed transactions plus privacy hints and refund config via mev_sendBundle",
+    "MEV-Share Node (Matchmaker): trusted auctioneer holding plaintext orderflow, emitting redacted SSE events, simulating bids, merging winners into atomic bundles",
+    "SSE Event Stream: Server-Sent Events feed broadcasting double-hashed tx/bundle hashes with only the user-approved hint fields",
+    "Searcher Bidders: bots composing partial backrun bundles referencing pending hashes and submitting sealed bids",
+    "Block Builders: competing builders receiving merged bundles with post-inclusion refund predicates and enforcing kickbacks on-chain"
+  ],
+  "technology_stack": [
+    "Flashbots MEV-Share Node / Matchmaker with mev_sendBundle and mev_simBundle JSON-RPC",
+    "SSE event stream at mev-share.flashbots.net (double-hashed tx/bundle events with hint fields)",
+    "mev-share-client-ts for originator submission and searcher bidding",
+    "MEV-Boost/PBS builder relay market enforcing refund validity predicates",
+    "Flashbots Protect RPC as wallet-facing private ingress to the auction"
+  ],
+  "anti_patterns": [
+    "Sharing full calldata hints on every transaction to chase marginally larger refunds: maximum disclosure recreates mempool visibility and invites sandwiching by the auction field itself",
+    "Running the auction with hash-only hints while expecting competitive backrun bids: searchers cannot price blind backruns without logs/selectors, so bids collapse and inclusion slows",
+    "Hardcoding a single trusted builder in privacy.builders: the intersection rule propagates that restriction into every composed bundle and one censoring builder stalls all flow",
+    "Submitting the same signed transaction to the public mempool in parallel with the auction: the public copy is frontrunnable and the backrun value the auction could have captured leaks",
+    "Treating the matchmaker as a neutral consensus layer: it sees plaintext orderflow pre-auction and must be trusted or replaced, not assumed trustless",
+    "Accepting backrun bundles without simulation: an un-simulated backrun can revert the merged bundle and burn the inclusion slot"
+  ],
+  "related_patterns": [
+    "broker",
+    "event-driven",
+    "blockchain-based",
+    "saga"
+  ],
+  "design_principles": [
+    "Originator-Captures-Value: MEV created by a transaction belongs first to its originator; the auction exists to return it",
+    "Selective Disclosure: reveal the minimum hint set that still attracts competitive backrun bids",
+    "Simulate-Before-Merge: only non-reverting, positive-value backruns reach builders",
+    "Builder Neutrality: never enshrine one builder; fan merged bundles out to a configurable builder set",
+    "Enforceable Kickbacks: refunds are post-inclusion validity predicates checked by builders, not promises"
+  ],
+  "best_practices": [
+    "Start with minimal hints (hash plus swap-relevant logs/selectors) and widen only when measured refunds justify the exposure",
+    "Always set an explicit refundConfig splitting the kickback between user, wallet/dapp, and validator rather than relying on the default",
+    "Scope privacy.builders to a diverse builder set so one censoring or offline builder cannot stall inclusion",
+    "Simulate every candidate backrun (mev_simBundle) before merging; forward only non-reverting bundles with enforceable refund predicates",
+    "Use maxBlock sparingly: a narrow inclusion window keeps hints fresh and bounds the exposure time of disclosed data",
+    "Monitor realized vs quoted refunds on-chain and rotate away builders that systematically underpay validity conditions"
+  ],
+  "references": [
+    "Flashbots, MEV-Share Introduction (orderflow auction, 90% default kickback) -- https://docs.flashbots.net/flashbots-mev-share/introduction",
+    "Flashbots, mev-share protocol specification repository -- https://github.com/flashbots/mev-share",
+    "Flashbots, MEV-Share bundle spec mev_sendBundle (privacy hints, validity refunds) -- https://docs.flashbots.net/flashbots-mev-share/searchers/understanding-bundles",
+    "Flashbots, MEV-Share event stream (SSE hints, double-hash) -- https://docs.flashbots.net/flashbots-mev-share/searchers/event-stream",
+    "Brock Smedley, Shea Ketsdever, Searching on MEV-Share, 2023 -- https://writings.flashbots.net/searching-on-mev-share"
+  ]
+}

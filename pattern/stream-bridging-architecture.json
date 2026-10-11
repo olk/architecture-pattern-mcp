@@ -1,0 +1,107 @@
+{
+  "category": "dataflow",
+  "name": "stream-bridging",
+  "context": "Data is produced outside the streaming platform — a REST endpoint, a relational table exposed through change data capture, a legacy broker, a file drop, an edge gateway — and must enter the topic bus without the producer taking a build-time or runtime dependency on the streaming stack. The bridge is the component that sits between the foreign source and the binder: it accepts the foreign payload, applies the platform's content-type, partitioning and serialization contract, and publishes it to a destination that may not be known until the first message arrives.",
+  "benefits": [
+    "Foreign producers stay decoupled — a REST controller or a database does not acquire a Kafka client, partitioner or schema dependency",
+    "Dynamic destinations let a bridge publish to a target chosen per message, so routing decisions can be made in the producing code",
+    "Buffering and reconnection live in one place, so an unavailable broker or a flapping network does not surface in the producer",
+    "Change-data-capture bridges bring an entire legacy database into the stream as a changelog without rewriting a single producer",
+    "Cross-broker bridging (consume from one messaging system, produce to another) becomes a configuration change rather than an integration project"
+  ],
+  "tradeoffs": [
+    "Every bridged record pays an extra hop plus a serialization round trip through the platform's contract",
+    "Dynamic destination creation is convenient and dangerous: a typo becomes a new topic, and wrong-type messages land as poison records",
+    "Exactly-once is not free across a bridge — it requires the sink connector to participate in the transaction, and most legacy sinks cannot",
+    "Send-by-default semantics mean a foreign producer can emit whether or not anyone is consuming, turning a bug into unbounded growth",
+    "A bridge that transforms is indistinguishable from a filter, and the temptation to put business logic there destroys debuggability"
+  ],
+  "quality_attributes": {
+    "scalability": 7,
+    "maintainability": 8,
+    "reliability": 6,
+    "security": 6,
+    "performance": 6,
+    "simplicity": 7
+  },
+  "suitable_domains": [
+    "stream-processing",
+    "event-driven-systems",
+    "enterprise-integration"
+  ],
+  "unsuitable_domains": [],
+  "use_cases": [
+    "A Spring MVC endpoint publishing domain events onto Kafka through a stream bridge without Kafka-specific code",
+    "Change data capture streaming a legacy operational database into the platform as a compacted changelog",
+    "An edge gateway accepting MQTT from constrained devices and republishing into the central broker",
+    "File and object-storage drops (batch) republished as records so batch consumers can join against the live stream",
+    "Cross-broker bridging where one application consumes from one messaging system and produces to another"
+  ],
+  "avoid_when": [
+    "The producer can reasonably depend on the messaging library directly — the bridge only adds indirection",
+    "The bridging step needs to aggregate, join or hold state across records",
+    "The system requires end-to-end exactly-once through a destination that cannot join the transaction",
+    "Traffic is high enough that the bridge's own buffer becomes the backpressure bottleneck"
+  ],
+  "component_types": [
+    "Foreign source adapter: the non-stream producer (controller, JDBC writer, file watcher, edge agent)",
+    "Bridge component: submits data to an output binding while preserving partitioning and content-type semantics",
+    "Dynamic destination resolver: creates and caches bindings and destinations on first use",
+    "Connector: source or sink connector managing offsets, schema and delivery guarantees",
+    "Local buffer: queue absorbing broker unavailability and reconnection storms",
+    "Schema registry integration: keeps bridged records on the platform's schema contract"
+  ],
+  "technology_stack": [
+    "Spring Cloud Stream StreamBridge",
+    "Apache Kafka",
+    "Kafka Connect",
+    "Debezium",
+    "MQTT",
+    "Amazon Kinesis Data Streams"
+  ],
+  "anti_patterns": [
+    "Putting transformation or business logic inside the bridge instead of in a downstream filter",
+    "Publishing per request with no buffer, so a broker hiccup becomes a user-visible error",
+    "Creating a new dynamic destination per call instead of reusing the cached binding",
+    "Bridging into a non-compacted destination with at-least-once semantics and no idempotent sink",
+    "Bridging bidirectionally between two systems without loop detection"
+  ],
+  "migration_from": [
+    "direct-broker-client-calls-from-foreign-code",
+    "batch-file-drops",
+    "polling-integration-endpoints"
+  ],
+  "migration_to": [
+    "event-driven",
+    "edge-computing"
+  ],
+  "related_patterns": [
+    "event-driven",
+    "broker",
+    "edge-computing",
+    "api-gateway",
+    "backend-for-frontend",
+    "enterprise-service-bus",
+    "pipe-and-filter"
+  ],
+  "design_principles": [
+    "Foreign producers must not acquire a dependency on the streaming stack",
+    "Preserve the platform's invocation contract — content type, partitioning and serialization — across the bridge",
+    "Absorb unavailability in the bridge's buffer, never in the producer's request path",
+    "Destinations are cached, not created per call",
+    "The bridge carries data, not meaning"
+  ],
+  "best_practices": [
+    "Pre-create output bindings at startup rather than relying on lazy creation from the first send",
+    "Keep the bridge logic to serialise-and-send; anything else is a filter or a pipe stage",
+    "Declare the delivery guarantee of every bridged destination explicitly and match sinks that can honour it",
+    "Size and monitor the bridge buffer; unbounded buffering converts a downstream outage into an OOM",
+    "For change-data-capture bridges, snapshot-then-stream consistently or the snapshot and the changelog will interleave wrongly"
+  ],
+  "references": [
+    "Spring Cloud Stream, Producing and Consuming Messages — bridging foreign sources, StreamBridge and dynamic destinations, https://docs.spring.io/spring-cloud-stream/reference/spring-cloud-stream/producing-and-consuming-messages.html",
+    "Spring Cloud Stream, Application Reference Guide — binders, destination binders and bridge processor, https://docs.spring.io/spring-cloud-stream/docs/current/reference/html/spring-cloud-stream.html",
+    "Apache Kafka, Kafka Connect Overview and User Guide, https://kafka.apache.org/43/kafka-connect/overview/",
+    "Apache Kafka, Core Concepts — source and sink processors, https://kafka.apache.org/43/streams/core-concepts/"
+  ]
+}

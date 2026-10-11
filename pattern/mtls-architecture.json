@@ -1,0 +1,135 @@
+{
+  "name": "mtls",
+  "category": "structural",
+  "context": "A system whose services, devices, or partners call each other across a network that nobody owns end to end. Traditional deployment treats 'inside the perimeter' as proof of identity, so a compromised pod, a flat cluster network, or a partner on the same VLAN inherits the trust of everything behind the firewall. Mutual TLS replaces location with a cryptographic claim: in the TLS 1.3 handshake the server sends a CertificateRequest and the client answers with its own certificate and a CertificateVerify proof of possession, so both endpoints are authenticated before any application byte moves. The pattern is architectural, not a library call, because it forces structural decisions - who runs the CA, where TLS terminates (application, sidecar, or gateway), what the identity claim looks like, and how certificates reach workloads that are created and destroyed continuously.",
+  "benefits": [
+    "Network location stops being a credential: authorization binds to a verified identity claim rather than to a subnet, which is what makes the zero-trust PDP/PEP model enforceable at all",
+    "Short-lived credentials replace revocation. SPIFFE recommends lifetimes as short as one hour; a leaked certificate expires before an attacker can use it, so CRLs and OCSP round trips become optional rather than mandatory",
+    "Per-service identities remove the shared internal credential. One leaked service key no longer opens every service on the internal network",
+    "A sidecar proxy (Envoy, linkerd2-proxy) can originate and terminate mTLS so application code never touches a key, a CA, or a rotation timer",
+    "Identity attestation removes the pre-shared-secret bootstrap problem: SPIRE proves which host and which process a workload is before issuing an SVID",
+    "The verified identity is bindable into a stronger token. RFC 8705 certificate-bound access tokens carry the client certificate hash in a `cnf` claim, so a stolen bearer token is useless to a party without that specific certificate"
+  ],
+  "tradeoffs": [
+    "The certificate lifecycle is an operational burden that scales badly by hand. Two services with a hand-run CA is an afternoon; twenty services with hourly rotation is a standing job of issuance, distribution, renewal and revocation",
+    "Revocation is genuinely hard: CRLs grow into megabytes, OCSP adds a round trip to every handshake, and stapling is not universally supported. Short TTL is the pragmatic substitute, and it trades fast compromise response for bounded exposure",
+    "Protection is per hop, not end to end. Any hop that terminates TLS holds plaintext, so an L7 proxy that re-encrypts to the next service moves the trust boundary rather than removing it",
+    "L7 load balancers routinely strip client certificates; the deployment must use TCP passthrough or re-encrypt, and that decision changes the topology",
+    "Extension Key Usage errors are silent until a handshake fails. A 'server' template issued to a client lacks clientAuth (1.3.6.1.5.5.7.3.2) and some TLS stacks reject it without saying why",
+    "Handshake and encryption cost is real at high connection rates; TLS 1.3 at 1-RTT helps, but the first connection on every certificate lifetime pays full price",
+    "Cross-cluster trust does not come free. Cilium documents that there is no option to build a single trust domain spanning multiple clusters, so a Cluster Mesh and an mTLS deployment can be mutually exclusive"
+  ],
+  "quality_attributes": {
+    "performance": 6,
+    "scalability": 7,
+    "reliability": 7,
+    "maintainability": 5,
+    "security": 9,
+    "simplicity": 4
+  },
+  "suitable_domains": [
+    "microservices-communication",
+    "cloud-native-applications-on-kubernetes",
+    "kubernetes",
+    "microservices",
+    "event-driven-microservices",
+    "b2b-integration",
+    "multi-external-integrations",
+    "iot",
+    "financial-services",
+    "healthcare-integration",
+    "government-systems",
+    "mobile-applications"
+  ],
+  "unsuitable_domains": [
+    "low-latency-local-calls",
+    "simple-applications",
+    "prototypes",
+    "mvp",
+    "batch-analytics-only",
+    "low-traffic-applications",
+    "static-requirements",
+    "single-threaded-environments"
+  ],
+  "use_cases": [
+    "Service-to-service calls inside a Kubernetes cluster where any pod may be hostile",
+    "A gateway authenticating a fleet of field devices that come and go without a provisioning step",
+    "Partner and B2B integrations where neither side controls the other's network",
+    "Splitting trust domains so a payment namespace cannot present a valid identity to the ordering namespace"
+  ],
+  "avoid_when": [
+    "All calls stay inside one process or one host - there is no network hop to authenticate",
+    "The estate is a handful of services with no platform to run a control plane; hand-managed mTLS costs more than the threat it removes",
+    "The requirement is end-to-end confidentiality against the terminating proxies, which per-hop transport encryption cannot deliver",
+    "The platform has no attestation story, so certificates would have to be injected as static files - that reintroduces the secret in the image"
+  ],
+  "component_types": [
+    "Workload / service instance",
+    "Sidecar or gateway proxy (Envoy, linkerd2-proxy)",
+    "Internal CA / workload CA",
+    "SPIRE server (root of trust for the trust domain)",
+    "SPIRE agent (per node)",
+    "Trust bundle distributor",
+    "Authorization policy engine"
+  ],
+  "technology_stack": [
+    "TLS 1.3 (RFC 8446)",
+    "SPIFFE / SPIRE (X.509-SVID, Workload API over Unix domain socket)",
+    "cert-manager",
+    "HashiCorp Vault PKI",
+    "step-ca",
+    "Envoy SDS",
+    "Istio PeerAuthentication / AuthorizationPolicy",
+    "Linkerd2"
+  ],
+  "anti_patterns": [
+    "Year-long certificates. A long-lived certificate is a long-lived secret; the mTLS benefit collapses the moment it is stolen",
+    "Leaving PeerAuthentication in PERMISSIVE mode after migration because plaintext callers still exist. Production ends at STRICT",
+    "Conflating authentication with authorization: mTLS proves who called, it does not decide whether that caller may perform the operation",
+    "Trusting any certificate chaining to the internal CA without a SAN policy, which makes the identity claim meaningless and reduces mTLS to encryption",
+    "Trust bundles that omit intermediate CAs, surfacing as `unknown CA` on one side of a connection while the other side looks healthy",
+    "Rotating manually or on a schedule that can slip. The first missed renewal presents as handshake failures that read like a network fault",
+    "Handing the certificate to the application as a mounted file, so it is copied into logs, images, and crash dumps"
+  ],
+  "design_principles": [
+    "Never infer trust from network position; every request carries a verified identity claim",
+    "Make credentials short-lived so that revocation becomes unnecessary rather than merely difficult",
+    "Bind identity, not location: the SAN holds the identity the policy engine matches, not the address the packet came from",
+    "Bootstrap identity from platform attestation instead of a pre-shared secret, so no workload has to be born holding a credential",
+    "Keep authentication and authorization as separate decisions with separate components",
+    "Prefer cryptographic agility: the identity format should be portable across runtimes"
+  ],
+  "best_practices": [
+    "Issue per-workload certificates with a SPIFFE ID URI in the SAN (spiffe://trust.domain/path), not a shared service wildcard",
+    "Keep TLS termination in a sidecar that receives certs via the SDS API, keeping private keys in tmpfs and off disk",
+    "Authenticate peer sessions once per certificate lifetime and cache the result in the datapath, rather than handshaking per connection - the model Cilium's auth map implements",
+    "Use PERMISSIVE only as a migration step, and track it as a removal ticket rather than as a steady state",
+    "Give server certs serverAuth EKU and client certs clientAuth EKU; validate both ends of the chain and ship the full chain from the peer",
+    "Verify SAN, EKU, validity and chain on every handshake; a certificate that parses is not a certificate that is acceptable",
+    "If identity also needs to drive API access, bind the token to the certificate per RFC 8705 so a stolen token cannot be replayed by another holder"
+  ],
+  "related_patterns": [
+    "service-mesh",
+    "api-gateway",
+    "microservices",
+    "hexagonal",
+    "edge-computing",
+    "modular-monolith",
+    "layered-monolith",
+    "event-driven"
+  ],
+  "migration_from": [
+    "monolithic",
+    "layered-monolith"
+  ],
+  "migration_to": [
+    "service-mesh",
+    "microservices"
+  ],
+  "references": [
+    "Cilium documentation, Mutual Authentication (beta) - https://docs.cilium.io/en/stable/network/servicemesh/mutual-authentication/mutual-authentication/",
+    "Cilium CFP-22215, Mutual Authentication for Service Mesh - https://github.com/cilium/design-cfps/blob/main/cilium/CFP-22215-mutual-auth-for-service-mesh.md",
+    "OWASP ASVS 5.0, V12 Secure Communication (12.3.5 requires strong authentication for intra-service communication) - https://github.com/OWASP/ASVS/blob/master/5.0/en/0x21-V12-Secure-Communication.md",
+    "Curity, Harden OAuth Client Credentials with SPIFFE X509 SVIDs (RFC 8705 certificate-bound tokens) - https://curity.io/resources/learn/oauth-client-credentials-spiffe-x509-svids/"
+  ]
+}

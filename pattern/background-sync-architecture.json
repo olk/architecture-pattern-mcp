@@ -1,0 +1,114 @@
+{
+  "category": "structural",
+  "name": "background-sync",
+  "context": "An application must keep working when it is not in the foreground — refreshing content, uploading telemetry, draining a write queue, reconciling local state with a server — under an operating system that will throttle, batch and defer all of it for battery and politeness. The pattern makes that work declarative: submit a request with explicit constraints, let the platform decide when it runs, and design the request to survive app exit, process death and device reboot without depending on exact timing.",
+  "benefits": [
+    "Work survives app exit, process death and reboot, unlike coroutines, handlers and in-app timers",
+    "Constraints let the platform pick a good moment — unmetered network, charging, idle device — instead of the app guessing",
+    "Periodic and one-shot requests share one queue with one retry and backoff policy",
+    "Expedited work gives a latency-sensitive path with its own quota, so urgent sync does not starve behind routine sync",
+    "The web equivalents — Background Sync, Background Fetch and Periodic Background Sync — give the same behaviour with no install"
+  ],
+  "tradeoffs": [
+    "Execution time is not guaranteed and never exact — Doze, standby buckets and battery optimisers defer and batch freely",
+    "Standby buckets cap total runtime per window, so a rare bucket can allow roughly ten minutes of scheduled jobs per rolling day",
+    "Periodic work has a hard minimum interval (15 minutes on Android), which rules out fine-grained polling",
+    "Expedited work draws on a finite quota; running out degrades the request to ordinary or drops it entirely",
+    "Work that must finish within seconds is not a background-sync problem — it belongs in the foreground with a progress indicator"
+  ],
+  "quality_attributes": {
+    "scalability": 5,
+    "maintainability": 8,
+    "reliability": 8,
+    "security": 6,
+    "performance": 5,
+    "simplicity": 7
+  },
+  "suitable_domains": [
+    "mobile-applications",
+    "mobile-first-applications",
+    "iot",
+    "event-driven-systems",
+    "low-data-volume-scenarios"
+  ],
+  "unsuitable_domains": [
+    "real-time-systems",
+    "high-frequency-trading"
+  ],
+  "use_cases": [
+    "Periodic content refresh for a news or feed app while it is closed",
+    "Queued uploads and telemetry flushing on unmetered networks only",
+    "Reconciling a local-first database with the server whenever connectivity allows",
+    "Cache warming and prefetch of content the user is likely to open next",
+    "Battery-gated maintenance such as compaction, cache eviction and index rebuilds"
+  ],
+  "avoid_when": [
+    "The work must complete within seconds — background execution cannot meet that latency",
+    "The result is needed to render the current screen, in which case it belongs on the foreground path",
+    "The platform offers no scheduling primitive for the target (a desktop app cannot rely on a service worker)",
+    "A continuous open connection is required — that is a different architectural choice, not background work"
+  ],
+  "component_types": [
+    "Work request: a declarative description of the work with its constraints, backoff and input data",
+    "Constraints: network type, battery-not-low, requires-charging, device-idle, storage-not-low — all must be satisfied",
+    "Scheduler: the OS service that persists and executes requests (JobScheduler on Android)",
+    "Worker: the unit that performs the work and reports result state",
+    "Expedited quota manager: the system-level budget that gates latency-sensitive work, with an out-of-quota policy",
+    "Backoff policy: retry schedule with criteria for system-initiated interruptions"
+  ],
+  "technology_stack": [
+    "Android Jetpack WorkManager",
+    "JobScheduler",
+    "Android Doze and App Standby",
+    "Service Worker Background Sync",
+    "Background Fetch API",
+    "Periodic Background Sync",
+    "iOS BGTaskScheduler"
+  ],
+  "anti_patterns": [
+    "Using a Handler, Timer or coroutine for work that must survive the process",
+    "Starting a foreground service to run recurring sync, which the platform treats as user-visible and battery-hostile",
+    "Submitting requests with no constraints and wondering why battery drains and the scheduler batches everything",
+    "Enqueuing expedited work without an out-of-quota policy, so the request is silently dropped",
+    "Treating the periodic interval as a schedule rather than as the minimum gap between runs"
+  ],
+  "best_practices": [
+    "Treat every request as opportunistic and make the work idempotent, since it may run more often than expected",
+    "Express real requirements as constraints so the platform can batch intelligently",
+    "Choose the retry backoff criteria deliberately and handle system-initiated interruption separately",
+    "For web background sync, use waitUntil for anything that must finish and Background Fetch for anything long-running",
+    "Do not use background sync for durable work the user expects to happen — use explicit sync with a visible control"
+  ],
+  "related_patterns": [
+    "client-server",
+    "edge-computing",
+    "event-driven",
+    "pipe-and-filter",
+    "presentation-abstraction-control",
+    "api-gateway"
+  ],
+  "design_principles": [
+    "Declare intent, let the platform schedule — never hand-roll timing",
+    "Express real requirements as constraints so batching is the platform's problem, not the app's",
+    "All background work is opportunistic and therefore idempotent, because it may run far more often than requested",
+    "Foreground latency belongs in the foreground; background execution has no latency guarantee to offer",
+    "Separate the durable queue from execution so a retry never duplicates a side effect"
+  ],
+  "migration_from": [
+    "in-app-timers",
+    "always-on-foreground-services",
+    "naive-polling",
+    "socket-keepalive-loops"
+  ],
+  "migration_to": [
+    "offline-first",
+    "client-server",
+    "api-gateway"
+  ],
+  "references": [
+    "Android Developers, Background work — Task scheduling with WorkManager, https://developer.android.com/develop/background-work/background-tasks/persistent",
+    "Android Developers, Define work requests — constraints, periodic work and the 15-minute minimum interval, https://developer.android.com/develop/background-work/background-tasks/persistent/getting-started/define-work",
+    "Android Developers, Power management resource limits — app standby buckets and job quotas, https://developer.android.com/topic/performance/power/power-details",
+    "MDN, Offline and background operation (Progressive web apps) — Background Sync, Background Fetch, Periodic Background Sync, https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps/Guides/Offline_and_background_operation"
+  ]
+}

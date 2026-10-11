@@ -200,7 +200,10 @@ class AnalysisResult(BaseModel):
 
 # Enum-value lists derived from the schema enums so the system prompt can never
 # drift from the Pydantic validation model (a hand-maintained list previously
-# missed 5 of the 40 ArchitectureStyle values).
+# missed 5 of the 40 ArchitectureStyle values). The category list (10 values)
+# is inlined; the style list (128 values since the catalog expansion) is
+# referenced by rule instead — inlining it cost ~375 proxy tokens against the
+# GENERATE prompt budget (test_generate_system_prompt.py::TestPromptTokenBudget).
 _STYLE_ENUM_LIST: str = ", ".join(s.value for s in ArchitectureStyle)
 _CATEGORY_ENUM_LIST: str = ", ".join(c.value for c in PatternCategory)
 
@@ -282,10 +285,9 @@ NOTE: This example illustrates the schema and field formats only. Adapt the shap
 VIOLATIONS TRIGGER AUTOMATIC RETRY — verify before emitting:
 
 ENUM INTEGRITY:
-- overview.style MUST be exactly one of: {_STYLE_ENUM_LIST}
+- overview.style MUST be exactly the requested style for this run (the {style} shape above): a canonical ArchitectureStyle name resolvable via get_architecture_pattern. Never invent a style name and never use an ArchitectureDomain problem-space tag.
 - overview.category MUST be exactly one of: {_CATEGORY_ENUM_LIST}
 - Never use ArchitectureDomain values for overview.style or overview.category — those are problem-space tags, not architectural styles or pattern categories.
-
 CROSS-REFERENCE INTEGRITY (most common rejection cause):
 - Every relationship.source and relationship.target must reference an existing component id.
 {contract_rules}

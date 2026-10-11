@@ -1,0 +1,167 @@
+{
+  "name": "event-time-processing",
+  "category": "dataflow",
+  "context": "This pattern is the discipline of choosing and honouring the clock, not the watermark mechanism itself: a watermark pattern can be embedded in a processing-time pipeline and be perfectly well built, whereas event-time processing is the end-to-end decision that makes a pipeline replayable, plus the machinery (timestamp extraction, the disorder bound, idleness, lateness handling) that makes that decision enforceable. Ordering and aggregating by the wall clock at which the engine happened to see a record produces results that are wrong in a specific, reproducible way: the same input replayed twice gives two different answers, a two-minute network delay moves a record into the wrong hour, and a consumer restart re-buckets historical data into today. Event-time processing fixes the clock: each record carries the timestamp at which it occurred at its source, and all time-based operations — windows, joins, aggregations — use that timestamp rather than arrival time. The cost of that choice is that the engine can no longer infer completeness from its own progress, so it needs an explicit completeness contract. That contract is the watermark. Flink states it exactly: a Watermark(t) 'declares that event time has reached time t in that stream, meaning that there should be no more elements from the stream with a timestamp t' <= t'. Watermarks are generated at, or directly after, the source, each parallel subtask generates its own, and the effective watermark downstream is the minimum across inputs — which is the source of the most common event-time bug: a single quiet partition freezes time for the entire job. Hence the idleness mechanism: with `withIdleness(Duration)`, a partition that stops producing for the given duration is marked idle and 'will not hold back the progress of watermarks in downstream operators'. The generator strategy is a declared assumption about disorder: `forBoundedOutOfOrderness(Duration)` declares the maximum lateness the source exhibits, and Flink is explicit that a lateness computation of t_w - t > 0 means the element is late and is 'by default ignored' for that window. The final subtlety is that the choice of event time is not purely an application concern. Kafka Streams notes the effective semantics depend on the broker and topic configuration: 'from Kafka 0.10.x onwards, timestamps are automatically embedded into Kafka messages' and whether they represent event time or ingestion time is a broker/topic setting — so an application can believe it is doing event-time processing while the transport is stamping CreateTime on receipt. The TimestampExtractor that overrides this must be stateless, and the extracted timestamp is reused as the message timestamp for KTable changelogs and joins, which is then used for log retention and segment rolling, so a nonsensical timestamp does not just corrupt results, it degrades the broker.",
+  "benefits": [
+    "Deterministic, replayable results: given the same records, event-time processing yields the same answer regardless of arrival order, machine speed or restarts",
+    "Correct aggregation boundaries — an hourly window contains every record whose event timestamp falls in that hour 'regardless of the order in which they arrive, or when they are processed'",
+    "Historical rebuilds are meaningful: replaying last month's log re-derives last month's windows instead of re-bucketing everything as today",
+    "Explicit completeness semantics: watermarks turn 'how complete is this window' from an implementation detail into a declared, testable contract",
+    "Graceful out-of-order handling via a stated bound — `forBoundedOutOfOrderness` encodes what the source actually does rather than relying on lucky arrival order",
+    "Tolerant of multi-source skew, since each input's watermark is generated independently and combined downstream",
+    "Resilient to idle inputs via `withIdleness`, which stops a low-volume partition from stalling event time for the whole application",
+    "Output timestamps compose correctly across chained operations, because windowed output carries the max allowed timestamp of the window and watermarks flush downstream windows",
+    "Kafka Streams derives join output timestamps systematically — stream-stream and table-table take max(left, right), stream-table takes the stream record's — so chained time-based operations stay consistent"
+  ],
+  "tradeoffs": [
+    "Wall-clock intuition breaks: the job's notion of 'now' is data-driven, so an idle pipeline shows a stalled clock and looks broken even though it is correct",
+    "The watermark is a guess and guesses fail: in many real setups elements can be 'arbitrarily delayed, making it impossible to specify a time by which all elements of a certain event timestamp will have occurred'",
+    "Delaying watermarks to be safe directly delays results — 'delaying the watermarks by too much is often not desirable, because it causes too much delay in the evaluation of event time windows'",
+    "The global watermark is a minimum across inputs, so one lagging partition stalls every downstream window and the failure is invisible without per-subtask watermark metrics",
+    "Time semantics can be configured out from under the application at the transport layer — broker and topic settings decide whether embedded timestamps are event time or ingestion time",
+    "Timestamp extraction must be stateless and is on the hot path; a bad extractor returning negative values causes records to be 'silently skipped'",
+    "Event-time timestamps are reused as message timestamps for changelogs, so a wrong value affects log retention and segment rolling, producing broker-level degradation rather than a visible application error",
+    "Out-of-order state handling is not uniform across join types: with versioned stores stream-side out-of-order data is handled, but table-side out-of-order data still is not",
+    "Correctness depends on an assumed disorder bound; set it too tight and records are treated as late and ignored by default, with no error raised",
+    "Requires every producer to supply a trustworthy timestamp, which means the pattern's correctness is distributed across systems you do not control"
+  ],
+  "quality_attributes": {
+    "scalability": 8,
+    "maintainability": 7,
+    "reliability": 9,
+    "security": 5,
+    "performance": 7,
+    "simplicity": 5
+  },
+  "suitable_domains": [
+    "stream-processing",
+    "streaming",
+    "event-driven-workloads",
+    "real-time-analytics",
+    "data-pipelines",
+    "distributed-data-pipelines",
+    "data-processing",
+    "high-throughput-streaming",
+    "iot-data-processing",
+    "log-analysis",
+    "clickstream-analytics",
+    "financial-trading",
+    "complex-window-functions-over-full-history"
+  ],
+  "unsuitable_domains": [
+    "purely-synchronous-workloads",
+    "simple-request-response",
+    "request-response-apis",
+    "real-time-deterministic",
+    "sub-millisecond-response-requirements",
+    "static-requirements",
+    "batch-analytics-only",
+    "simple-domains",
+    "low-concurrency-single-node-apps"
+  ],
+  "use_cases": [
+    "Hourly and daily tumbling windows over click or trade streams where records routinely arrive out of order by seconds to minutes",
+    "Converting orders to a common currency with a temporal join against the rate table version valid at the order's event time",
+    "Rebuilding a year of historical aggregates by replaying the retained log, which only produces the original answer under event-time semantics",
+    "Multi-source pipelines where one input is a low-volume partner feed, requiring `withIdleness` so that feed's quiet hours do not freeze the shared watermark",
+    "Session-style analytics where the session boundaries are derived from event timestamps and can be bridged by late events",
+    "Kafka Streams applications using a custom stateless TimestampExtractor to recover the business timestamp from the payload rather than trusting CreateTime",
+    "Chained windowed operations, where windowed output's end-timestamp-1 convention and watermark forwarding let consecutive same-sized windowing compose",
+    "Any pipeline that must produce the same result when replayed after a consumer restart or a migration"
+  ],
+  "avoid_when": [
+    "The workload is pure request/response with no time-based aggregation — event time buys nothing and adds a watermark contract to maintain",
+    "Arrival order is guaranteed by a single-writer, single-partition source and never violated; the machinery is pure overhead",
+    "Hard real-time determinism is required — event time trades wall-clock latency for order-independence, which is the wrong direction",
+    "Producers cannot supply a meaningful timestamp and the transport stamps CreateTime; the pipeline will be event-time in name only",
+    "You cannot monitor per-subtask watermarks — without them a stalled partition is indistinguishable from an idle-but-healthy one",
+    "The disorder bound is genuinely unbounded, so no safe watermark exists and the honest answer is an ingestion SLA rather than a larger tolerance",
+    "Only approximate window results are needed, in which case the watermark machinery buys precision nobody consumes",
+    "Sub-millisecond latency is the requirement; watermark generation and periodic emission are on the critical path"
+  ],
+  "component_types": [
+    "Timestamp assigner: the function that extracts the event timestamp from a record; in Kafka Streams it is a TimestampExtractor that must be stateless",
+    "Watermark generator: the strategy that declares event-time progress — bounded out-of-orderness, or a custom generator — emitted periodically or per event",
+    "WatermarkStrategy: the composition of an assigner and a generator, enriched with `withIdleness` so quiet partitions stop holding back the global minimum",
+    "Idle status signal: the separate watermark that tells downstream operators to disregard an inactive input when combining watermarks",
+    "Event-time clock (operator-local): each operator's current event time, advanced when a watermark arrives and re-emitted downstream",
+    "Window assigner and trigger: the time boundary and the firing condition, where a window's result timestamp is set to end-timestamp - 1 so chained windows compose",
+    "State backend and TTL: retained window state whose lifetime is what bounds how long late data can still be integrated",
+    "Allowed lateness / grace period: the declared interval during which a record behind the watermark is still admitted rather than ignored",
+    "Late-data side output: the channel that captures records discarded as late, keeping them observable instead of lost",
+    "Watermark telemetry: per-subtask current watermark, idle flags and idle timeouts — without these the pattern cannot be diagnosed"
+  ],
+  "technology_stack": [
+    "Apache Flink WatermarkStrategy and BoundedOutOfOrdernessWatermarks",
+    "Flink withIdleness and the idle status watermark",
+    "Apache Kafka record timestamps and topic timestamp configuration",
+    "Kafka Streams TimestampExtractor and stream time",
+    "Kafka Streams window grace periods",
+    "Apache Spark Structured Streaming withWatermark",
+    "Apache Beam event-time triggers and watermarks",
+    "Google Cloud Dataflow event-time windows",
+    "Amazon Kinesis and MSK event timestamps",
+    "Chrony and NTP for source clock discipline"
+  ],
+  "anti_patterns": [
+    "Declaring event-time semantics while the broker stamps CreateTime on receipt, so the 'event time' is really ingestion time and the whole guarantee evaporates",
+    "Using a naive timestamp extractor that returns negative or nonsensical values, which silently skips records or degrades changelog retention and segment rolling",
+    "Setting a bounded-out-of-orderness bound with no measurement, so records are classified late and ignored by default with no error surfaced",
+    "Forgetting `withIdleness`, so one low-volume partition holds back the global watermark and every downstream window stops firing with no obvious cause",
+    "Assuming the watermark means 'data is complete' — it is an assertion the generator makes, not a fact the engine verified",
+    "Mixing event-time and processing-time operators in one pipeline without an explicit boundary where the switch happens",
+    "Treating 'no output for a while' as a bug and lowering the watermark, thereby re-introducing exactly the lateness the design was meant to tolerate",
+    "Using an unbounded disorder tolerance to 'never drop anything', converting a latency problem into an unbounded state problem",
+    "Computing window aggregates with a non-idempotent function, so a late firing or a replay produces a different number than the original",
+    "Chaining windowed operations without checking the end-timestamp-1 convention, producing off-by-one window boundaries that look like a clock bug"
+  ],
+  "migration_from": [
+    "batch-processing",
+    "lambda-architecture",
+    "pipe-and-filter"
+  ],
+  "migration_to": [
+    "kappa-architecture",
+    "event-sourcing"
+  ],
+  "related_patterns": [
+    "kappa-architecture",
+    "event-driven",
+    "event-sourcing",
+    "reactive-architecture",
+    "lambda-architecture",
+    "actor-based",
+    "space-based",
+    "enterprise-service-bus"
+  ],
+  "design_principles": [
+    "Time belongs to the event, not to the engine — the clock is a property of the record so results are independent of arrival order and machine speed",
+    "Completeness must be declared, not inferred — the watermark is the contract, and it is only as good as the assumption behind it",
+    "The disorder bound is a measured property of the source, so set it from data and revisit it when the source changes",
+    "Silence is not progress — idleness must be signalled explicitly or a quiet partition silently freezes time for everyone",
+    "Late is a designed outcome, not an accident: specify the tolerance, keep the discarded records observable, and decide what happens beyond it",
+    "Determinism is the point; if a result cannot be reproduced from the same input, the pattern has been abandoned halfway",
+    "Timestamp semantics end-to-end — the transport's timestamp type is part of the design, not a deployment detail"
+  ],
+  "best_practices": [
+    "Verify at the transport layer what the embedded timestamps actually represent before writing a line of event-time logic",
+    "Instrument per-subtask watermark and idle status; alert on watermark age and on idleness as separate signals",
+    "Measure the real lateness distribution of each source and set the out-of-orderness bound from a high percentile, then re-measure periodically",
+    "Always configure an idleness timeout on sources with variable or naturally low traffic",
+    "Capture late records to a side output from the start so the tolerance can be widened retrospectively without a redeploy",
+    "Keep window functions pure and idempotent so late firings and replays are indistinguishable from the original computation",
+    "Emit periodic watermarks rather than per-event, and tune the emission interval as a latency/throughput dial",
+    "Test determinism explicitly: shuffle the input and assert identical output before and after shuffling",
+    "Document which outputs are provisional until the watermark passes, and make that visible in the sink's schema or metadata"
+  ],
+  "references": [
+    "Apache Flink, Timely Stream Processing — definition of event time as the time the event occurred on its producing device, the Watermark(t) completeness declaration, watermark generation at the source and per-subtask independence, and the impossibility of a safe bound when elements are arbitrarily delayed — https://nightlies.apache.org/flink/flink-docs-stable/docs/concepts/time/",
+    "Apache Flink, Generating Watermarks — WatermarkStrategy composition, `withIdleness` for idle sources, and the rule that the watermark is the minimum over parallel watermarks so one idle partition stalls the job — https://nightlies.apache.org/flink/flink-docs-stable/docs/dev/datastream/event-time/generating_watermarks/",
+    "Apache Flink, WatermarkStrategy API — `forBoundedOutOfOrderness` and `withIdleness` semantics, including that an idle partition 'will not hold back the progress of watermarks in downstream operators' — https://nightlies.apache.org/flink/flink-docs-stable/api/java/org/apache/flink/api/common/eventtime/WatermarkStrategy.html",
+    "Apache Flink, Builtin Watermark Generators — BoundedOutOfOrdernessWatermarks, the lateness formula t_w - t, and the rule that a late element is by default ignored for its window — https://nightlies.apache.org/flink/flink-docs-stable/docs/dev/datastream/event-time/built_in/",
+    "Apache Flink, Windows — window lifecycle relative to end timestamp plus allowed lateness, output records carrying end-timestamp - 1 so consecutive same-size windowed operations compose, and watermark forwarding flushing downstream windows — https://nightlies.apache.org/flink/flink-docs-stable/docs/dev/datastream/operators/windows/",
+    "Apache Kafka, Kafka Streams Core Concepts — event time versus ingestion time as a broker/topic configuration, stateless TimestampExtractor requirement, negative timestamps causing silent skipping, extracted timestamps reused for changelog log retention and rolling, stream time advancing only when a record arrives, and the max(left,right) join output timestamp rules — https://kafka.apache.org/43/streams/core-concepts/",
+    "Apache Kafka, TimestampExtractor Javadoc — interface contract, `FailOnInvalidTimestamp` and `LogAndSkipOnInvalidTimestamp` policies, and the statement that the extracted timestamp may become the message timestamp for KTable changelogs and joins, affecting log retention and rolling — https://kafka.apache.org/43/javadoc/org/apache/kafka/streams/processor/TimestampExtractor.html",
+    "Apache Kafka, JoinWindows Javadoc — grace period as the time to admit out-of-order events after window end, delay defined as stream_time minus record timestamp, and the caution that a zero grace drops any out-of-order record arriving after the window ends — https://kafka.apache.org/39/javadoc/org/apache/kafka/streams/kstream/JoinWindows.html"
+  ]
+}

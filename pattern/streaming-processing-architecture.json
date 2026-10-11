@@ -1,0 +1,108 @@
+{
+  "category": "dataflow",
+  "name": "streaming-processing",
+  "context": "An unbounded sequence of events must be transformed continuously, one record at a time, with results visible in milliseconds rather than at the end of a batch window. The defining mechanics are incremental computation over a partitioned, replayable log; parallelism bounded by partition count; ordering guaranteed only per key; local state for anything that needs memory; and event time as the only clock that survives restarts and replays. This is the base style, not a specific data-lake decision — it applies to transaction processing, telemetry, IoT and clickstream alike.",
+  "benefits": [
+    "Results appear within milliseconds of the triggering record instead of at the next batch boundary",
+    "Replayability is inherent: the log is the input, so logic can be re-executed over history without special tooling",
+    "Scaling is horizontal and bounded by partition count, with per-key ordering preserved automatically",
+    "Exactly-once is achievable where the framework is tightly integrated with the log — offsets, state and output commit atomically",
+    "Graceful degradation is natural: a downstream that is down creates lag, not data loss"
+  ],
+  "tradeoffs": [
+    "Exactly-once requires end-to-end integration with the log; a framework that treats the broker as an external system cannot deliver it, and generic sinks do not participate",
+    "Out-of-order data is the normal case, not the exception — stream-stream joins handle it, table joins often do not",
+    "Long-running stateful processes need restart, restore and rebalance machinery that batch jobs do not",
+    "Failure semantics are constant: a task restart replays from the last commit, so state and time advance together",
+    "No full recomputation for free — a logic change means either replaying history or accepting divergence between old and new results"
+  ],
+  "quality_attributes": {
+    "scalability": 9,
+    "maintainability": 6,
+    "reliability": 8,
+    "security": 6,
+    "performance": 10,
+    "simplicity": 6
+  },
+  "suitable_domains": [
+    "stream-processing",
+    "real-time-analytics",
+    "event-driven-systems",
+    "iot-sensor-processing"
+  ],
+  "unsuitable_domains": [
+    "batch-analytics-only"
+  ],
+  "use_cases": [
+    "Real-time transaction authorization and fraud scoring over a payment event log",
+    "IoT telemetry ingestion with per-device aggregation published as it arrives",
+    "Clickstream analytics with incremental sessionization and funnel metrics",
+    "Continuous operational monitoring: alerting on stream predicates rather than on stored queries",
+    "Order and inventory workflows where business decisions depend on events happening now"
+  ],
+  "avoid_when": [
+    "The workload is inherently bounded and complete results are needed before any output is useful",
+    "The team has no operational capability for long-running processes, restarts and replay",
+    "Strong cross-key consistency is a hard requirement and there is no reconciling store downstream",
+    "Batch is already fast enough and the added failure modes buy nothing"
+  ],
+  "component_types": [
+    "Partitioned log: ordered, replayable record stream supplying both input and parallelism",
+    "Source processor: reads a partition and drives per-task processing",
+    "Stateless operator: per-record transformation with no memory",
+    "Stateful operator: aggregation, join or window backed by a local store",
+    "Changelog and commit protocol: durability for state plus atomic offset and output commit",
+    "Sink processor: writes results back to the log or to an external transactional sink"
+  ],
+  "technology_stack": [
+    "Apache Kafka Streams",
+    "Apache Flink",
+    "Kafka Streams Processor API",
+    "RocksDB",
+    "Exactly-once v2 (KIP-447)"
+  ],
+  "anti_patterns": [
+    "Claiming exactly-once because the broker is transactional, when the sink does not participate in the transaction",
+    "Using processing-time windows over event-time data and calling the result late-arrival-safe",
+    "Scaling consumers past the partition count and believing the extra capacity is used",
+    "Treating a state store's local cache as the source of truth rather than the changelog",
+    "Running a long batch-style computation inside a streaming job simply because the input happens to be a log"
+  ],
+  "migration_from": [
+    "batch-processing",
+    "micro-batch-jobs"
+  ],
+  "migration_to": [
+    "kappa-architecture",
+    "event-driven"
+  ],
+  "related_patterns": [
+    "event-driven",
+    "pipe-and-filter",
+    "kappa-architecture",
+    "lambda-architecture",
+    "broker",
+    "reactive-architecture",
+    "event-sourcing"
+  ],
+  "design_principles": [
+    "One record at a time: incremental computation over an unbounded input",
+    "The log is the input, the state and the recovery mechanism",
+    "Parallelism is bounded by partitions; per-key order is the only order guaranteed",
+    "Event time is the clock; wall clock is a performance detail",
+    "Failure is a rewind, not a stop"
+  ],
+  "best_practices": [
+    "Decide explicitly between at-least-once and exactly-once per output, and document which sinks qualify",
+    "Size partitions to the parallelism you intend to reach, then treat it as a hard ceiling",
+    "Design for out-of-order arrival from the first version, including late-arrival handling for every windowed result",
+    "Test by killing tasks mid-stream, not by running the happy path",
+    "Replay-based recovery requires idempotent sinks unless the sink participates in the transaction"
+  ],
+  "references": [
+    "Apache Kafka, Core Concepts — processor topologies, event vs processing vs ingestion time, processing guarantees, https://kafka.apache.org/43/streams/core-concepts/",
+    "Apache Flink, Timely Stream Processing — event time, watermarks and lateness, https://nightlies.apache.org/flink/flink-docs-master/docs/concepts/time/",
+    "Apache Flink, Windows — window assigners, triggers and allowed lateness, https://nightlies.apache.org/flink/flink-docs-stable/docs/dev/datastream/operators/windows/",
+    "Apache Kafka, Streams Architecture — tasks, partitions and fault tolerance, https://kafka.apache.org/43/streams/architecture/"
+  ]
+}

@@ -1,0 +1,140 @@
+{
+  "name": "request-batch",
+  "category": "api_gateway",
+  "context": "A client needs several independent operations from the same provider — read a user, list their files, fetch their permissions — and issues them one at a time. Each individual call is cheap, but the chatty sequence dominates the cost: connection setup, TLS handshakes, per-request serialization, and N round trips of network latency that no amount of backend optimization can remove. Request batching (also catalogued as Request Bundle, Request Deck, or Bulk Request-Response) defines a single request message that carries many independent sub-requests, each with its own id, method, URL, headers, and optional body; the provider unpacks the bundle, executes the sub-requests, and returns a response bundle whose entries mirror the request structure, correlated by the same ids. The semantics are deliberately weak: a sub-request that fails does not roll back its siblings, which is exactly why the pattern only applies to genuinely independent operations. Microsoft Graph caps a JSON batch at 20 requests and exposes dependsOn for the cases that are not independent; Facebook Graph caps at 50 and counts every call inside a batch against the same rate limits, so batching reduces round trips without buying extra quota. A client may also assemble the bundle itself, with a time-window threshold that collects queries issued within 50ms into one dispatch — which is how most real implementations decide what goes in a batch.",
+  "benefits": [
+    "N network round trips collapse into one, so latency for a screen of independent reads drops from the sum of N calls to roughly one call",
+    "Connection reuse and header amortization: TLS handshake, TCP setup, and authentication are paid once per bundle instead of per sub-request",
+    "Serialization and parsing overhead is amortized — one envelope is parsed rather than N separate documents",
+    "Per-sub-request failure isolation becomes explicit and safe: one failed operation returns its own status in the response bundle without affecting siblings, unlike a single all-or-nothing composite call",
+    "Each sub-request can still carry its own method, URL, headers, and body, so the batch is heterogeneous and does not force a new bespoke bulk endpoint per use case",
+    "Response entries are correlatable by id even when the provider returns them out of order, so the client can match results without relying on position",
+    "Side effect on the client's cache and telemetry: batching reduces total requests, which improves the effect of any request rate limit on a well-behaved client",
+    "Deprioritization is possible without changing semantics — long-running sub-requests (report generation, export) can be split into their own asynchronous bundle"
+  ],
+  "tradeoffs": [
+    "Head-of-line blocking: a batched response is only as fast as its slowest sub-request, so one slow operation delays every unrelated operation sharing the bundle",
+    "Retries are much coarser — a network failure loses the whole bundle, so the client must be able to re-issue sub-requests idempotently or accept partial completion",
+    "Debugging gets materially harder: network tooling shows one request instead of many, and per-operation latency is no longer visible in the browser's request list",
+    "Whole-query caching degrades — a bundled operation's effective TTL is the shortest TTL of any field it contains, so adding fields makes the entire bundle less cacheable",
+    "Error semantics must be designed explicitly; a 200 on the bundle does not mean the sub-requests succeeded, and clients that check only the outer status will silently swallow failures",
+    "Batch size caps and per-sub-request rate limits still apply, so batching reduces chatter without granting additional quota — providers still count each sub-request",
+    "Payload growth increases memory pressure on both ends, and very large bundles can exceed request-size limits or URL-length constraints",
+    "Adds a client-side buffer and a dispatch window, which introduces its own latency and can batch requests that were never logically related"
+  ],
+  "quality_attributes": {
+    "scalability": 8,
+    "maintainability": 6,
+    "reliability": 6,
+    "security": 5,
+    "performance": 8,
+    "simplicity": 5
+  },
+  "suitable_domains": [
+    "request-response-apis",
+    "restful-apis",
+    "public-apis-requiring-rate-limiting-and-authentication",
+    "high-traffic",
+    "global-distribution",
+    "web-applications",
+    "mobile-applications",
+    "multi-client-systems",
+    "edge-computing-bandwidth"
+  ],
+  "unsuitable_domains": [
+    "hard-real-time-systems",
+    "real-time-interactive-systems",
+    "latency-sensitive-extreme",
+    "ultra-low-latency-requirements",
+    "short-duration-transactions-where-2pc-is-feasible",
+    "purely-synchronous-workloads"
+  ],
+  "use_cases": [
+    "A dashboard assembling 8 independent widgets, each fetching from the same API, into one dispatch on page load",
+    "A mobile client on a high-latency link batching profile, notification-count, and settings reads to avoid three radio round trips",
+    "A data sync job issuing thousands of independent per-record reads or writes through a bulk endpoint instead of one HTTP call each",
+    "Microsoft Graph's $batch JSON endpoint, where up to 20 independent requests travel in one POST and each response carries its own status",
+    "GraphQL clients collecting colocated component queries issued within a dispatch window into a single array-of-operations request",
+    "Bypassing URL-length limits by moving complex filter expressions from the query string into the request body of a batched call"
+  ],
+  "avoid_when": [
+    "The sub-requests are dependent — later operations need earlier results, which is what dependsOn is for, and full dependency graphs belong in an orchestration pattern",
+    "One slow sub-request would hold back fast, user-visible results; debatch or split the slow operations out instead",
+    "You have not fixed the underlying over-fetching — batching five redundant queries into one request still executes five queries",
+    "The provider has no per-sub-request status semantics, so a client cannot tell which operation failed and the whole bundle must be retried",
+    "Operations are not idempotent and a mid-bundle network failure would duplicate side effects on replay",
+    "The interaction is a single dependent read-modify-write, where a composite all-or-nothing endpoint is the correct mechanism, not a bundle"
+  ],
+  "component_types": [
+    "Request Bundle: the container format holding an array of independent sub-requests, each with an id, method, relative URL, headers, and optional body",
+    "Batch Endpoint: the provider route that accepts a bundle — Graph $batch, a multipart/mixed endpoint, or an array-of-operations body",
+    "Metadata Element: correlation ids that let the response bundle be matched back to request entries even out of order",
+    "Bundle Dispatcher: the client-side buffer with a time or size threshold that collects candidate operations before sending",
+    "Response Bundle: the mirrored structure of per-sub-request status, headers, and body, plus a bundle-level envelope status",
+    "Idempotency Key: the per-operation token that makes safe replay of a partially failed bundle possible",
+    "Dependency Descriptor: the dependsOn or sequencing metadata that expresses the rare cases where bundled operations are ordered"
+  ],
+  "technology_stack": [
+    "Microsoft Graph $batch",
+    "Facebook Graph API Batch Requests",
+    "Google Calendar API multipart/mixed batches",
+    "Apollo Client apollo-link-batch-http",
+    "GraphQL array-of-operations transport",
+    "gRPC (client-side batching)",
+    "HTTP/2 multiplexing",
+    "Salesforce Bulk API 2.0"
+  ],
+  "anti_patterns": [
+    "Batching enabled by default at project start with no measured evidence that request count is the actual problem",
+    "A generalized tunnel endpoint that accepts arbitrary unrelated operations, which hides API semantics behind a transport trick and is explicitly advised against in REST cookbook guidance",
+    "Checking only the outer 200 status and discarding per-sub-request statuses, silently losing failed operations",
+    "Combining every query on a page into one giant bundle, destroying whole-operation cache hit rates for all of them",
+    "Retrying an entire non-idempotent bundle after a transport failure, duplicating side effects",
+    "Batching fast user-blocking reads together with slow reporting calls so the whole screen waits on the report",
+    "Assuming batching buys quota — providers still count every sub-request against rate limits and still enforce a bundle size cap"
+  ],
+  "migration_from": [
+    "chatty-request-sequence",
+    "scatter-gather",
+    "api-gateway",
+    "client-server"
+  ],
+  "migration_to": [
+    "serverless",
+    "edge-computing"
+  ],
+  "related_patterns": [
+    "api-gateway",
+    "backend-for-frontend",
+    "edge-computing",
+    "microservices",
+    "client-server",
+    "event-driven",
+    "serverless"
+  ],
+  "design_principles": [
+    "Bundle only independent work: the safety of the pattern rests entirely on the absence of dependencies between sub-requests",
+    "Per-sub-request semantics over bundle semantics: every entry carries its own status, and the bundle-level status says nothing about whether the operations succeeded",
+    "Correlation by identity, never by position — assign explicit ids and match responses by id, since providers may return entries out of order",
+    "Idempotent replay: the design must tolerate a whole-bundle retry, because transport failures do not respect partial success",
+    "Batching is a transport optimization, not an API redesign — it must not change what any individual operation means or what it is authorized to do",
+    "Fix over-fetching first — reducing the number of operations needed is a better fix than packing them together more efficiently",
+    "Isolate the slow: expected-latency differences between operations are a reason to split the bundle, not to merge it"
+  ],
+  "best_practices": [
+    "Establish a measured baseline first — count actual round trips per user action before introducing batching",
+    "Try cheaper fixes in order: automatic persisted queries, CDN caching, partial query caching, then HTTP/2 multiplexing, before reaching for batching",
+    "Give every sub-request a unique id and validate uniqueness client-side, since providers reject the whole bundle on a duplicate",
+    "Cap bundle size at the provider's documented maximum and chunk above it, with per-chunk retry",
+    "Propagate per-sub-request status into client error handling and telemetry so failures remain attributable",
+    "Attach idempotency keys to mutating sub-requests so a bundle retry is safe",
+    "Add a debatch escape hatch for operations known to be slow, and drive it from observed latency rather than from a static list"
+  ],
+  "references": [
+    "Thomas Erling, et al., Request Bundle (a.k.a. Request Batch, Request Deck, Bulk Request-Response) — microservice API patterns, https://microservice-api-patterns.org/patterns/quality/dataTransferParsimony/RequestBundle",
+    "Microsoft, Combine multiple HTTP requests using JSON batching — Microsoft Graph documentation, https://learn.microsoft.com/en-us/graph/json-batching",
+    "Meta, Batch Requests — Graph API documentation, https://developers.facebook.com/docs/graph-api/batch-requests/",
+    "Jake Dawkins, Batching Client GraphQL Queries — Apollo GraphQL Blog, 2019, https://www.apollographql.com/blog/batching-client-graphql-queries",
+    "Sami Teräväinen, Applying the Micro Batching Pattern to Data Transfer — Salesforce Engineering Blog, 2021, https://engineering.salesforce.com/applying-the-micro-batching-pattern-to-data-transfer-5b5f72509da2/"
+  ]
+}

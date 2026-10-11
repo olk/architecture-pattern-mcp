@@ -1,0 +1,119 @@
+{
+  "category": "dataflow",
+  "name": "passthrough-replicator",
+  "context": "A source topic, or an external system that writes to one, must be republished to a destination topic — renamed, re-partitioned, re-keyed, filtered, or routed — with no aggregation, no windowing and no local state. The canonical topology is the Kafka Streams 'replicator': consume the input partitions as an ordinary consumer group member, optionally re-map the record, and write to an output topic whose partition count and partitioner are chosen independently of the source. Used for cross-cluster mirroring, environment-scoped topic aliasing, security re-scoping, and re-partitioning ahead of a downstream stateful sub-topology.",
+  "benefits": [
+    "Stays completely stateless — no state store, no changelog, no restore step, so a restart is O(1) instead of a state replay",
+    "Decouples the destination partition count and key scheme from the source, so downstream parallelism can change without producer changes",
+    "Provides one choke point for topic-level ACLs, PII redaction and schema translation instead of N consumer-side copies of that logic",
+    "Replay and backfill reduce to re-reading an offset range from the source log; the log is the queue",
+    "Delivery semantics are an explicit choice: at-least-once by default, exactly-once when the relay commits inside a Kafka transaction"
+  ],
+  "tradeoffs": [
+    "Adds a full extra hop (producer to source topic, relay, destination topic) with the matching latency, cost and failure domain",
+    "Ordering is only guaranteed within a source partition; re-keying during replication breaks per-key order for every downstream stateful operator",
+    "A naive relay duplicates by default — the destination accumulates a duplicate tail unless it is compacted or the relay is transactional",
+    "Backpressure is invisible at the destination: without lag-based autoscaling an overloaded relay silently buffers instead of shedding",
+    "Cross-cluster replication is asynchronous, so there is no global ordering and cycles are possible unless provenance headers are stamped"
+  ],
+  "quality_attributes": {
+    "scalability": 8,
+    "maintainability": 8,
+    "reliability": 7,
+    "security": 8,
+    "performance": 6,
+    "simplicity": 8
+  },
+  "suitable_domains": [
+    "stream-processing",
+    "high-throughput-streaming",
+    "distributed-data-pipelines",
+    "data-transformation-pipelines",
+    "multi-external-integrations",
+    "legacy-system-integration",
+    "cross-organizational",
+    "geographical-expansion-without-building-datacenters"
+  ],
+  "unsuitable_domains": [
+    "request-response-apis",
+    "simple-crud",
+    "strong-transaction",
+    "strongly-consistent-single-entity",
+    "low-data-volume-scenarios",
+    "random-data-access"
+  ],
+  "use_cases": [
+    "Mirroring a production topic into an analytics or archive cluster without exposing producers to a second cluster",
+    "Renaming topics per environment (dc1_orders to dc2_orders) so downstream clients always see a stable local name",
+    "Re-partitioning a topic to raise downstream parallelism before a stateful consumer joins it",
+    "Filtering or redacting sensitive fields once at a trusted boundary rather than in every consumer",
+    "Replaying a rebuilt destination topic from a retained source log after an accidental bad deployment"
+  ],
+  "avoid_when": [
+    "The relay needs to aggregate, deduplicate or join — that is a stateful topology, not a replicator",
+    "The source is a request/response API with no durable log behind it to replay from",
+    "End-to-end ordering across the whole topic is required — the topic, not the relay, is the ordering boundary",
+    "The transformation cannot be made idempotent, so replay from an arbitrary offset is unsafe"
+  ],
+  "component_types": [
+    "Source processor: subscribes to the input topic partitions as a normal consumer group member",
+    "Key/value re-map: optional record transformation, chosen to avoid an unnecessary repartition topic",
+    "Repartition topic: explicitly sized internal topic inserted only when the key actually changes",
+    "Sink processor: writes the destination topic with a declared partitioner and partition count",
+    "Provenance header: stamped on each replicated record to prevent a relayed record from being relayed back"
+  ],
+  "technology_stack": [
+    "Apache Kafka",
+    "Kafka Streams",
+    "Confluent Replicator",
+    "Kafka Connect",
+    "MirrorMaker 2",
+    "Debezium"
+  ],
+  "anti_patterns": [
+    "Re-keying without an explicit repartition topic, so downstream stateful operators silently receive data that is not co-partitioned",
+    "Mirroring inside the same cluster as if it were cross-cluster replication, doubling write load for zero isolation benefit",
+    "Relaying with at-least-once semantics into a non-compacted destination, producing an ever-growing duplicate tail",
+    "Configuring A to B and B to A relays without provenance headers, which is an infinite replication loop",
+    "Running several relays that each apply a different transformation, so the destination topic no longer has one defined meaning"
+  ],
+  "migration_from": [
+    "hand-written-consumers-that-republish-by-hand",
+    "batch-export-jobs",
+    "manual-topic-mirroring-scripts"
+  ],
+  "migration_to": [
+    "event-driven",
+    "pipe-and-filter",
+    "broker"
+  ],
+  "related_patterns": [
+    "broker",
+    "event-driven",
+    "pipe-and-filter",
+    "edge-computing",
+    "master-slave",
+    "kappa-architecture"
+  ],
+  "design_principles": [
+    "Statelessness: the relay holds no state, so recovery requires no restore step",
+    "Explicit partitioning: the destination partition count is a declared decision, never an inherited accident",
+    "Chosen delivery semantics: at-least-once or transactional exactly-once, decided rather than inherited",
+    "Unidirectional flow: replication is one-way and cycle-free by construction",
+    "Bounded blast radius: a relay failure degrades destination freshness, never the correctness of the source"
+  ],
+  "best_practices": [
+    "Size the destination partitions for the downstream consumer's parallelism, not for the upstream producer's convenience",
+    "Stamp provenance or origin headers so a replicated record can never be re-replicated back",
+    "Alert on consumer lag age, not record count — lag is measured in records but retention is measured in time",
+    "Keep relay logic trivial; anything with branching or aggregation belongs in a stateful topology",
+    "Make the relay idempotent so replay from an arbitrary offset is always safe"
+  ],
+  "references": [
+    "Apache Kafka, Streams Developer Guide — Repartition / Stateless transformations, https://kafka.apache.org/43/streams/developer-guide/dsl-api/",
+    "Apache Kafka, Repartitioned (javadoc) — partition count and partitioner for internal repartition topics, https://kafka.apache.org/43/javadoc/org/apache/kafka/streams/kstream/Repartitioned.html",
+    "KIP-221: Enhance DSL with Connecting Topic Creation and Repartition Hint, https://cwiki.apache.org/confluence/display/KAFKA/KIP-221%3A+Enhance+DSL+with+Connecting+Topic+Creation+and+Repartition+Hint",
+    "Confluent, Replicate Multi-Datacenter Topics Across Kafka Clusters in Confluent Platform, https://docs.confluent.io/platform/current/multi-dc-deployments/replicator/",
+    "Confluent, Replicator Configuration Reference — topic.rename.format, topic.preserve.partitions, https://docs.confluent.io/platform/current/multi-dc-deployments/replicator/configuration_options.html"
+  ]
+}

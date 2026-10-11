@@ -1,0 +1,104 @@
+{
+  "category": "data",
+  "name": "static-joiner",
+  "context": "A stream must be enriched with reference data that changes rarely — currency and geo tables, product catalogues, feature flags, model metadata, tenant configuration — so issuing a network query or a shard lookup per record is both slow and wasteful. The static joiner materialises the small side of the join locally (broadcast to every worker, or replicated into a compacted changelog and read as a table) and joins in-process, trading memory and replication cost for the removal of a per-record remote call.",
+  "benefits": [
+    "Eliminates a per-record network round trip — the join becomes an in-memory probe against a local store",
+    "Removes load from the authoritative reference store, which is often the very system the join exists to protect",
+    "Broadcasting the reference side removes the co-partitioning requirement entirely, so the stream need not be re-keyed to match it",
+    "Reference data can be refreshed without restarting the stream: the local copy is updated from a changelog",
+    "Chainable — several small reference tables can be joined in sequence without extra shuffles, unlike a repartitioned table join"
+  ],
+  "tradeoffs": [
+    "Every worker holds a full copy, so local memory and broker read bandwidth scale with workers times reference size",
+    "The join is only as fresh as the last reference update — a stale local copy silently produces wrong enrichment",
+    "A reference table that outgrows memory turns a static join into an unbounded problem that must be redesigned",
+    "Broadcasting a partitioned topic multiplies broker read load by the consumer count, which can become its own bottleneck",
+    "Foreign-key-style lookups by a value other than the record key are supported by global tables but not by co-partitioned local tables"
+  ],
+  "quality_attributes": {
+    "scalability": 7,
+    "maintainability": 8,
+    "reliability": 7,
+    "security": 7,
+    "performance": 9,
+    "simplicity": 7
+  },
+  "suitable_domains": [
+    "stream-processing",
+    "data-pipelines",
+    "etl"
+  ],
+  "unsuitable_domains": [],
+  "use_cases": [
+    "Enriching clickstream events with campaign and referrer metadata held in a slowly changing reference topic",
+    "Annotating transactions with currency and exchange-rate reference data for reporting",
+    "Joining IoT readings with a device registry that is provisioned rarely but queried constantly",
+    "Applying tenant configuration and feature flags to a high-volume stream without calling the config service per record",
+    "Star joins in which a fact stream meets several small dimension topics in sequence"
+  ],
+  "avoid_when": [
+    "The reference side is large, unbounded or changes at a rate comparable to the stream",
+    "A per-record external lookup is already cheap and the reference store is designed for point reads",
+    "Strong consistency with the authoritative reference store is required at the moment of the join",
+    "The reference data is itself highly partitioned and co-partitioned access is acceptable"
+  ],
+  "component_types": [
+    "Reference source: compacted topic, snapshot file, or change-data-capture stream from the authoritative store",
+    "Global/local reference table: fully replicated on every worker, or a partitioned table read as a local store",
+    "Broadcast join operator: per-key lookup into the local copy with no co-partitioning requirement",
+    "External lookup operator: async call to the authoritative store, used when the reference cannot be replicated",
+    "Refresh mechanism: changelog consumption or periodic reload that updates the local copy in place",
+    "Size guard: threshold that converts the join from broadcast to lookup when the reference exceeds the budget"
+  ],
+  "technology_stack": [
+    "Apache Kafka (GlobalKTable, compacted topics)",
+    "Kafka Streams",
+    "Apache Spark (broadcast hash join, BROADCAST hint)",
+    "Apache Flink (broadcast state)",
+    "Debezium (CDC of reference tables)"
+  ],
+  "anti_patterns": [
+    "Broadcasting a reference topic whose size has quietly outgrown the memory budget",
+    "Re-keying the stream to co-partition with a reference topic when a global broadcast join would need no repartition",
+    "Treating the local copy as authoritative and never reconciling it against the source of truth",
+    "Choosing a join strategy at plan time from estimated sizes, when runtime statistics would have chosen better",
+    "Joining against a reference topic that is not compacted, so the local copy accumulates every historical revision"
+  ],
+  "migration_from": [
+    "per-record-remote-lookups",
+    "batch-dimension-joins",
+    "periodic-full-reference-reloads"
+  ],
+  "migration_to": [
+    "event-driven",
+    "pipe-and-filter"
+  ],
+  "related_patterns": [
+    "data-mesh",
+    "event-driven",
+    "pipe-and-filter",
+    "lambda-architecture",
+    "command-query-responsibility-segregation"
+  ],
+  "design_principles": [
+    "Replicate the small side, never the large one",
+    "Local-first joins: reference data belongs next to the processor, not behind a socket",
+    "No co-partitioning requirement for globally replicated reference data",
+    "Freshness is an explicit property of the join, measured and bounded",
+    "A size budget decides the strategy — broadcast below it, lookup above it"
+  ],
+  "best_practices": [
+    "Compact the reference topic so each key retains only its latest value",
+    "Track reference-table size in bytes, not row count, when sizing the broadcast budget",
+    "Set an explicit size threshold that flips the join strategy before the local copy becomes fatal",
+    "Keep the join key identical to the reference key; a foreign-key lookup needs a global table, not a partitioned one",
+    "Monitor the staleness of the local copy as a first-class pipeline SLI"
+  ],
+  "references": [
+    "Apache Kafka, Streams DSL — GlobalKTable benefits and downsides (broadcast, no co-partitioning, storage and broker load), https://kafka.apache.org/43/streams/developer-guide/dsl-api/",
+    "Apache Kafka, Core Concepts — stream-table duality and changelog streams, https://kafka.apache.org/43/streams/core-concepts/",
+    "Apache Spark, SQL Performance Tuning — AQE converting sort-merge join to broadcast hash join, and broadcast hints, https://spark.apache.org/docs/latest/sql-performance-tuning.html",
+    "Apache Spark, SQL Programming Guide — BROADCAST join hint syntax, https://spark.apache.org/docs/latest/sql-ref-syntax-qry-select-join.html"
+  ]
+}

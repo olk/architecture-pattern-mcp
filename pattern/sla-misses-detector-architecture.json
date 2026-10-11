@@ -1,0 +1,105 @@
+{
+  "category": "specialized",
+  "name": "sla-misses-detector",
+  "context": "A data pipeline's promise is not 'the process is up' but 'data is fresh, complete and correct within X'. This pattern evaluates pipeline service-level indicators against their objectives over rolling windows and emits structured, severity-classified alerts when the objective is being missed — a page for an error budget burning fast, a ticket for slow erosion. Freshness is measured as the age of the oldest unprocessed item or the most recently processed item; correctness as a ratio of processing errors to items processed; completeness as the fraction of expected volume observed.",
+  "benefits": [
+    "Converts an unbounded stream of raw metrics into a small number of alerts that correspond to user-visible loss",
+    "Severity falls out of the burn rate, so paging is reserved for events that will exhaust the error budget, not for every threshold crossing",
+    "Multiwindow checks (page when the long window and a 1/12-length short window both breach) cut false positives without losing detection speed",
+    "Makes the error budget an explicit, spendable quantity that teams can trade against release velocity",
+    "Windowed SLIs catch chronic sub-threshold degradation that instantaneous checks miss"
+  ],
+  "tradeoffs": [
+    "Burn-rate alerting needs a minimum event rate; a pipeline processing a handful of records an hour cannot be distinguished from one failing",
+    "Objective selection is a business decision, and a wrong objective produces confident, worthless alerts",
+    "Multiwindow rules are more complex to author and to explain at 3am than a single threshold",
+    "Very high availability objectives cannot be defended by alerting — a 100% outage can exhaust a 99.999% budget faster than the alert pipeline can deliver a page",
+    "Alerts that classify hard misses without suppressing known-benign windows degrade into noise and get muted"
+  ],
+  "quality_attributes": {
+    "scalability": 6,
+    "maintainability": 7,
+    "reliability": 9,
+    "security": 5,
+    "performance": 7,
+    "simplicity": 6
+  },
+  "suitable_domains": [
+    "stream-processing",
+    "real-time-analytics",
+    "telecommunications"
+  ],
+  "unsuitable_domains": [],
+  "use_cases": [
+    "Freshness SLO: 99% of records reach the serving table within 100 seconds, measured as a distribution cut over pipeline lag",
+    "Completeness SLO: the hourly ingest volume is at least 99.5% of the previous hour's volume",
+    "Correctness SLO: fewer than 0.5% of items in a calendar month contain schema or range errors",
+    "Windowed freshness: 99% of five-minute windows over a rolling day never exceeded the lag threshold",
+    "Classifying an SLA miss as a hard miss requiring paging versus a soft miss that opens a ticket"
+  ],
+  "avoid_when": [
+    "No objective has been agreed with the business — the pattern needs a target, not just a metric",
+    "The signal is a low-rate, bursty event stream where burn rate is statistically meaningless",
+    "Only infrastructure health is available (CPU, disk) and no pipeline-level SLI can be derived",
+    "The consumer of the alert is automated remediation with no human in the loop — that is a policy engine, not an SLO"
+  ],
+  "component_types": [
+    "SLI definitions: correctness ratio, freshness distribution cut, completeness ratio, each expressed over a rolling window",
+    "Objective store: the target percentage, rolling period and error budget derived from it",
+    "Burn-rate evaluator: ratio of observed bad-event rate to the SLO's allowed error rate",
+    "Multiwindow gate: a long window plus a short window (roughly 1/12 its length) that must both breach before firing",
+    "Severity classifier: page versus ticket, derived from the fraction of budget consumed",
+    "Emission channel: structured alert with the objective, window, observed value and budget remaining"
+  ],
+  "technology_stack": [
+    "Prometheus",
+    "Alertmanager",
+    "Google Cloud Monitoring",
+    "Grafana",
+    "Kafka consumer lag exporter",
+    "OpenTelemetry"
+  ],
+  "anti_patterns": [
+    "Alerting on a raw lag threshold, which fires constantly on bursty pipelines and stays silent on slowly degrading ones",
+    "Using only infrastructure metrics (CPU, memory) as a proxy for pipeline health",
+    "Treating SLO compliance as binary, hiding the difference between a 1% and a 60% budget burn",
+    "Paging on a single slow window with no burn-rate gating",
+    "Alerting on percentiles of a signal whose population changes at night, so the very p99 that mattered yesterday is now routine"
+  ],
+  "migration_from": [
+    "threshold-based-alerting",
+    "infrastructure-health-dashboards"
+  ],
+  "migration_to": [
+    "event-driven",
+    "task-control-architecture",
+    "broker"
+  ],
+  "related_patterns": [
+    "event-driven",
+    "pipe-and-filter",
+    "edge-computing",
+    "task-control-architecture",
+    "saga"
+  ],
+  "design_principles": [
+    "Alert on user-visible loss, not on component state",
+    "Budget, not threshold: the unit of concern is how fast the error budget is being spent",
+    "Multiwindow confirmation: fast detection with slow reset, so the alert neither misses nor cries wolf",
+    "Severity derived from burn rate, never from the metric that tripped",
+    "Every alert carries enough context to act without opening the dashboard"
+  ],
+  "best_practices": [
+    "Start the rolling period at 28 days — long enough for strategic and tactical use, short enough to react to",
+    "Express SLIs as good-events over total-events so the objective maps directly onto an error budget",
+    "Implement multiwindow multi-burn-rate alerts rather than a single threshold; page on 14.4x over 1h confirmed by 5m, ticket on 6x over 6h",
+    "For streaming pipelines use lag age, not lag count — records and seconds are different units",
+    "Alert on windowed SLIs as well as request-based ones so chronic slowness is visible"
+  ],
+  "references": [
+    "Google SRE Workbook, Chapter 5 — Alerting on SLOs (burn rate, multiwindow multi-burn-rate, low-traffic services), https://sre.google/workbook/alerting-on-slos/",
+    "Google Cloud, SLI metrics for data processing services (correctness and freshness SLIs), https://cloud.google.com/stackdriver/docs/solutions/slo-monitoring/sli-metrics/data-proc-metrics",
+    "Google Cloud, Plan your Dataflow pipeline — data freshness and correctness SLO formats, https://cloud.google.com/dataflow/docs/guides/plan-pipelines",
+    "Google Cloud, SLI overview — what makes a good SLI, https://cloud.google.com/stackdriver/docs/solutions/slo-monitoring/sli-metrics/overview"
+  ]
+}

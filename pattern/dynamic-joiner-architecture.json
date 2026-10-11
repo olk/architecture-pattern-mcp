@@ -1,0 +1,167 @@
+{
+  "name": "dynamic-joiner",
+  "category": "dataflow",
+  "context": "Enriching an unbounded stream against a reference table that keeps changing under you. The classic case is an order stream that must be valued at the currency rate in force when the order happened, or a click stream that must be labelled with the customer segment as it stood at click time — not as it stands now. The mechanic that makes this hard is that a naive lookup produces a result that depends on arrival order rather than on event time, which makes replay non-deterministic. Kafka Streams states this bluntly: for a stream-table join the KTable lookup is done against the current KTable state, so 'out-of-order records can yield non-deterministic result', and out-of-order data is not handled at all unless the store is versioned — with versioned stores 'stream-side out-of-order data will be properly handled by performing a timestamp-based lookup in the table', while table-side out-of-order data still is not. That single distinction — versioned (timestamp-keyed) versus unversioned (offset-keyed) state — is the axis the pattern turns on. Flink splits it into two named operators. A temporal join uses `FOR SYSTEM_TIME AS OF probe.time` and returns the version of the table that was valid at the probe row's timestamp, giving 'correct, deterministic results in the presence of out-of-orderness and arbitrary time skew between the two tables' — but it demands a versioned build side, and in the temporal-table-function form it can only be defined on top of append-only streams, with no changelog input. A lookup join instead takes the probe row's processing time (`FOR SYSTEM_TIME AS OF o.proc_time`), queries an external table through a lookup source, and caches it locally: only INNER and LEFT are supported, the join condition must hit the dimension table's primary key, and changes made in the dimension database are visible only to events that arrive afterwards. Both operators have a hard operational prerequisite that surprises people: the dimension side needs its own watermarks, and until they advance past the probe timestamps the temporal join returns nothing at all. A stream-table join also inherits Kafka Streams' requirement that the table side be a compacted changelog — a KTable whose updates collapse to latest-value-per-key, which is why the canonical tutorial joins a transaction topic against a currency-rate topic that is specifically compacted with upsert-kafka.",
+  "benefits": [
+    "Deterministic output under out-of-order arrival and clock skew: the temporal join is specified to return correct results regardless of arrival order or arbitrary time skew between probe and build side",
+    "Historical correctness — an event joined 'as of' its own timestamp reflects the reference data as it stood, so a replay years later reproduces the original result",
+    "Event-time joins are reprocessable: because the result depends on data and not on wall clock, the whole log can be replayed to rebuild state",
+    "No unbounded state for the lookup variant — a probe stream joined against an external table reads through a cache instead of buffering the entire stream, which is what makes it viable at high throughput",
+    "Asynchronous lookup mode keeps the enrichment off the critical path: implementations that issue lookups concurrently amortise per-request round-trip cost across the batch",
+    "Versioned state stores convert an offset-based, non-deterministic table view into a timestamp-based one, making out-of-order stream-side records correct instead of arbitrary",
+    "Late probe records get the right dimension version instead of today's value, which removes a whole class of silent revenue-reporting error",
+    "Cache TTL and row-count limits make the reference table's freshness an explicit, tunable parameter rather than an accident of the connector's defaults"
+  ],
+  "tradeoffs": [
+    "Versioned state costs storage and memory: a versioned store keeps the full history of the table's changes, while an unversioned store keeps only the latest value",
+    "The build side must be a changelog — in Flink's temporal-table-function form only append-only streams qualify, and in Kafka Streams a KTable requires a compacted topic fed by upserts",
+    "The dynamic joiner only fixes the probe side. Kafka Streams is explicit that with versioned stores 'table-side out-of-order data is still not handled'",
+    "Temporal joins emit nothing until the dimension side's watermarks pass the probe timestamps — the join can look broken while it is actually correct and waiting",
+    "Lookup joins are non-deterministic by construction: they snapshot the dimension at processing time, so a result cannot be reproduced after the fact and is sensitive to dimension updates during a replay",
+    "A per-record lookup can become the bottleneck — each enrichment is a network round trip unless the connector batches or caches, and an unselective lookup key pulls the whole table",
+    "Cache staleness is a correctness compromise: rows are refreshed on TTL rather than immediately, so the window between a dimension update and its visibility in joined output is the TTL",
+    "Join cardinality is unbounded on the stream-stream side: Kafka Streams warns that a stream-stream join 'is always windowed, because otherwise the size of the internal state store would grow indefinitely'",
+    "Outer-join semantics add their own delay and fragility: left and outer results are emitted only after the grace period has passed, and using a deprecated grace-setting API 'will result in eagerly emitted spurious left results'",
+    "Dimension changes make historical aggregates inconsistent if they were computed by different join semantics at different times — the join is only as reproducible as the state version behind it"
+  ],
+  "quality_attributes": {
+    "scalability": 8,
+    "maintainability": 6,
+    "reliability": 7,
+    "security": 6,
+    "performance": 7,
+    "simplicity": 4
+  },
+  "suitable_domains": [
+    "stream-processing",
+    "streaming",
+    "event-driven-workloads",
+    "real-time-analytics",
+    "data-pipelines",
+    "data-processing",
+    "financial-trading",
+    "banking-and-finance",
+    "e-commerce-order-processing",
+    "recommendation-systems",
+    "applications-needing-complex-cross-shard-joins",
+    "state-dependent-processing",
+    "clickstream-analytics",
+    "high-throughput-streaming"
+  ],
+  "unsuitable_domains": [
+    "batch-analytics-only",
+    "static-reference-data",
+    "simple-request-response",
+    "request-response-apis",
+    "single-threaded-environments",
+    "prototypes",
+    "simple-domains",
+    "strong-immediate-consistency",
+    "ultra-low-latency-requirements"
+  ],
+  "use_cases": [
+    "Converting order amounts to a common currency using the rate table version that was in force at the order's event time via `FOR SYSTEM_TIME AS OF orders.transaction_time`",
+    "Labelling clickstream events with the customer segment as of the click, using a dimension stream exposed through the upsert-kafka connector",
+    "Streaming enrichment of a high-throughput event stream against a Postgres or HBase dimension table through a lookup join with a bounded row cache and TTL",
+    "Kafka Streams stream-table join against a compacted topic, materialised with a versioned store so out-of-order stream records perform a timestamp-based lookup",
+    "Runtime dict building: a lookup join with insert-if-not-exists that assigns an auto-increment integer id the first time an unknown user or device id is seen, avoiding the dictionary table being a separate pipeline",
+    "Joining several dimension streams to one fact stream in a single Flink SQL query, where each dimension needs its own watermark declared before any result appears",
+    "Sessionisation against a reference set of known user sessions whose boundaries are corrected after the fact"
+  ],
+  "avoid_when": [
+    "The reference data genuinely never changes during the run — a static broadcast join is simpler, has no cache to tune and no version state to hold",
+    "You need the exact result to be reproducible later; a processing-time lookup join is a snapshot at arrival time and cannot be replayed",
+    "The probe stream has no event timestamp, because without one there is no 'as of' to join at and event-time joins become lookups",
+    "The build side cannot expose a version or changelog, which rules out the temporal form entirely",
+    "The join key has very low selectivity — pulling a whole dimension row set per record will cost more than the stream is worth",
+    "The dimension table is so large it will not fit a cache and the lookup source cannot filter server-side",
+    "You cannot wait for dimension-side watermarks; a temporal join that emits nothing looks indistinguishable from a broken job",
+    "Table-side out-of-orderness matters and versioned stores do not cover it — you would need a temporal table function on an append-only build side"
+  ],
+  "component_types": [
+    "Probe stream: the left input, append-only in the temporal form, carrying the event-time or processing-time attribute used to resolve the join",
+    "Build side: the changing reference data, either a changelog stream with a primary key or an external table exposed through a lookup source",
+    "Temporal join operator: `FOR SYSTEM_TIME AS OF probe.time`, returning the build-side version valid at the probe timestamp and requiring watermarks on both sides",
+    "Temporal table function: an append-only stream registered with key columns and a time attribute, queried as a UDTF for the event-time variant",
+    "Lookup join operator: a per-record query against an external table with asynchronous mode, a lookup cache of bounded rows, and a TTL",
+    "Versioned state store: the timestamp-keyed store backing a KTable so stream-side out-of-order records do a timestamp-based lookup instead of reading the current value",
+    "Watermark generator with idleness: the per-input watermark whose minimum across inputs holds back the join, plus the idleness timeout that lets a quiet partition stop blocking progress",
+    "Changelog topic: the compacted, upsert-backed topic that makes a Kafka Streams KTable possible at all",
+    "State TTL / cleanup policy: the retention after which superseded build-side versions are discarded from state",
+    "Cardinality / hit-rate metrics: per-record lookup latency, cache hit ratio, miss rate and out-of-order-count, since a dynamic join's failure mode is usually a silent cache miss storm"
+  ],
+  "technology_stack": [
+    "Apache Flink SQL temporal joins and lookup joins",
+    "Flink FOR SYSTEM_TIME AS OF",
+    "Kafka Streams KStream-KTable joins",
+    "Apache Kafka compacted and upsert-kafka topics",
+    "Kafka Streams versioned state stores",
+    "Apache Spark Structured Streaming stream-static joins",
+    "Debezium change data capture",
+    "PostgreSQL and MySQL JDBC lookup connectors",
+    "HBase and Redis as lookup or cache targets",
+    "Iceberg and Hudi as versioned build-side storage"
+  ],
+  "anti_patterns": [
+    "Joining against the current dimension value in an event-time pipeline, which silently produces results that depend on arrival order and cannot be reproduced",
+    "Using an unversioned store for a stream-table join and assuming out-of-order records are handled — they are not, and the docs say the result is unpredictable",
+    "Enabling compaction on the table side but feeding it from a plain producer, so the changelog never collapses and the KTable view grows instead of updating",
+    "Declaring watermarks on the fact stream only, so the temporal join sits silent because the dimension side's watermark never advances",
+    "Leaving an unbounded grace or no-grace configuration on a stream-stream join and discovering the state store grows without limit",
+    "Using the deprecated grace-setting API and getting eagerly emitted spurious left/outer join rows",
+    "Per-record synchronous lookup with no cache on a hot key path, turning enrichment latency into the pipeline's latency",
+    "Caching an entire dimension table instead of a bounded row set, which converts a memory problem into a correctness problem when the table changes",
+    "Joining on a non-unique key where the build side declares a primary key, producing silently wrong multiplicity",
+    "Treating a lookup join as equivalent to a temporal join in an audit context, where point-in-time correctness is a regulatory requirement"
+  ],
+  "migration_from": [
+    "event-driven",
+    "lambda-architecture",
+    "pipe-and-filter"
+  ],
+  "migration_to": [
+    "kappa-architecture",
+    "event-sourcing",
+    "reactive-architecture"
+  ],
+  "related_patterns": [
+    "kappa-architecture",
+    "event-driven",
+    "event-sourcing",
+    "lambda-architecture",
+    "reactive-architecture",
+    "pipe-and-filter",
+    "data-mesh",
+    "actor-based"
+  ],
+  "design_principles": [
+    "Decide the clock before the mechanism — the first question is whether the join resolves at probe event time or at processing time, because that choice determines whether results are reproducible at all",
+    "A reference table that changes under you must be versioned; latest-value state is sufficient only when the reference is genuinely static",
+    "Waiting is part of correctness — a temporal join's silence until watermarks advance is the mechanism working, not a fault",
+    "Fixed grace periods buy correctness at the price of latency and state; the grace is an explicit latency/cost/correctness trade, not a tuning detail",
+    "Versioned joins fix the probe side only; treat table-side out-of-orderness as a separate, unsolved requirement",
+    "Put the join key at the head of the partition key and give the build side the same partitioning, so lookup state is co-located and cacheable",
+    "Bound every cache and every state store — an unbounded enrichment state is a distributed join with all of its failure modes"
+  ],
+  "best_practices": [
+    "Declare watermarks on both sides before deploying, and alert on 'watermark has not advanced' separately from 'join emits no rows'",
+    "Use a versioned store for any stream-table join where records can arrive out of order, and document the assumption in the job definition",
+    "Bound the lookup cache by rows and TTL, and expose hit rate as a metric — an unmonitored cache miss is an unbounded latency generator",
+    "Filter on the lookup key with a pushdown-capable connector so the lookup source never returns more than one candidate row",
+    "Use asynchronous lookup mode for high-throughput enrichment and measure the effect before assuming synchronous is simpler",
+    "Make the dimension side a compacted, upsert-backed changelog and keep its retention long enough that a replay can rebuild state from it",
+    "Test with deliberately shuffled input and verify determinism — a temporal join is only correct if it survives out-of-order arrival, and the shuffle test is the only cheap proof",
+    "Validate the point-in-time result against a known historical case (an order whose rate changed that day) before trusting the pipeline",
+    "Set state TTL to the longest replay window you intend to support; cleanup too early makes replay silently incomplete"
+  ],
+  "references": [
+    "Apache Flink, Joins in Continuous Queries — temporal table function joins, `FOR SYSTEM_TIME AS OF`, requirement that a temporal table be backed by a LookupableTableSource, and the non-determinism of processing-time joins — https://nightlies.apache.org/flink/flink-docs-release-1.10/dev/table/streaming/joins.html",
+    "Apache Flink, Temporal Table Function — versioned temporal tables over append-only streams, LATERAL TABLE lookup against the row's time attribute — https://nightlies.apache.org/flink/flink-docs-master/docs/concepts/sql-table-concepts/temporal_table_function/",
+    "Confluent, How to join multiple streams of data with Flink SQL — a temporal join returning nothing until the dimension tables' watermarks advance past the order timestamps, and the non-compacted / compacted (upsert-kafka) topic split — https://developer.confluent.io/confluent-tutorials/multi-joins/flinksql/",
+    "Ververica, Dimension Table Joins — `FOR SYSTEM_TIME AS OF o.proc_time` as a processing-time snapshot, INNER/LEFT only, primary-key equi-join, lookup.cache.max-rows and lookup.cache.ttl, changes visible only to later events — https://docs.ververica.com/docs/byoc/user-guides/developer-guide/sql-development/dimension-table-joins",
+    "Apache Flink Table Store, Lookup Join — asynchronous lookup as the default, primary-key requirement, RocksDB cache, and insert-if-not-exists for runtime dictionary building — https://nightlies.apache.org/flink/flink-table-store-docs-master/docs/development/lookup-join/",
+    "Apache Kafka, Kafka Streams Core Concepts — event time vs ingestion time via TimestampExtractor, stream-table joins against current KTable state yielding non-deterministic results on out-of-order records, and versioned stores making stream-side out-of-order data correct while table-side remains unhandled — https://kafka.apache.org/43/streams/core-concepts/",
+    "Apache Kafka, JoinWindows Javadoc — grace period semantics, `ofTimeDifferenceAndGrace` window close at windowEnd + afterWindowEnd, and the caution that `ofTimeDifferenceWithNoGrace` drops any out-of-order record after window end — https://kafka.apache.org/39/javadoc/org/apache/kafka/streams/kstream/JoinWindows.html",
+    "Apache Flink, Generating Watermarks — watermark strategy composition and `withIdleness` so a quiet partition stops holding back the global watermark — https://nightlies.apache.org/flink/flink-docs-stable/docs/dev/datastream/event-time/generating_watermarks/"
+  ]
+}
