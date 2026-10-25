@@ -93,8 +93,12 @@ class ScenarioExecutor(Protocol):
 
     async def run(
         self, scenario: cfg.Scenario
-    ) -> tuple[PipelineAnalysisResult, PipelineResult, list[StageRecord], dict[str, Any]]:
-        """Execute ``scenario``; return (analysis, pipeline result, stage slice, provenance)."""
+    ) -> tuple[PipelineAnalysisResult, PipelineResult | None, list[StageRecord], dict[str, Any]]:
+        """Execute ``scenario``; return (analysis, result or None, stage slice, provenance).
+
+        ``result`` is ``None`` for the analyze-only arm: it stops after ANALYZE, so the
+        generate–evaluate observables do not exist.
+        """
         ...
 
 
@@ -133,11 +137,9 @@ class OfflineExecutor:
 
     async def run(
         self, scenario: cfg.Scenario
-    ) -> tuple[PipelineAnalysisResult, PipelineResult, list[StageRecord], dict[str, Any]]:
+    ) -> tuple[PipelineAnalysisResult, PipelineResult | None, list[StageRecord], dict[str, Any]]:
         """Run one scenario through the real pipeline over the scenario's scripted pool."""
-        script = build_script(
-            scenario, self._catalog, flip=scenario.scenario_id in self._flips
-        )
+        script = build_script(scenario, self._catalog, flip=scenario.scenario_id in self._flips)
         pipeline = build_offline_pipeline(
             script, scenario, config=self._config, catalog=self._catalog, recorder=self.recorder
         )
@@ -166,9 +168,7 @@ class LiveExecutor:
         self.recorder = recorder
 
     @classmethod
-    async def create(
-        cls, *, config: ServerConfig, catalog: PatternLoader, recorder: StageRecorder
-    ) -> LiveExecutor:
+    async def create(cls, *, config: ServerConfig, catalog: PatternLoader, recorder: StageRecorder) -> LiveExecutor:
         """Build the live wiring exactly like the server does, then wrap the timing seams.
 
         ``warmup_indexes()`` builds both retrieval legs through the real TEI embedder
@@ -201,18 +201,14 @@ class LiveExecutor:
             "BaseRetriever",
             SyncLegTimingProxy(pipeline._bm25_retriever, recorder, stage="retrieval.bm25"),
         )
-        pipeline._agent = cast(
-            "SoftwareArchitectAgent", AgentTimingProxy(pipeline._agent, recorder)
-        )
+        pipeline._agent = cast("SoftwareArchitectAgent", AgentTimingProxy(pipeline._agent, recorder))
 
         reasoning_inner: ReasoningClient | None = None
         reasoning_health: dict[str, str] | None = None
         if config.reasoning.enabled:
             reasoning_inner = ReasoningClient(config.reasoning, agent_inner)
             reasoning_health = await reasoning_inner.health_check()
-            pipeline._reasoning = cast(
-                "ReasoningClient | None", ReasoningTimingProxy(reasoning_inner, recorder)
-            )
+            pipeline._reasoning = cast("ReasoningClient | None", ReasoningTimingProxy(reasoning_inner, recorder))
 
         return cls(
             config=config,
@@ -242,12 +238,40 @@ class LiveExecutor:
 
     async def run(
         self, scenario: cfg.Scenario
-    ) -> tuple[PipelineAnalysisResult, PipelineResult, list[StageRecord], dict[str, Any]]:
+    ) -> tuple[PipelineAnalysisResult, PipelineResult | None, list[StageRecord], dict[str, Any]]:
         """Run one scenario in-process; failures propagate to the runner's failure policy."""
-        analysis, result, slice_records = await _execute_pipeline(
-            self._pipeline, scenario, self.recorder
-        )
+        analysis, result, slice_records = await _execute_pipeline(self._pipeline, scenario, self.recorder)
         return analysis, result, slice_records, {}
+
+
+class AnalyzeExecutor(LiveExecutor):
+    """Live seams, ANALYSIS phase only: the arm a generation-skipping default would ship.
+
+    The wiring is :class:`LiveExecutor`'s (real TEI embedder/reranker, real generator for
+    the requirement-weight extraction, optional reasoning); only the phase scope differs:
+    :meth:`ArchitecturePipeline.analyze` runs and ``design_loop`` does not. Selection
+    observables (hit on ``recommended_style``, the ordered selection set, recall@3/@5) are
+    exactly what a full arm's ANALYZE phase produces, so they compare directly with a
+    ``live`` arm; the evaluation score, calibration and design block are not observable
+    and are recorded as ``None``/``null`` rather than a zero.
+    """
+
+    name = "analyze"
+
+    async def run(
+        self, scenario: cfg.Scenario
+    ) -> tuple[PipelineAnalysisResult, None, list[StageRecord], dict[str, Any]]:
+        """Run ANALYZE only; failures propagate to the runner's failure policy."""
+        analysis, slice_records = await _execute_analyze_pipeline(self._pipeline, scenario, self.recorder)
+        return analysis, None, slice_records, {"phases": ["analyze"]}
+
+    def describe(self) -> dict[str, Any]:
+        """Seam provenance: the live wiring plus the reduced phase scope."""
+        description = super().describe()
+        description["seams"]["phases"] = (
+            "analyze only via ArchitecturePipeline.analyze (no generate/evaluate; score/calibration not observable)"
+        )
+        return description
 
 
 async def _execute_pipeline(
@@ -281,6 +305,21 @@ async def _execute_pipeline(
     return analysis, result, recorder.snapshot()[offset:]
 
 
+async def _execute_analyze_pipeline(
+    pipeline: ArchitecturePipeline, scenario: cfg.Scenario, recorder: StageRecorder
+) -> tuple[PipelineAnalysisResult, list[StageRecord]]:
+    """ANALYZE only: the phase whose selection the full arm's generate/evaluate build on.
+
+    Same request construction as :func:`_execute_pipeline` (the authored description and
+    domain), so the arm is a strict phase subset of a ``live`` run: retrieval legs,
+    requirement-weight extraction, reasoning and deterministic scoring all run; the
+    generate–evaluate loop does not.
+    """
+    offset = len(recorder)
+    analysis = await pipeline.analyze(requirements=scenario.description, domain=scenario.domain)
+    return analysis, recorder.snapshot()[offset:]
+
+
 async def run_benchmark(options: RunOptions) -> dict[str, Any]:
     """Execute one arm and write its run directory; return the run id/paths for the CLI.
 
@@ -311,9 +350,7 @@ def _write_abort_marker(options: RunOptions, exc: BaseException) -> None:
         "at": cfg.utc_now_iso(),
     }
     try:
-        out_dir = options.out_dir or (
-            cfg.DEFAULT_OUT_DIR / (options.run_id or cfg.default_run_id(options.mode))
-        )
+        out_dir = options.out_dir or (cfg.DEFAULT_OUT_DIR / (options.run_id or cfg.default_run_id(options.mode)))
         cfg.write_json(cfg.RunPaths.for_run(out_dir).root / "aborted.json", marker)
     except OSError:
         pass
@@ -377,11 +414,11 @@ async def _run_benchmark(options: RunOptions) -> dict[str, Any]:
     recorder = StageRecorder()
     executor: ScenarioExecutor
     if options.mode == "offline":
-        executor = OfflineExecutor(
-            config=config, catalog=catalog, recorder=recorder, flips=frozenset(options.flips)
-        )
+        executor = OfflineExecutor(config=config, catalog=catalog, recorder=recorder, flips=frozenset(options.flips))
     elif options.mode == "live":
         executor = await LiveExecutor.create(config=config, catalog=catalog, recorder=recorder)
+    elif options.mode == "analyze":
+        executor = await AnalyzeExecutor.create(config=config, catalog=catalog, recorder=recorder)
     else:
         raise ValueError(f"mode {options.mode!r} runs through e2e.py (black-box, no stages)")
 
@@ -391,9 +428,7 @@ async def _run_benchmark(options: RunOptions) -> dict[str, Any]:
 
     warmup_record: dict[str, Any] | None = None
     if options.warmup:
-        warmup_record, _warmup_stages = await _execute(
-            executor, selected[0], repeat=0, warmup=True
-        )
+        warmup_record, _warmup_stages = await _execute(executor, selected[0], repeat=0, warmup=True)
         cfg.write_json(paths.root / "warmup.json", warmup_record)
 
     records, stage_records, failures = await _run_scenarios(
@@ -401,6 +436,7 @@ async def _run_benchmark(options: RunOptions) -> dict[str, Any]:
     )
 
     notes = _fixture_notes(options, records)
+    notes.extend(_mode_notes(options))
     if failures:
         failed_keys = ", ".join(f"{item['scenario_id']}#r{item['repeat']}" for item in failures)
         notes.append(
@@ -467,7 +503,7 @@ async def _execute(
         "residual_ms": residual,
         "residual_note": _residual_note(residual),
         "quality": quality,
-        "pipeline": _pipeline_block(result),
+        "pipeline": None if result is None else _pipeline_block(result),
         "selection": _selection_block(analysis),
         "provenance": extra,
     }
@@ -538,14 +574,19 @@ def _residual_note(residual: float) -> str | None:
 
 
 def _quality_block(
-    analysis: PipelineAnalysisResult, result: PipelineResult, scenario: cfg.Scenario
+    analysis: PipelineAnalysisResult, result: PipelineResult | None, scenario: cfg.Scenario
 ) -> dict[str, Any]:
-    """Every quality metric for one scenario (plan §4)."""
+    """Every quality metric for one scenario (plan §4).
+
+    ``result`` is ``None`` for the analyze-only arm: hit/recall stay fully observable
+    (they come from the analysis), while the evaluation score and its calibration
+    diagnostics are ``None`` — never a zero, which would poison Brier/ECE for the arm.
+    """
     fallback = scoring.is_fallback(analysis, result)
     final_style = scoring.final_pattern_of(analysis, result)
     hit = (not fallback) and final_style is not None and final_style in set(scenario.acceptable_primary)
     selected = scoring.selected_ordered(analysis)
-    score = scoring.calibration_score(result)
+    score = None if result is None else scoring.calibration_score(result)
     return {
         "hit": hit,
         "fallback": fallback,
@@ -558,9 +599,9 @@ def _quality_block(
         "recall_at_5": round(scoring.recall_at_k(selected, scenario.acceptable, 5), 6),
         "acceptable_primary_f1": scoring.acceptable_primary_f1(hit, scenario.acceptable_primary),
         "score": score,
-        "score_scaled": round(score * 100.0, 3),
-        "reliability_bin": scoring.reliability_bin(score),
-        "brier": round((score - (1.0 if hit else 0.0)) ** 2, 6),
+        "score_scaled": None if score is None else round(score * 100.0, 3),
+        "reliability_bin": None if score is None else scoring.reliability_bin(score),
+        "brier": None if score is None else round((score - (1.0 if hit else 0.0)) ** 2, 6),
         "calibration_eligible": scenario.split == "train",
     }
 
@@ -622,9 +663,7 @@ def _fixture_notes(options: RunOptions, records: Sequence[dict[str, Any]]) -> li
         scenario_id = record["scenario"]["scenario_id"]
         hit = bool(record["quality"]["hit"])
         if scenario_id in flips and hit:
-            violations.append(
-                f"{scenario_id}: flipped scenario still hit ({record['quality']['final_pattern']})"
-            )
+            violations.append(f"{scenario_id}: flipped scenario still hit ({record['quality']['final_pattern']})")
         if scenario_id not in flips and not hit:
             violations.append(
                 f"{scenario_id}: scripted slug pool missed (final={record['quality']['final_pattern']}, "
@@ -632,10 +671,21 @@ def _fixture_notes(options: RunOptions, records: Sequence[dict[str, Any]]) -> li
             )
     if violations:
         raise ValueError("offline fixture integrity failed:\n  " + "\n  ".join(violations))
-    notes.append(
-        "offline fixture integrity verified: every non-flipped scenario hit, every flipped scenario missed"
-    )
+    notes.append("offline fixture integrity verified: every non-flipped scenario hit, every flipped scenario missed")
     return notes
+
+
+def _mode_notes(options: RunOptions) -> list[str]:
+    """Mode-specific observability note: what this arm structurally cannot measure."""
+    if options.mode != "analyze":
+        return []
+    return [
+        (
+            "analyze-only arm: hit = analyze recommended_style, recall = analyze selection; "
+            "generate/evaluate are skipped, so the design block, evaluation score, calibration "
+            "and risk-coverage are not measured (null, never zero)"
+        )
+    ]
 
 
 # --------------------------------------------------------------------------------------
@@ -689,31 +739,21 @@ def summarise(
         },
         "latency": {
             "e2e_ms": percentile_fields(
-                [
-                    float(record["e2e_ms"])
-                    for record in records
-                    if record["e2e_ms"] is not None
-                ]
+                [float(record["e2e_ms"]) for record in records if record["e2e_ms"] is not None]
             ),
             "warmup_e2e_ms": warmup_e2e,
             "stages": stage_table(stage_records),
             "negative_residual_scenarios": sum(
-                1
-                for record in records
-                if record["residual_ms"] is not None and float(record["residual_ms"]) < 0.0
+                1 for record in records if record["residual_ms"] is not None and float(record["residual_ms"]) < 0.0
             ),
             "residual_note": (
                 "stage sums double-count wall clock when generate batches run concurrently; "
                 "a negative residual means overlap, not missing time"
-                if any(
-                    record["residual_ms"] is not None and float(record["residual_ms"]) < 0.0
-                    for record in records
-                )
+                if any(record["residual_ms"] is not None and float(record["residual_ms"]) < 0.0 for record in records)
                 else None
             ),
             "per_scenario_e2e_ms": {
-                f"{record['scenario']['scenario_id']}#{record['repeat']}": record["e2e_ms"]
-                for record in records
+                f"{record['scenario']['scenario_id']}#{record['repeat']}": record["e2e_ms"] for record in records
             },
         },
         "calibration": scoring.calibration(
@@ -850,9 +890,7 @@ def render_report(summary: dict[str, Any], manifest: dict[str, Any]) -> str:
     for name in ("overall", "train", "holdout"):
         block = quality[name]
         wilson = block["hit_rate_wilson"]
-        wilson_text = (
-            f"[{wilson['low']:.3f}, {wilson['high']:.3f}]" if wilson["low"] is not None else "null"
-        )
+        wilson_text = f"[{wilson['low']:.3f}, {wilson['high']:.3f}]" if wilson["low"] is not None else "null"
         lines.append(
             f"| {name} | {block['scenarios']} | {_pct(block['hit_rate'])} | {wilson_text} | "
             f"{_int_or_null(block['fallbacks'])} | {_num(block['recall_at_3']['mean'])} | "
@@ -862,11 +900,7 @@ def render_report(summary: dict[str, Any], manifest: dict[str, Any]) -> str:
     e2e = latency["e2e_ms"]
     lines.append(
         f"- e2e: n={e2e['samples']} p50={_ms(e2e['p50_ms'])} p95={_ms(e2e['p95_ms'])}"
-        + (
-            f" (warmup {_ms(latency['warmup_e2e_ms'])})"
-            if latency["warmup_e2e_ms"] is not None
-            else ""
-        )
+        + (f" (warmup {_ms(latency['warmup_e2e_ms'])})" if latency["warmup_e2e_ms"] is not None else "")
         + (f" — {e2e['note']}" if e2e["note"] else "")
     )
     if latency.get("residual_note"):
@@ -876,9 +910,7 @@ def render_report(summary: dict[str, Any], manifest: dict[str, Any]) -> str:
         "| stage | calls | failures | total ms | p50 ms | p95 ms | ops |",
         "|---|---|---|---|---|---|---|",
     ]
-    for stage, entry in sorted(
-        latency["stages"].items(), key=lambda item: _stage_order(item[0], item[1])
-    ):
+    for stage, entry in sorted(latency["stages"].items(), key=lambda item: _stage_order(item[0], item[1])):
         lines.append(
             f"| `{stage}` | {entry['count']} | {entry['failures']} | {entry['total_ms']:.1f} | "
             f"{_ms(entry['p50_ms'])} | {_ms(entry['p95_ms'])} | "

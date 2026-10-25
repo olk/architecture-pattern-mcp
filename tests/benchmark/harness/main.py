@@ -5,6 +5,10 @@ Examples::
     uv run python -m tests.benchmark.harness.main --mode offline --limit 3 --out data/benchmark-runs/offline-smoke
     uv run python -m tests.benchmark.harness.main --mode offline --flip messaging-async-integration --out …/offline-flip
     uv run python -m tests.benchmark.harness.main --mode live --split holdout --repeat 2 --out …/live-holdout
+    uv run python -m tests.benchmark.harness.main --mode analyze --out …/analyze-all
+
+``--mode analyze`` runs the same live seams as ``--mode live`` but stops after
+ANALYZE: selection hit/recall stay observable, generation work is not paid for.
 
 ``--mode e2e`` lives in :mod:`tests.benchmark.harness.e2e` (black-box, no stage attribution).
 """
@@ -30,9 +34,13 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--mode",
-        choices=("offline", "live"),
+        choices=("offline", "live", "analyze"),
         default="offline",
-        help="offline = scripted seams (<60 s, no network); live = real in-process pipeline",
+        help=(
+            "offline = scripted seams (<60 s, no network); live = real in-process pipeline "
+            "(ANALYZE → GENERATE → EVALUATE); analyze = live seams, ANALYSIS phase only "
+            "(selection hit/recall, no generation)"
+        ),
     )
     parser.add_argument(
         "--scenarios",
@@ -46,12 +54,8 @@ def build_parser() -> argparse.ArgumentParser:
         default="all",
         help="which split to run (default: all)",
     )
-    parser.add_argument(
-        "--limit", type=int, default=None, help="run only the first N scenarios of the split"
-    )
-    parser.add_argument(
-        "--repeat", type=int, default=1, help="repeat count per scenario (default 1)"
-    )
+    parser.add_argument("--limit", type=int, default=None, help="run only the first N scenarios of the split")
+    parser.add_argument("--repeat", type=int, default=1, help="repeat count per scenario (default 1)")
     parser.add_argument(
         "--flip",
         action="append",
@@ -65,9 +69,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="run directory (default: data/benchmark-runs/<mode>-<timestamp>)",
     )
-    parser.add_argument(
-        "--run-id", default=None, help="explicit run id (default: derived from the mode and time)"
-    )
+    parser.add_argument("--run-id", default=None, help="explicit run id (default: derived from the mode and time)")
     parser.add_argument("--no-warmup", action="store_true", help="skip the untimed warmup scenario")
     parser.add_argument(
         "--fail-fast",
@@ -75,12 +77,8 @@ def build_parser() -> argparse.ArgumentParser:
         help="abort the whole arm on the first scenario failure (default: record the failed "
         "scenario with provenance.error and keep going; compare refuses error-carrying arms)",
     )
-    parser.add_argument(
-        "--force", action="store_true", help="write into a non-empty --out directory"
-    )
-    parser.add_argument(
-        "--log-level", default="warning", help="harness log level (default: warning)"
-    )
+    parser.add_argument("--force", action="store_true", help="write into a non-empty --out directory")
+    parser.add_argument("--log-level", default="warning", help="harness log level (default: warning)")
     return parser
 
 

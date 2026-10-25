@@ -57,7 +57,7 @@ DEFAULT_SCENARIOS = SCENARIOS_DIR / "seed.json"
 SCENARIO_SCHEMA = SCENARIOS_DIR / "scenario.schema.json"
 DEFAULT_OUT_DIR = REPO_ROOT / "data" / "benchmark-runs"
 
-MODES: tuple[str, ...] = ("offline", "live", "e2e")
+MODES: tuple[str, ...] = ("offline", "live", "analyze", "e2e")
 SPLITS: tuple[str, ...] = ("train", "holdout")
 
 _SECRET_KEY_RE = re.compile(r"(KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL)", re.IGNORECASE)
@@ -268,8 +268,11 @@ def load_server_config(mode: str) -> ServerConfig:
 
     Only ``offline`` changes anything: it pins ``retrieval.min_fusion_score``
     to 0.0 so degenerate stub recall can never trip the relevance floor (the
-    shipped default is already 0.0; the override exists for explicitness). Live
-    and e2e run the shipped configuration unmodified. ``ConfigManager`` is
+    shipped default is already 0.0; the override exists for explicitness).
+    ``analyze`` and ``live`` run the shipped configuration unmodified — the
+    analyze-only arm must see exactly what a full arm's ANALYZE phase sees, so
+    the only difference between the two is where they stop. ``e2e`` runs
+    through its own module and never reaches this loader. ``ConfigManager`` is
     deliberately bypassed — its class-level cache would leak configuration
     between arms sharing a process.
     """
@@ -367,7 +370,7 @@ def _scenario_schema_validator() -> object:
     ``object`` and narrowed to the structural ``iter_errors`` protocol below
     (mypy-strict without plugins).
     """
-    validator: _SchemaValidator = Draft7Validator(read_json(SCENARIO_SCHEMA))
+    validator: object = Draft7Validator(read_json(SCENARIO_SCHEMA))
     return validator
 
 
@@ -393,7 +396,9 @@ def load_scenarios(path: Path, catalog: PatternLoader | None = None) -> list[Sce
     for index, entry in enumerate(entries):
         errors = sorted(validator.iter_errors(entry), key=lambda error: list(error.absolute_path))
         if errors:
-            details = "; ".join(f"{'/'.join(str(part) for part in error.absolute_path)}: {error.message}" for error in errors)
+            details = "; ".join(
+                f"{'/'.join(str(part) for part in error.absolute_path)}: {error.message}" for error in errors
+            )
             raise ValueError(f"{path}: scenario #{index} violates scenario.schema.json: {details}")
         scenario = _scenario_from_entry(entry, path)
         if scenario.scenario_id in seen_ids:
@@ -487,9 +492,7 @@ def _assert_labels_resolvable(scenario: Scenario, catalog: PatternLoader) -> Non
             )
 
 
-def select_scenarios(
-    scenarios: list[Scenario], *, split: str, limit: int | None
-) -> list[Scenario]:
+def select_scenarios(scenarios: list[Scenario], *, split: str, limit: int | None) -> list[Scenario]:
     """Filter by ``split`` (``train``/``holdout``/``all``) preserving corpus order, then cut."""
     if split not in (*SPLITS, "all"):
         raise ValueError(f"unknown split {split!r}; expected one of {(*SPLITS, 'all')}")

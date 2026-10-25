@@ -18,7 +18,7 @@
 	verify-fizz verify-fizz-simulation verify-fizz-garden regen-fizz-traces \
 	verify-ledger verify-cross-consistency verify-patterns verify-all \
 	benchmark-selfcheck benchmark-offline benchmark-sidecars-up benchmark-live \
-	benchmark-e2e benchmark-draft benchmark-compare \
+	benchmark-analyze benchmark-e2e benchmark-draft benchmark-compare \
 	client docker-build docker-build-tei \
 	docker-build-all docker-publish docker-publish-tei \
 	docker-publish-all \
@@ -324,6 +324,7 @@ BENCH_SCENARIOS    ?= tests/benchmark/scenarios/seed.json
 BENCH_COMPOSE      := docker compose -f docker/docker-compose.yml -f docker/docker-compose.benchmark.yml
 BENCH_EMBED_URL    ?= http://127.0.0.1:18081/v1
 BENCH_RERANK_URL   ?= http://127.0.0.1:18082
+BENCH_MODE         ?= live
 BENCH_RUN_ARGS     := $(if $(OUT),--out $(OUT),) $(if $(RUN_ID),--run-id $(RUN_ID),) \
 	$(if $(LIMIT),--limit $(LIMIT),) $(if $(SPLIT),--split $(SPLIT),) $(if $(REPEAT),--repeat $(REPEAT),) \
 	$(if $(NO_WARMUP),--no-warmup,) $(if $(FAIL_FAST),--fail-fast,) $(if $(FORCE),--force,) \
@@ -359,8 +360,8 @@ benchmark-sidecars-up: ## Benchmark: publish the TEI sidecars on loopback (addit
 # other make invocation pays for `npm root -g`.
 benchmark-live: ## Benchmark: in-process live run with full stage attribution
 	@sh -c 'root=$$(npm root -g 2>/dev/null); \
-		if [ -n "$$root" ] && [ -f "$$root/shannon-thinking/dist/index.js" ]; then \
-			export REASONING_SHANNONTHINKING_CMD="[\"node\", \"$$root/shannon-thinking/dist/index.js\"]"; \
+		if [ -n "$$root" ] && [ -f "$$root/server-shannon-thinking/dist/index.js" ]; then \
+			export REASONING_SHANNONTHINKING_CMD="[\"node\", \"$$root/server-shannon-thinking/dist/index.js\"]"; \
 		fi; \
 		if [ -n "$$root" ] && [ -f "$$root/@mettamatt/code-reasoning/dist/index.js" ]; then \
 			export REASONING_CODE_REASONING_CMD="[\"node\", \"$$root/@mettamatt/code-reasoning/dist/index.js\"]"; \
@@ -373,8 +374,11 @@ benchmark-live: ## Benchmark: in-process live run with full stage attribution
 		export EMBEDDER_BASE_URL="$(BENCH_EMBED_URL)"; \
 		export EMBEDDER_API_KEY="$${EMBEDDER_API_KEY:-tei-noauth}"; \
 		export RERANKER_BASE_URL="$(BENCH_RERANK_URL)"; \
-		exec $(UV) run python -m tests.benchmark.harness.main --mode live \
+		exec $(UV) run python -m tests.benchmark.harness.main --mode $(BENCH_MODE) \
 			--scenarios $(BENCH_SCENARIOS) $(BENCH_RUN_ARGS)'
+
+benchmark-analyze: ## Benchmark: analyze-only live run (hit/recall vs the full arm)
+	$(MAKE) --no-print-directory benchmark-live BENCH_MODE=analyze
 
 benchmark-e2e: ## Benchmark: black-box run against the running compose stack
 	$(UV) run python -m tests.benchmark.harness.e2e \

@@ -2,10 +2,10 @@
 
 Compares two complete run directories (baseline A, candidate B — e.g. shipped pipeline vs a
 reasoning-off arm) and refuses to compare corpora that are not the same file (the
-scenario-file sha256 is part of every manifest). Everything is *paired by scenario*:
-per-scenario e2e deltas, a sign test over those deltas, hit-flip detection, Wilson/Newcombe
-intervals on hit-rate differences and per-stage deltas that separate "fewer calls" from
-"faster calls".
+scenario-file sha256 is part of every manifest) or runs against different catalogue sizes
+(the retrieval pool feeds every selection). Everything is *paired by scenario*: per-scenario
+e2e deltas, a sign test over those deltas, hit-flip detection, Wilson/Newcombe intervals on
+hit-rate differences and per-stage deltas that separate "fewer calls" from "faster calls".
 
 Pre-registered rule:
 
@@ -14,6 +14,12 @@ Pre-registered rule:
 
 With the Stage-0 corpus (16 scenarios) the Wilson floor is wide; at this corpus size the
 rule usually resolves to ``inconclusive`` — that is reported, never hidden.
+
+An analyze-only arm is a *phase subset* of the full ``live`` arm: hit/recall come from the
+same ANALYSIS selection and compare directly, but the e2e delta is the skipped
+generate/evaluate work by construction. That pair is accepted (with a warning) and its
+verdict is ``inconclusive`` by rule — the pre-registered latency leg assumes both arms do
+the same work. Read its hit-rate Newcombe interval and hit flips instead.
 """
 
 from __future__ import annotations
@@ -35,6 +41,14 @@ P95_IMPROVEMENT_THRESHOLD = 0.15
 
 #: Percentile helper needs this many samples before p95 is defined (see probes).
 MIN_P95_SAMPLES = 4
+
+#: Phase-subset mode pairs whose *selection* observables (hit/recall) are directly
+#: comparable although the arms run different phase scopes. ``analyze`` is the ANALYSIS
+#: prefix of ``live``: hit and recall are computed from exactly the selection the full arm's
+#: analyze phase produced. The evaluation score is absent on the analyze arm, and its e2e
+#: delta is the skipped generate/evaluate work by construction — both stay flagged, never
+#: treated as zero.
+_PHASE_SUBSET_MODE_PAIRS: frozenset[frozenset[str]] = frozenset((frozenset({"analyze", "live"}),))
 
 #: Metrics compared per scenario (name → (path, higher_is_better)).
 # B drops the supporting-set and veto observables (no wire equivalents).
@@ -73,9 +87,7 @@ class Arm:
 
     def keyed(self) -> dict[str, dict[str, Any]]:
         """Records keyed by ``<scenario_id>#<repeat>``."""
-        return {
-            f"{record['scenario']['scenario_id']}#{record['repeat']}": record for record in self.records
-        }
+        return {f"{record['scenario']['scenario_id']}#{record['repeat']}": record for record in self.records}
 
     def holdout(self) -> list[dict[str, Any]]:
         """Records of the holdout split only."""
@@ -149,9 +161,7 @@ def _paired(a: Arm, b: Arm) -> dict[str, Any]:
     e2e_deltas = [float(second[key]["e2e_ms"]) - float(first[key]["e2e_ms"]) for key in keys]
     metric_deltas: dict[str, dict[str, Any]] = {}
     for name, (path, higher_is_better) in _METRICS.items():
-        deltas = [
-            delta for key in keys if (delta := _metric_delta(first[key], second[key], path)) is not None
-        ]
+        deltas = [delta for key in keys if (delta := _metric_delta(first[key], second[key], path)) is not None]
         metric_deltas[name] = {
             "compared": len(deltas),
             "mean_delta": scoring.mean_or_none(deltas),
@@ -234,6 +244,18 @@ def _verdict(a: Arm, b: Arm, holdout_p95_a: dict[str, Any], holdout_p95_b: dict[
     """Apply the pre-registered rule to the holdout split."""
     conditions: dict[str, Any] = {}
     reasons: list[str] = []
+    modes = frozenset({str(a.manifest.get("mode")), str(b.manifest.get("mode"))})
+    if modes in _PHASE_SUBSET_MODE_PAIRS:
+        conditions["phase_subset_pair"] = {
+            "baseline_mode": a.manifest.get("mode"),
+            "candidate_mode": b.manifest.get("mode"),
+        }
+        reasons.append(
+            "phase-subset comparison (analyze vs live): the e2e delta is the omitted "
+            "generate/evaluate work by construction, so the pre-registered p95 latency rule "
+            "is not applicable; read the hit-rate Newcombe interval and the hit flips"
+        )
+        return _verdict_block("inconclusive", conditions, reasons)
     samples_a = int(holdout_p95_a["samples"])
     samples_b = int(holdout_p95_b["samples"])
     conditions["holdout_samples"] = {"baseline": samples_a, "candidate": samples_b}
@@ -254,13 +276,14 @@ def _verdict(a: Arm, b: Arm, holdout_p95_a: dict[str, Any], holdout_p95_b: dict[
     candidate_wilson = b.summary["quality"]["holdout"]["hit_rate_wilson"]
     baseline_floor = a.summary["quality"]["holdout"]["hit_rate_wilson"]["low"]
     candidate_rate = b.summary["quality"]["holdout"]["hit_rate"]
-    conditions["holdout_hit_rate"] = {"baseline": a.summary["quality"]["holdout"]["hit_rate"], "candidate": candidate_rate}
+    conditions["holdout_hit_rate"] = {
+        "baseline": a.summary["quality"]["holdout"]["hit_rate"],
+        "candidate": candidate_rate,
+    }
     conditions["baseline_wilson_lower_bound"] = baseline_floor
     conditions["candidate_wilson"] = candidate_wilson
     if improvement < P95_IMPROVEMENT_THRESHOLD:
-        reasons.append(
-            f"p95 e2e improved {100.0 * improvement:.1f}% (< {100.0 * P95_IMPROVEMENT_THRESHOLD:.0f}%)"
-        )
+        reasons.append(f"p95 e2e improved {100.0 * improvement:.1f}% (< {100.0 * P95_IMPROVEMENT_THRESHOLD:.0f}%)")
     if baseline_floor is None or candidate_rate is None:
         reasons.append("holdout hit-rate floor undefined (no holdout records)")
     elif candidate_rate < baseline_floor:
@@ -284,30 +307,67 @@ def _verdict_block(outcome: str, conditions: dict[str, Any], reasons: list[str])
     }
 
 
-def compare_arms(
-    a: Arm, b: Arm, *, allow_mismatch: bool = False, out_dir: Path | None = None
-) -> dict[str, Any]:
-    """Compare two arms and write ``comparison.json`` + ``comparison.md``."""
+@dataclass(frozen=True)
+class _Integrity:
+    """Cross-arm comparability facts; ``warnings`` covers tolerated drift."""
+
+    scenario_file_match: bool
+    catalog_match: bool
+    same_mode: bool
+    hit_recall_comparable: bool
+    warnings: tuple[str, ...]
+
+
+def _check_integrity(a: Arm, b: Arm, *, allow_mismatch: bool) -> _Integrity:
+    """Refuse arms whose corpus/catalogue/mode make the comparison meaningless.
+
+    Everything that changes what an arm *measures* is gated here: a different scenario
+    file, a different catalogue size (the retrieval pool feeds every selection), a
+    different mode (except the analyze↔live phase-subset pair), and failed scenario runs
+    (their records are conservative misses, not measurements).
+    """
     warnings: list[str] = []
     first_hash = (a.manifest.get("scenario_file") or {}).get("sha256")
     second_hash = (b.manifest.get("scenario_file") or {}).get("sha256")
-    if first_hash != second_hash and not allow_mismatch:
-        raise ValueError(
+    scenario_file_match = first_hash == second_hash
+    if not scenario_file_match:
+        detail = (
             "the two arms ran different scenario files "
             f"({(a.manifest.get('scenario_file') or {}).get('path')} != "
             f"{(b.manifest.get('scenario_file') or {}).get('path')}); "
-            "compare is only meaningful for the identical corpus (--allow-mismatch to override)"
-        )
-    if first_hash != second_hash:
-        warnings.append("scenario-file hashes differ (--allow-mismatch override)")
-    if a.manifest.get("mode") != b.manifest.get("mode"):
-        detail = (
-            f"the two arms ran different modes ({a.manifest.get('mode')} vs {b.manifest.get('mode')}): "
-            "stage attribution and quality observables are not equivalent"
+            "compare is only meaningful for the identical corpus"
         )
         if not allow_mismatch:
             raise ValueError(f"{detail} (--allow-mismatch to override)")
-        warnings.append(detail)
+        warnings.append(f"{detail} (--allow-mismatch override)")
+    catalog_a = (a.manifest.get("catalog") or {}).get("records")
+    catalog_b = (b.manifest.get("catalog") or {}).get("records")
+    catalog_match = catalog_a == catalog_b
+    if not catalog_match:
+        detail = (
+            f"the two arms ran different catalog sizes ({catalog_a} vs {catalog_b} pattern "
+            "records): the retrieval pool and fusion scores are not comparable"
+        )
+        if not allow_mismatch:
+            raise ValueError(f"{detail} (--allow-mismatch to override)")
+        warnings.append(f"{detail} (--allow-mismatch override)")
+    mode_a, mode_b = a.manifest.get("mode"), b.manifest.get("mode")
+    same_mode = mode_a == mode_b
+    modes = frozenset({str(mode_a), str(mode_b)})
+    hit_recall_comparable = same_mode or modes in _PHASE_SUBSET_MODE_PAIRS
+    if not same_mode:
+        pair_detail = f"the two arms ran different modes ({mode_a} vs {mode_b})"
+        if modes in _PHASE_SUBSET_MODE_PAIRS:
+            warnings.append(
+                f"{pair_detail}: analyze-only is a phase subset of the full arm — hit/recall "
+                "compare directly, the evaluation score is absent on the analyze arm, and the "
+                "e2e delta is the skipped generate/evaluate work by construction"
+            )
+        else:
+            detail = f"{pair_detail}: stage attribution and quality observables are not equivalent"
+            if not allow_mismatch:
+                raise ValueError(f"{detail} (--allow-mismatch to override)")
+            warnings.append(detail)
     error_keys_a = sorted(key for key, record in a.keyed().items() if record.get("provenance", {}).get("error"))
     error_keys_b = sorted(key for key, record in b.keyed().items() if record.get("provenance", {}).get("error"))
     if error_keys_a or error_keys_b:
@@ -320,6 +380,19 @@ def compare_arms(
         if not allow_mismatch:
             raise ValueError(detail)
         warnings.append(detail + " (--allow-mismatch override)")
+    return _Integrity(
+        scenario_file_match=scenario_file_match,
+        catalog_match=catalog_match,
+        same_mode=same_mode,
+        hit_recall_comparable=hit_recall_comparable,
+        warnings=tuple(warnings),
+    )
+
+
+def compare_arms(a: Arm, b: Arm, *, allow_mismatch: bool = False, out_dir: Path | None = None) -> dict[str, Any]:
+    """Compare two arms and write ``comparison.json`` + ``comparison.md``."""
+    integrity = _check_integrity(a, b, allow_mismatch=allow_mismatch)
+    warnings = list(integrity.warnings)
     config_diff = _config_diff(a.manifest.get("server_config") or {}, b.manifest.get("server_config") or {})
     env_diff = _env_diff(a.manifest.get("env") or {}, b.manifest.get("env") or {})
     if config_diff:
@@ -337,8 +410,10 @@ def compare_arms(
         "generated_at": cfg.utc_now_iso(),
         "arms": {"baseline": a.describe(), "candidate": b.describe()},
         "integrity": {
-            "scenario_file_match": first_hash == second_hash,
-            "same_mode": a.manifest.get("mode") == b.manifest.get("mode"),
+            "scenario_file_match": integrity.scenario_file_match,
+            "catalog_match": integrity.catalog_match,
+            "same_mode": integrity.same_mode,
+            "hit_recall_comparable": integrity.hit_recall_comparable,
             "config_diff": config_diff,
             "env_diff": env_diff,
             "warnings": warnings,
@@ -400,7 +475,13 @@ def render_comparison(payload: dict[str, Any]) -> str:
             f"candidate {conditions['holdout_p95_ms']['candidate']:.1f} ms "
             f"({'null' if improvement is None else f'{100.0 * improvement:.1f}%'})"
         )
-    lines += ["", "## Hit rate (Wilson / Newcombe)", "", "| split | baseline | candidate | difference [95% CI] |", "|---|---|---|---|"]
+    lines += [
+        "",
+        "## Hit rate (Wilson / Newcombe)",
+        "",
+        "| split | baseline | candidate | difference [95% CI] |",
+        "|---|---|---|---|",
+    ]
     for split, block in payload["quality"].items():
         difference = block["difference"]
         ci = (
@@ -408,9 +489,7 @@ def render_comparison(payload: dict[str, Any]) -> str:
             if difference["difference"] is not None
             else "null"
         )
-        lines.append(
-            f"| {split} | {_rate(block['baseline']['rate'])} | {_rate(block['candidate']['rate'])} | {ci} |"
-        )
+        lines.append(f"| {split} | {_rate(block['baseline']['rate'])} | {_rate(block['candidate']['rate'])} | {ci} |")
     lines += ["", "## Paired deltas (candidate minus baseline)", ""]
     e2e = paired["e2e_ms"]
     lines.append(
@@ -418,7 +497,11 @@ def render_comparison(payload: dict[str, Any]) -> str:
         f"faster {e2e['faster']} / slower {e2e['slower']} · sign test p={e2e['sign_test']['p_two_sided']} "
         f"(n={e2e['sign_test']['n']})"
     )
-    lines += ["", "| metric | compared | mean Δ | median Δ | improved | worsened | unchanged |", "|---|---|---|---|---|---|---|"]
+    lines += [
+        "",
+        "| metric | compared | mean Δ | median Δ | improved | worsened | unchanged |",
+        "|---|---|---|---|---|---|---|",
+    ]
     for name, block in paired["metric_deltas"].items():
         lines.append(
             f"| {name} | {block['compared']} | {_signed(block['mean_delta'])} | {_signed(block['median_delta'])} | "
@@ -463,13 +546,18 @@ def _signed(value: Any) -> str:
 
 def build_parser() -> argparse.ArgumentParser:
     """CLI of the comparison tool."""
-    parser = argparse.ArgumentParser(prog="tests.benchmark.harness.compare",
-                                     description="Compare two benchmark run directories (A=baseline, B=candidate).")
+    parser = argparse.ArgumentParser(
+        prog="tests.benchmark.harness.compare",
+        description="Compare two benchmark run directories (A=baseline, B=candidate).",
+    )
     parser.add_argument("baseline", type=Path, help="baseline run directory (A)")
     parser.add_argument("candidate", type=Path, help="candidate run directory (B)")
     parser.add_argument("--out", type=Path, default=None, help="comparison output directory (default: <B>/comparison)")
-    parser.add_argument("--allow-mismatch", action="store_true",
-                        help="compare even when the scenario files or modes differ (records a warning)")
+    parser.add_argument(
+        "--allow-mismatch",
+        action="store_true",
+        help="compare even when the scenario files or modes differ (records a warning)",
+    )
     parser.add_argument("--quiet", action="store_true", help="print only the verdict line")
     return parser
 

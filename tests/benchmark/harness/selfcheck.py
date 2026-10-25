@@ -16,6 +16,7 @@ import sys
 from collections.abc import Sequence
 from typing import Any
 
+from src.pipeline import AnalysisResult as PipelineAnalysisResult
 from src.schemas.analysis import AnalysisResult
 from src.schemas.components import Component
 from src.schemas.design import ArchitectureDesign
@@ -24,6 +25,7 @@ from src.schemas.enums import ArchitectureStyle, PatternCategory
 from src.schemas.evaluation import ArchitectureEvaluation, EvaluationSummary, PipelineResult
 from src.schemas.patterns import ScoredPattern
 
+from . import config as cfg
 from . import scoring
 from .probes import (
     AgentTimingProxy,
@@ -359,6 +361,65 @@ def check_proxies() -> None:
     asyncio.run(_exercise())
 
 
+def check_analyze_mode() -> None:
+    """Analyze-only arm: mode/config plumbing and the no-result quality record.
+
+    The arm differs from ``live`` only by phase scope, so these anchors pin the two things
+    a refactor can silently break: the CLI/mode registry forwarding and the record contract
+    (hit from ``recommended_style``, recall from the selection, no fabricated score).
+    """
+    from . import runner
+    from .main import build_parser
+
+    _assert("analyze" in cfg.MODES, f"analyze must be a registered harness mode: {cfg.MODES}")
+    parsed = build_parser().parse_args(["--mode", "analyze"])
+    _assert(parsed.mode == "analyze", "the harness CLI must accept --mode analyze")
+    analyze_config = cfg.load_server_config("analyze")
+    live_config = cfg.load_server_config("live")
+    _assert(
+        analyze_config == live_config,
+        "analyze must run the shipped configuration; only offline may override it",
+    )
+
+    scenario = cfg.Scenario(
+        scenario_id="selfcheck-analyze",
+        family="coordination",
+        category="coordination",
+        domain="financial-services",
+        split="train",
+        description="selfcheck",
+        weights=None,
+        style=None,
+        expected_primary="saga",
+        acceptable_primary=("saga", "blockchain-based"),
+    )
+    analysis = PipelineAnalysisResult(
+        recommended_style="saga",
+        selected_patterns=[
+            {"name": "saga"},
+            {"name": "event-driven"},
+            {"name": "microservices"},
+            {"name": "blockchain-based"},
+        ],
+    )
+    block = runner._quality_block(analysis, None, scenario)
+    _assert(block["hit"] is True, f"analyze hit must use recommended_style: {block}")
+    _assert(block["final_pattern"] == "saga", f"analyze final pattern: {block}")
+    _assert(block["fallback"] is False, f"clean analyze run is not a fallback: {block}")
+    _approx(block["recall_at_3"], 0.5, label="analyze-only recall@3 (sibling at rank 4)")
+    _approx(block["recall_at_5"], 1.0, label="analyze-only recall@5")
+    _assert(block["score"] is None, "analyze-only records must not fabricate a calibration score")
+    _assert(block["brier"] is None, "analyze-only records must not fabricate a Brier score")
+    _assert(block["calibration_eligible"] is True, "train analyze records stay calibration-eligible")
+
+    fallback = runner._quality_block(
+        PipelineAnalysisResult(recommended_style="layered-monolith", is_fallback=True),
+        None,
+        scenario,
+    )
+    _assert(fallback["hit"] is False, f"an analyze fallback must be a miss: {fallback}")
+
+
 CHECKS: tuple[tuple[str, Any], ...] = (
     ("percentiles", check_percentiles),
     ("stage table + residual", check_stage_table),
@@ -370,6 +431,7 @@ CHECKS: tuple[tuple[str, Any], ...] = (
     ("Brier + ECE", check_calibration),
     ("risk-coverage", check_risk_coverage),
     ("timing proxies", check_proxies),
+    ("analyze-only arm", check_analyze_mode),
 )
 
 

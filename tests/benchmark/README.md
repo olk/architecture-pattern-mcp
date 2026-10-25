@@ -97,6 +97,7 @@ runners wrap the seams they hand in (retrieval legs, agent, reasoning client).
 |----------|---------------------------|-------------------------------------------------------------|-------------------|-------------------|
 | offline  | `harness/main.py`         | scripted legs + scripted LLM over the real catalog          | yes (scripted)    | yes (85.0 stub)   |
 | live     | `harness/main.py`         | real TEI embedder/reranker, real generator, optional reasoning | yes           | yes               |
+| analyze  | `harness/main.py`         | live seams, ANALYSIS phase only (no generate/evaluate)      | yes               | no (no evaluation) |
 | e2e      | `harness/e2e.py`          | fastmcp Client → running stack (`design_architecture`)      | no                | no (wire carries none) |
 
 - **offline** — deterministic plumbing proof (<60 s, no network). Every scenario's domain-slug
@@ -112,6 +113,19 @@ runners wrap the seams they hand in (retrieval legs, agent, reasoning client).
   `RuntimeError: TEI reranker … 429` and is recorded as a *failed scenario*
   (`provenance.error`, counted as a miss, `compare` refuses the arm) — so run one arm at a
   time and keep other CPU-heavy jobs, including ad-hoc retrieval probes, off the machine.
+  When another session shares the loopback sidecars, start a private pair from the repository
+  images (`docker run -d -p 127.0.0.1:18091:8080 pattern-tei-embed:latest`; likewise
+  `pattern-tei-rerank:latest` on 18092) and pass
+  `BENCH_EMBED_URL=http://127.0.0.1:18091/v1 BENCH_RERANK_URL=http://127.0.0.1:18092` to
+  *both* arms — the manifests record the pair, and the comparison stays same-sidecar.
+- **analyze** — the live wiring stopped after `analyze`: hit (`recommended_style`), the ordered
+  selection and recall@3/@5 are exactly the full arm's ANALYSIS observables, at one
+  requirement-weight LLM call (+ reasoning, when enabled) per scenario instead of a
+  generate/evaluate loop. The design block, evaluation score and calibration are not
+  observable and are recorded as `null` (never zero). Compare it against a full arm with
+  `make benchmark-compare A=<full> B=<analyze>`: the phase-subset pair is accepted with a
+  warning, the verdict stays `inconclusive` by rule, and the hit-rate Newcombe interval plus
+  the hit flips carry the evidence.
 - **e2e** — black-box: what a real deployment costs *in total* and nothing else. Hit/recall are
   computed over `final_style ∪ alternative_styles[].name`; the tool error is recorded, never
   dropped. Calibration/risk-coverage are reported as `{"available": false}`.
@@ -122,7 +136,8 @@ runners wrap the seams they hand in (retrieval legs, agent, reasoning client).
   `expected.acceptable_primary` and the run is not a fallback; a fallback is an automatic miss.
 - **recall@3 / recall@5** — the analyze selection set capped at K against `acceptable_primary`.
 - **acceptable-primary F1** — hit ⇒ P=1, R=1/|A|; miss ⇒ 0/0.
-- **Brier / ECE(10)** — monitoring-only diagnostics over `final_quality_score/100`.
+- **Brier / ECE(10)** — monitoring-only diagnostics over `final_quality_score/100`; `null`
+  in analyze mode, which never evaluates a design.
 - **risk-coverage** — within-arm ordering by score; AUC anchored at (0,0).
 - Supporting-set F1 and veto-conflict violations (A's harness) are **dropped**: B exposes no
   supporting-set or veto-ledger observables.
@@ -134,8 +149,14 @@ runners wrap the seams they hand in (retrieval legs, agent, reasoning client).
 
 Anything else is `inconclusive` or `candidate-loss` (`make benchmark-compare` exits 1 on a
 loss, 2 on a refusal). At this corpus size the rule usually resolves to `inconclusive` — that
-is reported, never hidden. Compare refuses corpora whose scenario-file sha256 or mode differs
-(`--allow-mismatch` overrides with a warning).
+is reported, never hidden. Compare refuses corpora whose scenario-file sha256, catalogue size
+or mode differs (`--allow-mismatch` overrides with a warning) — except the `analyze`↔`live`
+pair, which is accepted as a *phase subset*: hit/recall are computed from the same ANALYSIS
+selection, but the e2e delta is the omitted generate/evaluate work by construction, so the
+latency leg of the rule cannot decide anything and the verdict is `inconclusive` by rule.
+Read that comparison's hit-rate Newcombe interval and hit flips; they are the load-bearing
+evidence. The catalogue-size gate exists because every selection draws its retrieval pool
+from it: a 40-record arm and a 128-record arm are not the same experiment.
 
 ## Usage
 
@@ -144,11 +165,12 @@ make benchmark-selfcheck                       # metric formulas vs hand-compute
 make benchmark-offline                         # 16 deterministic scenarios
 make benchmark-offline FLIP=coordination-robot-orchestration   # negative control
 make benchmark-sidecars-up                     # publish TEI sidecars on 127.0.0.1:18081/18082
-make benchmark-live LIMIT=2                    # real in-process pipeline (needs DEEPSEEK_API_KEY)
+make benchmark-live LIMIT=2                    # real in-process pipeline (TEI + provider key)
 make benchmark-live LIMIT=1 LOG_LEVEL=info     # + per-phase logs: candidate pool, fusion summary, scores
+make benchmark-analyze LIMIT=2                 # ANALYSIS phase only: hit/recall without generate/evaluate
 make benchmark-e2e LIMIT=2                     # black-box vs the running compose stack
 make benchmark-draft DRY_RUN=1                 # print the corpus-drafting prompt
-make benchmark-compare A=<dir> B=<dir>         # paired comparison + verdict
+make benchmark-compare A=<dir> B=<dir>         # paired comparison + verdict (analyze↔live accepted)
 ```
 
 Run directories land in `data/benchmark-runs/<run-id>/` (gitignored): `manifest.json`
