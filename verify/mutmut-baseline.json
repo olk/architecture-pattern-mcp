@@ -2421,9 +2421,9 @@
       "timeout": "938eb71709f6",
       "type_check": "2e38e77b22c3"
     },
-    "git_commit": "6e2368558946f48d956d08c570e80e287f12cea7",
+    "git_commit": "45a3f4c6addcf3e61ede876bd4d0ee90e615ef74",
     "scratch_dir": "/home/graemer/Projekte/Python/architecture-pattern-mcp/mutants",
-    "stats_time": 25.487682604
+    "stats_time": 24.428145065
   },
   "schema": 1,
   "totals": {
