@@ -7,7 +7,7 @@
 #   - TEI sidecars use unique container names (architecture-pattern-tei*) so the dev
 #     stack can run concurrently with the systemd stack and/or the shared
 #     tei-infra stack without container-name conflicts.
-#   - Default host port is 8060 (systemd uses 8050) so dev and prod can coexist.
+#   - Default host port is 8820 (systemd uses 8810) so dev and prod can coexist.
 #
 # Usage:
 #   make docker-up   # or: docker compose -f docker/docker-compose.yml up -d --build
@@ -90,7 +90,7 @@ services:
       pattern-tei-rerank:
         condition: service_healthy
     ports:
-      - "${MCP_HOST_PORT:-8060}:8050"
+      - "8820:8050"
     volumes:
       - ../config:/app/config
     restart: on-failure

@@ -20,7 +20,7 @@ Architecture design pipeline exposed by the `architecture-pattern` MCP server on
 
 OMP applies one MCP request deadline, resolved in this order: `OMP_MCP_TIMEOUT_MS` env → the server's `timeout` field (milliseconds) in `~/.omp/agent/mcp.json` → **30 000 ms default**. It is a single timer per request (`src/mcp/timeout.ts`, `src/mcp/transports/http.ts`); server progress notifications do **not** extend it, so the server's 30 s heartbeat buys nothing here.
 
-`architecture-pattern` has no `timeout` entry in `~/.omp/agent/mcp.json` on this host, so the 30 s deadline applies. Measured against `http://localhost:8050/mcp` in that configuration:
+`architecture-pattern` has no `timeout` entry in `~/.omp/agent/mcp.json` on this host, so the 30 s deadline applies. Measured against `http://localhost:8810/mcp` in that configuration:
 
 | Call | Device | Latency |
 |------|--------|---------|
@@ -52,7 +52,7 @@ The timeout does not stop the server: in a test the aborted `analyze_architectur
 To run the blocking one-shot pipeline instead, raise the deadline for this server — edit `~/.omp/agent/mcp.json`:
 
 ```json
-"architecture-pattern": { "type": "http", "url": "http://localhost:8050/mcp", "timeout": 900000 }
+"architecture-pattern": { "type": "http", "url": "http://localhost:8810/mcp", "timeout": 900000 }
 ```
 
 `"timeout": 0` disables client-side MCP timeouts for the server. Then `/mcp reload`. A project `.omp/mcp.json` entry shadows the user entry; the user file's `disabledServers`/`enabledServers` win over both.

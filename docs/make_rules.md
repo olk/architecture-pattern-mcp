@@ -200,7 +200,7 @@ toolchain-less boxes because the gated members self-skip (see Conventions).
 
 ### `client`
 Runs the pipes-and-filters MCP client demo
-(`examples/architecture_client.py`) against `http://localhost:8060/mcp` —
+(examples/architecture_client.py) against `http://localhost:8820/mcp` —
 synchronous `design_architecture`. Development tool proving the server
 completes long requests; the timeout issue it demonstrates is client-side.
 
@@ -242,7 +242,7 @@ failed push is safe — already-uploaded layers are cache hits.
 
 ### `docker-up` / `docker-down`
 Start (`up -d --build`) / stop the compose stack
-(`docker/docker-compose.yml`); serves on :8060.
+(`docker/docker-compose.yml`); serves on :8820.
 
 ### `docker-logs` / `docker-logs-follow`
 One-time / following logs of the MCP server service.
@@ -287,7 +287,7 @@ make test-oracles               # pre-push
 make test-mutations             # occasionally / before risky merges (slow)
 make verify-fizz                # after control-flow changes (needs fizz)
 make docker-build-all           # before first docker-up or after dep changes
-make docker-up                  # serve on :8060
+make docker-up                  # serve on :8820
 make docker-logs-follow         # tail logs
 make docker-down                # stop
 make clean                      # clear caches

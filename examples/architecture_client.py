@@ -101,9 +101,7 @@ async def amain() -> int:
     except Exception as exc:
         print(f"Error: {exc}", file=sys.stderr)
         print(
-            f"\nIs the MCP server running?\n"
-            f"  Start it with:  python -m src.main\n"
-            f"  Expected URL:   {SERVER_URL}",
+            f"\nIs the MCP server running?\n  Start it with:  python -m src.main\n  Expected URL:   {SERVER_URL}",
             file=sys.stderr,
         )
         return 1

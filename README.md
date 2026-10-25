@@ -55,7 +55,7 @@ docker compose -f docker/docker-compose.yml up --build
 make client
 ```
 
-Server starts on **streamable-http** at `http://localhost:8060/mcp` (dev compose host port; systemd uses 8050). Then connect your agent below.
+Server starts on **streamable-http** at `http://localhost:8820/mcp` (dev compose host port; systemd uses 8810). Then connect your agent below.
 
 ---
 
@@ -64,14 +64,14 @@ Server starts on **streamable-http** at `http://localhost:8060/mcp` (dev compose
 To have an AI coding agent install the Docker stack from prebuilt images (no local build), point it at **[INSTALL.md](INSTALL.md)** — the non-interactive agent runbook (copy-paste commands, expected outputs, verification probes).
 
 ```text
-Clone this repo, then follow INSTALL.md Path A (compose stack, port 8060).
+Clone this repo, then follow INSTALL.md Path A (compose stack, port 8820).
 My generator API key is: sk-...
 ```
 
 Pick one path in `INSTALL.md`:
 
-- **Path A — Compose stack** (`:8060`): evaluating / developing, no sudo needed. Own TEI sidecar copies.
-- **Path B — systemd stack** (`:8050`): persistent host service, starts at boot, needs `sudo`. Uses the shared `pattern-tei-infra` TEI stack.
+- **Path A — Compose stack** (`:8820`): evaluating / developing, no sudo needed. Own TEI sidecar copies.
+- **Path B — systemd stack** (`:8810`): persistent host service, starts at boot, needs `sudo`. Uses the shared `pattern-tei-infra` TEI stack.
 
 The agent needs a repo clone, Docker ≥ v2.20 with group membership, ~5 GB free, a `MINIMAXAI_API_KEY` (or another provider per `INSTALL.md#switching-the-generator-llm`), and linux/amd64 (on arm64 it builds locally via `make docker-build-all`). After install, continue with [Connect Your Agent](#-connect-your-agent) below.
 
@@ -119,7 +119,7 @@ uv run python -m src.main --port 8050
   "mcp": {
     "architecture-pattern": {
       "type": "remote",
-      "url": "http://localhost:8060/mcp"
+      "url": "http://localhost:8820/mcp"
     }
   }
 }
@@ -246,7 +246,7 @@ In Python (via the MCP HTTP API directly — see `examples/architecture_client_a
 ```python
 import asyncio, aiohttp
 
-SERVER = "http://localhost:8060/mcp"
+SERVER = "http://localhost:8820/mcp"
 POLL_EVERY = 15  # seconds
 
 async def main():
@@ -418,7 +418,7 @@ Recommended order — macro first, micro second:
 
 Concrete handoff on the IoT example: this server emits the `pipe-and-filter` architecture (Kafka source → JSON parser filter → geolocation enricher → InfluxDB/S3 sinks, with at-least-once delivery and backpressure in the contracts). The geolocation enricher's cache-miss path then goes to `select_design_patterns` ("cache-aside enrichment with Redis fallback, Python") — e.g. a `circuit-breaker` + `retry` design with participants, `implementation_steps`, and a Python `code_sketch` — which the architecture-level component contract references but never implements.
 
-Run both servers side by side (dev host ports `:8060` architecture, `:8062` design-pattern; systemd `:8050` / `:8062`). They are independent — either order works for exploration — but architecture-first keeps component boundaries stable while the design server fills in the internals.
+Run both servers side by side (dev host ports `:8820` architecture, `:8062` design-pattern; systemd `:8810` / `:8062`). They are independent — either order works for exploration — but architecture-first keeps component boundaries stable while the design server fills in the internals.
 
 ## Install Alternatives
 
@@ -954,7 +954,6 @@ sudo $EDITOR /etc/architecture-pattern-mcp/.env
 # Contents:
 #   MINIMAXAI_API_KEY=sk-...
 #   COMPOSE_PROJECT_NAME=apmcp-systemd
-#   MCP_HOST_PORT=8050          # change to avoid port conflicts with other MCP servers
 
 # 4. Install and enable the service.
 sudo install -m 644 systemd/architecture-pattern-mcp.service /etc/systemd/system/
@@ -972,7 +971,10 @@ The unit does not wait for healthchecks.
 systemctl status architecture-pattern-mcp
 journalctl -u architecture-pattern-mcp -n 50
 docker compose -p apmcp-systemd -f /etc/architecture-pattern-mcp/docker-compose.yml ps
-curl -fsS http://localhost:${MCP_HOST_PORT:-8050}/health
+# GET /health is 404 by design; the JSON-RPC initialize POST is the probe.
+curl -s -o /dev/null -w '%{http_code}\n' -X POST "http://localhost:8810/mcp" \
+  -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' \
+  -d '{"jsonrpc":"2.0","method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"probe","version":"0.0.0"}},"id":1}'
 ```
 
 ### Day-to-day

@@ -32,7 +32,7 @@ Usage:
     $ docker compose -f docker/docker-compose.yml up --build
 
     # Terminal 2: run the client
-    $ ARCHITECTURE_CLIENT_URL=http://localhost:8060/mcp \\
+    $ ARCHITECTURE_CLIENT_URL=http://localhost:8820/mcp \\
         uv run python examples/architecture_client_async.py
 
 Requires:

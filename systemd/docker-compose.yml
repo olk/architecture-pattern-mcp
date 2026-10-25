@@ -92,7 +92,7 @@ services:
     depends_on: []
 
     ports:
-      - "${MCP_HOST_PORT:-8050}:8050"
+      - "8810:8050"
     volumes:
       - /etc/architecture-pattern-mcp/config:/app/config
     restart: on-failure

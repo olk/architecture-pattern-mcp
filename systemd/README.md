@@ -64,13 +64,13 @@ If you re-pull the repo later, rerun the same pull+tag commands to refresh image
 
 The systemd-managed project is given a distinct name (`apmcp-systemd`, set via
 `COMPOSE_PROJECT_NAME` in the `.env` file). The dev compose uses unique TEI
-container names (`architecture-pattern-tei*`) and a different host port (8060 vs
-8050). Both stacks can now run **concurrently** — no need to stop one before
+container names (`architecture-pattern-tei*`) and a different host port (8820 vs
+8810). Both stacks can now run **concurrently** — no need to stop one before
 starting the other:
 
 ```bash
-make docker-up                                  # dev on :8060
-sudo systemctl start architecture-pattern-mcp  # prod on :8050
+make docker-up                                  # dev on :8820
+sudo systemctl start architecture-pattern-mcp  # prod on :8810
 ```
 
 ## Step 2 — Install
@@ -102,7 +102,6 @@ sudo $EDITOR /etc/architecture-pattern-mcp/.env
 # File contents:
 #   MINIMAXAI_API_KEY=sk-...
 #   COMPOSE_PROJECT_NAME=apmcp-systemd
-#   MCP_HOST_PORT=8050          # change to avoid port conflicts with other MCP servers
 
 # 5. Install the unit file.
 sudo install -m 644 systemd/architecture-pattern-mcp.service \
@@ -140,7 +139,10 @@ The unit does **not** wait for healthchecks.
 systemctl status architecture-pattern-mcp                          # service state
 journalctl -u architecture-pattern-mcp -n 50                     # last 50 log lines
 docker compose -p apmcp-systemd -f /etc/architecture-pattern-mcp/docker-compose.yml ps
-curl -fsS http://localhost:${MCP_HOST_PORT:-8050}/health         # MCP HTTP health
+# GET /health is 404 by design; the JSON-RPC initialize POST is the probe.
+curl -s -o /dev/null -w '%{http_code}\n' -X POST "http://localhost:8810/mcp" \
+  -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' \
+  -d '{"jsonrpc":"2.0","method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"probe","version":"0.0.0"}},"id":1}'
 ```
 
 ## Day-to-day commands
