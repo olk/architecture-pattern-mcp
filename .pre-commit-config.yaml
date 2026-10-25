@@ -11,6 +11,14 @@
 #   4. deptry  — packaging hygiene; import usage depends on the final code
 #               state (dead-code removal can orphan a dependency), so it must
 #               see the tree only after code-level checks passed
+#
+# Commit hook only: `default_install_hook_types` pins the installer to
+# pre-commit (a plain `pre-commit install` never recreates a pre-push hook),
+# and `default_stages` scopes the four hooks to the commit stage so they cannot
+# fire from any other hook type. Push-time verification is CI's job (the same
+# four gates run there on every push).
+default_install_hook_types: [pre-commit]
+default_stages: [pre-commit]
 repos:
   - repo: local
     hooks:
