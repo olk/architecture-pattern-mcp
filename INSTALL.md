@@ -253,6 +253,7 @@ B: `sudo systemctl restart architecture-pattern-mcp`). Full provider list:
 | Symptom | Cause → fix |
 |---|---|
 | `GET /health` returns 404 | Expected — FastMCP streamable-http exposes no GET /health. Probe `POST /mcp` (A6/B4). |
+| `/var/cache/architecture-pattern-mcp` missing on the host although the log shows a cache hit | Expected — the logged path is the *in-container* view of the named volume. Host data lives at `docker volume inspect --format '{{.Mountpoint}}' architecture-pattern-mcp-dev-embedding-index` (or `-systemd-`); list it without sudo via `docker exec <container> ls /var/cache/architecture-pattern-mcp/embedding-index`. Verify the mount with `docker inspect -f '{{json .Mounts}}' <container>`. |
 | `docker image inspect architecture-pattern-mcp:latest` failed (unit start) | B1 retag step missed or used a different tag. |
 | `network pattern-tei-shared not found` | TEI infra not running: `sudo systemctl start pattern-tei-infra.service`. |
 | MCP container unhealthy; logs show TEI connection errors | TEI still cold-starting (start_period 120 s) — recheck health after ~2 min; if persistent, verify B0. |
@@ -280,3 +281,57 @@ sudo systemctl daemon-reload
 docker compose --env-file docker/.env -f docker/docker-compose.yml down
 rm docker/.env
 ```
+
+## Embedding-index cache
+
+The server embeds every catalogue domain slug once at startup (`_build_retrievers`:
+one text per unique slug through the configured embedder). It now snapshots that
+dense index to disk and reloads it on the next start, so a restart costs one probe
+embedding instead of a full corpus embedding pass.
+
+- **Path**: `EMBEDDING_CACHE`. The image bakes the default
+  `/var/cache/architecture-pattern-mcp/embedding-index` (host runs use
+  `~/.config/architecture-pattern-mcp/embedding-index`); `0` (or
+  `false`/`off`/`no`) disables the cache entirely and restores the
+  embed-every-start behaviour.
+- **Contents**: `manifest.json` (commit marker) plus `docstore.json`,
+  `index_store.json`, `default__vector_store.json` and two empty placeholders.
+  A directory without `manifest.json` is ignored and rebuilt.
+- **Survives image upgrades**: both compose files mount a NAMED volume
+  (`architecture-pattern-mcp-dev-embedding-index` /
+  `architecture-pattern-mcp-systemd-embedding-index`) at that path, so a rebuilt
+  or re-pulled image, `docker compose down`/`up`, and a `docker compose down -v`
+  of any other stack all keep the snapshot. It is deliberately not inside the
+  config mount: `git clean` / a fresh clone / a config re-install can no longer
+  take it with them.
+  `docker compose down -v` (or `docker volume rm <name>`) is the explicit reset —
+  the next start re-embeds the corpus.
+  A bare `docker run` gets no volume: pass
+  `-v apmcp-embedding-index:/var/cache/architecture-pattern-mcp/embedding-index`
+  if you want the cache to outlive that container.
+- **Invalidated automatically** by a changed embedding function (provider,
+  `base_url`, resolved model name, query/text instruction prefixes), a changed slug
+  corpus, or a probe-vector mismatch (a redeployed TEI sidecar serving a different
+  model behind an unchanged config). Log lines: `Embedding index cache hit: N slugs,
+  0 corpus embed calls (snapshot <cache-dir>)`, `Embedding index cache miss
+  (<reason>); embedding corpus`, `Embedding index snapshot written: N slugs (path
+  <cache-dir>)` (emitted immediately after the embedding pass, before any other
+  startup step) and `Embedding index cache disabled; embedding corpus` when the
+  cache is switched off — that case is never reported as a miss.
+- **Writability**: the image creates the directory as `1000:1000` before
+  `USER 1000:1000`, and Docker copies that ownership into a fresh volume — so a
+  new named volume is writable without a chown step. A root-owned read-only
+  directory instead logs `Embedding index cache write failed (...)` and the
+  server runs cacheless — never failing the start.
+- **Single writer**: no locking; run one server process per cache directory
+  (the deployment model here — dev and systemd stacks use separate paths).
+- **Upgrading from a pre-cache image**: an older container image has no snapshot
+  support at all — it re-embeds the corpus every start and logs neither line.
+  Re-run B1 to fetch the release image (pull + retag), or `make docker-build`
+  if you build the MCP image from source — do NOT `make docker-build-all`
+  unless you also want to rebuild both TEI images. Then re-install the compose
+  file for your path (B2 for systemd — the volume mount lives there, so skipping
+  B2 leaves the new image on a container-layer cache), then recreate the
+  container (`docker compose up -d` / `sudo systemctl reload architecture-pattern-mcp`).
+  The first start re-embeds the corpus once and writes the snapshot; later
+  restarts are warm.

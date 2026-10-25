@@ -104,6 +104,22 @@ class InstructionAwareEmbedding(LiteLLMEmbedding):
 
 TEI_RERANKER_MODEL = "Alibaba-NLP/gte-reranker-modernbert-base"
 
+TEI_EMBEDDER_MODEL = "openai//data/qwen3-embedding-0.6b"
+
+
+def resolve_model_name(provider: str) -> str:
+    """Return the model name ``build_embedder`` uses for ``provider``.
+
+    TEI serves the fixed local Qwen3-0.6B model; other providers resolve their
+    model through the LLM provider configuration (empty here).  Single source
+    of truth so the embedding-cache fingerprint cannot drift from the
+    actually configured embedder.
+
+    Returns:
+        Model name string (``""`` when the provider resolves it elsewhere).
+    """
+    return TEI_EMBEDDER_MODEL if provider.lower() == "tei" else ""
+
 
 def build_embedder(
     provider: str,
@@ -131,10 +147,7 @@ def build_embedder(
     if normalized not in ("openai", "tei", "ollama", "vllm", "hosted_vllm"):
         raise ValueError(f"Unsupported embedder provider: {provider!r}")
 
-    if normalized == "tei":
-        model_name = "openai//data/qwen3-embedding-0.6b"
-    else:
-        model_name = ""
+    model_name = resolve_model_name(normalized)
 
     return InstructionAwareEmbedding(
         model_name=model_name,

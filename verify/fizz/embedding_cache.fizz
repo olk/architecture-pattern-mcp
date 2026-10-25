@@ -1,0 +1,157 @@
+---
+# embedding_cache.fizz — embedding-index snapshot reuse vs rebuild (EMB-1..EMB-4).
+deadlock_detection: true
+options:
+  max_actions: 60
+  max_concurrent_actions: 2
+---
+
+# Assertions: EMB-1 (liveness), EMB-2, EMB-3, EMB-4 — ledger rows in
+# verify/fizz/README.md.
+#
+# Element→code map (ledger: verify/fizz/README.md):
+#   role Cache ↔ the embed-or-load decision of
+#     ArchitecturePipeline._build_retrievers (src/pipeline.py) driving
+#     src/patterns/embedding_cache.py:
+#       Observe        ↔ the invalidation guards evaluated against the cached
+#                        manifest: absent/unreadable manifest, fingerprint
+#                        change, corpus change, probe mismatch. The observation
+#                        is nondeterministic — it is whatever the PREVIOUS run
+#                        left on disk (a cold start sees nothing).
+#       LoadHit        ↔ load_cached_index + .as_retriever: reuse the snapshot;
+#                        zero corpus text-embedding calls (one probe call is the
+#                        fixed cost on both paths and is not modelled).
+#       BuildMiss      ↔ build_vector_index over every slug (cold path).
+#       PersistOk      ↔ persist_index success (manifest written last).
+#       PersistFail    ↔ persist_index raising inside its own guard — the
+#                        failure is logged, never propagated.
+#   Ghosts: manifest/probe (what the manifest says), built_retriever
+#   (self._dense_retriever is set), embed_calls (corpus texts embedded).
+
+role Cache:
+    action Init:
+        # NONE / HIT / MISS_ABSENT / MISS_FP / MISS_CORPUS / MISS_PROBE / MISS_READ
+        self.case = "NONE"
+        self.manifest = "NONE"         # ghost: ABSENT / STALE_FP / STALE_CORPUS / VALID
+        self.probe = "NONE"            # ghost: MATCH / MISMATCH
+        self.loaded = False
+        self.built = False
+        self.built_retriever = False   # ghost: the dense leg exists
+        self.persisted = False
+        self.persist_failed = False
+        self.embed_calls = 0           # ghost: corpus texts embedded this start
+
+    atomic func Hit():
+        self.case = "HIT"
+        self.manifest = "VALID"
+        self.probe = "MATCH"
+
+    atomic func MissAbsent():
+        self.case = "MISS_ABSENT"
+        self.manifest = "ABSENT"
+        self.probe = "MATCH"
+
+    atomic func MissFingerprint():
+        self.case = "MISS_FP"
+        self.manifest = "STALE_FP"
+        self.probe = "MATCH"
+
+    atomic func MissCorpus():
+        self.case = "MISS_CORPUS"
+        self.manifest = "STALE_CORPUS"
+        self.probe = "MATCH"
+
+    atomic func MissProbe():
+        # fingerprint and corpus match, but the served model changed behind
+        # an unchanged configuration (redeployed TEI sidecar)
+        self.case = "MISS_PROBE"
+        self.manifest = "VALID"
+        self.probe = "MISMATCH"
+
+    atomic func MissUnreadable():
+        # manifest valid, snapshot files unreadable → load_cached_index None
+        self.case = "MISS_READ"
+        self.manifest = "VALID"
+        self.probe = "MATCH"
+
+    atomic fair action Observe:
+        # one server start: the cache state is inherited, not chosen — the
+        # nondeterministic input of the model.
+        require self.case == "NONE"
+        oneof:
+            self.Hit()
+            self.MissAbsent()
+            self.MissFingerprint()
+            self.MissCorpus()
+            self.MissProbe()
+            self.MissUnreadable()
+
+    atomic fair action LoadHit:
+        require self.case == "HIT"
+        require self.loaded == False and self.built == False
+        self.loaded = True
+        self.built_retriever = True
+
+    atomic fair action BuildMiss:
+        require self.case != "NONE" and self.case != "HIT"
+        require self.loaded == False and self.built == False
+        self.built = True
+        self.built_retriever = True
+        self.embed_calls = 1
+
+    atomic action PersistOk:
+        require self.built == True
+        require self.persisted == False and self.persist_failed == False
+        self.persisted = True
+
+    atomic action PersistFail:
+        # the snapshot write raises (read-only volume, full disk): the run
+        # continues cacheless — the freshly built index is NOT discarded
+        require self.built == True
+        require self.persisted == False and self.persist_failed == False
+        self.persist_failed = True
+
+    action Idle:
+        require self.built_retriever == True
+        pass
+
+action Init:
+    cache = Cache()
+
+action Idle:
+    require cache.built_retriever == True
+    pass
+
+# ---- assertions (ledger §3.4) ----
+
+always eventually assertion EMB1_BuildsEventually:
+    # Every start ends with a dense retriever: a hit loads it, every miss
+    # builds it — no path may return leaving self._dense_retriever unset
+    # (FG-35: restricting the build to the hit path must violate: a miss
+    # start stalls with no dense leg).
+    return cache.built_retriever == True
+
+always assertion EMB2_HitEmbedsNothing:
+    # A cache hit reuses the persisted vectors: zero corpus text-embedding
+    # calls — the entire point of the snapshot (FG-36: a load that re-embeds
+    # the corpus must violate).
+    if cache.loaded == True:
+        return cache.embed_calls == 0
+    return True
+
+always assertion EMB3_ProbeMismatchRebuilds:
+    # A probe mismatch means a different model is behind an unchanged
+    # configuration (no model field for the tei provider), so its vectors are
+    # NOT reusable: the probe-mismatch observation must take the build path
+    # (FG-37: letting it load must violate).
+    if cache.probe == "MISMATCH":
+        return cache.loaded == False
+    return True
+
+always assertion EMB4_PersistFailureKeepsBuild:
+    # persist_index never raises into _build_retrievers: a failed snapshot
+    # write disables caching for the run, it never discards the built index
+    # (FG-38: a persist failure that clears the retriever must violate).
+    if cache.persist_failed == True:
+        return cache.built_retriever == True
+    return True

@@ -25,7 +25,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 LEDGER = REPO_ROOT / "verify/fizz/README.md"
 
-ID_PATTERN = re.compile(r"\b(?:J|P|FP|FC|RUN|C|E5F|TEI|RET|FUS|DL|N)-\d+\b")
+ID_PATTERN = re.compile(r"\b(?:J|P|FP|FC|RUN|C|E5F|TEI|RET|FUS|DL|N|EMB)-\d+\b")
 # A ledger row is a table row whose FIRST cell is a backticked property ID
 # (possibly a range, e.g. `N-1..N-4`). Anchoring on the first cell keeps the
 # Models table (whose first cell is a backticked model name) from shadowing

@@ -108,6 +108,15 @@ ENV PATH="/app/.venv/bin:$PATH" \
   CONFIG_PATH=/app/config/config.json \
   PIPELINE_TIMEOUT_SECONDS=1200
 
+# Embedding-index cache home. The directory is created HERE (as root, before
+# USER) so that a fresh named volume mounted at this path inherits 1000:1000 —
+# Docker only copies the image directory's metadata into an EMPTY volume, which
+# is what makes the cache writable on the first `docker compose up` without a
+# chown step. Baked as the container default so any launcher (compose, k8s,
+# plain docker) points at ONE path; host runs keep the ~/.config default.
+RUN install -d -o 1000 -g 1000 /var/cache/architecture-pattern-mcp/embedding-index
+ENV EMBEDDING_CACHE=/var/cache/architecture-pattern-mcp/embedding-index
+
 USER 1000:1000
 
 # Readiness = the MCP HTTP surface accepts connections. The server binds its

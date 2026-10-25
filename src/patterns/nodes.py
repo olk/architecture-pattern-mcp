@@ -46,6 +46,8 @@ from llama_index.core.schema import BaseNode, TextNode
 from llama_index.retrievers.bm25 import BM25Retriever
 from llama_index.vector_stores.faiss import FaissVectorStore
 
+from src.patterns.embedding_cache import PROBE_TEXT
+
 logger = logging.getLogger(__name__)
 
 DEFAULT_LANGUAGE = "english"
@@ -110,25 +112,30 @@ def build_bm25_retriever(nodes: list[TextNode], top_k: int) -> BM25Retriever:
 def build_vector_index(
     nodes: list[TextNode],
     embed_model: BaseEmbedding,
+    dim: int | None = None,
 ) -> VectorStoreIndex:
     """Build the dense retrieval index via the upstream LlamaIndex stack.
 
     ``FaissVectorStore`` wraps an ``faiss.IndexFlatIP``; because every
     embedding is L2-normalised (see embedder.py), inner product equals
     cosine similarity — identical score semantics to the former custom
-    DomainVectorIndex.  Everything stays in memory: no ``persist()`` is
-    called anywhere.
+    DomainVectorIndex.  This factory never calls ``persist()``: the snapshot
+    is orchestrated by ``embedding_cache.persist_index`` from the pipeline.
 
     Args:
         nodes: Shared domain-slug nodes (same objects as the BM25 leg,
             which guarantees identical ``node.hash`` per slug across legs).
         embed_model: InstructionAwareEmbedding (or compatible BaseEmbedding).
+        dim: Embedding dimension.  When ``None`` it is probed with one
+            embedding call; the pipeline already embeds PROBE_TEXT for its
+            cache check and passes the length here to avoid a second call.
 
     Returns:
         VectorStoreIndex; call ``.as_retriever(similarity_top_k=k)`` for
         the dense leg. Constructed once at warmup.
     """
-    dim = len(embed_model.get_query_embedding("dimension-probe"))
+    if dim is None:
+        dim = len(embed_model.get_query_embedding(PROBE_TEXT))
     vector_store = FaissVectorStore(faiss_index=faiss.IndexFlatIP(dim))
     storage_context = StorageContext.from_defaults(vector_store=vector_store)
     index = VectorStoreIndex(

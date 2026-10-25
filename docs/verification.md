@@ -24,7 +24,7 @@ add: cheap layers (types, unit tests) run always; expensive layers
 | L1b | Hypothesis (payload strategies) | MCP tool-call boundary robustness: malformed/nested/oversized payloads — structured errors only, no tracebacks | collected by `make test-oracles` (advisory → blocking Phase 1) | harness active, generators expanding |
 | L2 | Hypothesis | input-space properties: job-lifecycle interleavings vs shadow automaton (J-1..J-4), LLM-boundary timeout/retry discipline (E5), normalization idempotence/dedup (N-1..N-4) | `make test-oracles` | active |
 | L3 | mutmut + planted-bug gardens | tests-the-tests: tautological oracles, vacuous contracts/assertions; the garden is the vacuity authority (Python-side and, since 2026-09-11, `.fizz`-side via `make verify-fizz-garden`) | `make test-mutations` (manual/nightly); `make verify-fizz-garden` (nightly) | garden active; mutmut nightly |
-| L4 | FizzBee (`.fizz` models) | **all interleavings up to bounds**: races, crash windows, guard gaps, deadlock freedom, fault injection; 7 models over the job protocol, the background-task lifecycle + cancel tool, the pipeline stage machine, design-loop triage, reasoning-client deadline/retry/cache, TEI rerank verdicts, retrieval resolution | `make verify-fizz` + `make verify-fizz-garden` (CI-authoritative) | active (7 specs, 33 garden mutants, mechanically revalidated) |
+| L4 | FizzBee (`.fizz` models) | **all interleavings up to bounds**: races, crash windows, guard gaps, deadlock freedom, fault injection; 8 models over the job protocol, the background-task lifecycle + cancel tool, the pipeline stage machine, design-loop triage, reasoning-client deadline/retry/cache, TEI rerank verdicts, retrieval resolution, embedding-index snapshot reuse | `make verify-fizz` + `make verify-fizz-garden` (CI-authoritative) | active (8 specs, 37 garden mutants, mechanically revalidated) |
 | L5 | deductive verification (Viper/Z3) | **retired 2026-09** — the decision modules (`text_validation`, `design_normalization`) previously carried Requires/Ensures/Invariant contracts; their properties are now pinned by the L1/L2 behavioral oracles (`tests/unit/test_text_validation.py`, `tests/unit/test_normalization.py`, `tests/verification/test_normalization_idempotence.py`) | — | retired |
 | L6 | deterministic simulation (native now; simloom/frontrun on provisioning) | real asyncio schedules of the **real implementation**: bounded, seeded, replayable proof of J-1/J-2 under all race schedules | `tests/verification/test_jobs_dst.py` (always on) | active (native), proven |
 | L7 | deptry, uv.lock pinning, import-inventory listing | supply chain: hallucinated/unused deps; slopsquatting defence (new package names need human decision) | `make check-depcheck` | active |
@@ -121,10 +121,17 @@ protocol-level view no other layer can produce. Artifacts:
 - `verify/fizz/retrieval_fusion.fizz` — the retrieval resolution tail:
   real outcomes carry patterns and passed the floor (FUS-1/2); fallbacks
   are tagged (FUS-3).
+- `verify/fizz/embedding_cache.fizz` — the embed-or-load decision of
+  `_build_retrievers` against `src/patterns/embedding_cache.py`: every start
+  ends with a dense leg (EMB-1), a snapshot hit embeds nothing (EMB-2), a
+  probe mismatch always rebuilds (EMB-3), and a failed snapshot write never
+  discards the built index (EMB-4).
 - `verify/fizz/README.md` — the property-ID ledger coupling every assertion
   to its Hypothesis oracle and conformance test, plus the
-  spec garden (FG-01..FG-34; full-suite revalidation on the toolchain
-  2026-09-11, FG-34 added and validated 2026-09-20) and run-stats table.
+  spec garden (FG-01..FG-38; full-suite revalidation on the toolchain
+  2026-09-11, FG-34 added and validated 2026-09-20, FG-35..FG-38 added and
+  validated 2026-10-25 with the embedding-index snapshot cache) and
+  run-stats table.
 - `verify/fizz/garden.toml` + `scripts/fizz_garden.py` (added 2026-09-11) —
   the machine-executable encoding of the garden: 1:1 ID agreement with the
   README table, the AGENTS.md assertion-coverage rule (every `always`
@@ -265,6 +272,7 @@ One ID per property across all layers (drift is reviewable 1:1 via the
 | `E5F-1..E5F-4` | reasoning-client deadline/retry/cache discipline (FizzBee view of E5) | L4 |
 | `TEI-1`, `RET-1`, `FUS-1..FUS-3` | reranker verdict + retrieval resolution/fallback | L4 |
 | `DL-2..DL-5` | design-loop triage decisions | L4 |
+| `EMB-1..EMB-4` | embedding-index snapshot: warmup liveness, zero-embed hit, probe-mismatch rebuild, best-effort persist | L4 |
 | `N-1..N-4` | normalization idempotence + dedup | L2 |
 | `E5` | LLM-boundary timeout/retry discipline | L2 |
 | `INV-1..INV-7` | LLM-output structural invariants | L9 |

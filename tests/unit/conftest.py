@@ -73,6 +73,21 @@ def mock_config_manager():
 
 
 @pytest.fixture(autouse=True)
+def embedding_cache_dir(tmp_path, monkeypatch):
+    """Point the embedding-index cache at a throwaway dir for every unit test.
+
+    ``ArchitecturePipeline._build_retrievers`` persists a snapshot by default;
+    without this guard a test that builds real retrievers would write into the
+    developer's ``~/.config/architecture-pattern-mcp/embedding-index``.
+    Cache tests override the variable with their own ``tmp_path``.
+    """
+    cache_dir = tmp_path / "embedding-index"
+    monkeypatch.setenv("EMBEDDING_CACHE", str(cache_dir))
+    yield str(cache_dir)
+    monkeypatch.delenv("EMBEDDING_CACHE", raising=False)
+
+
+@pytest.fixture(autouse=True)
 async def jobs_store(tmp_path, monkeypatch):
     """Isolate JobsStore to a per-test tmp_path SQLite database.
 

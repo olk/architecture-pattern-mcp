@@ -10,6 +10,16 @@
 # BENCH_EMBED_PORT / BENCH_RERANK_PORT (the runner's defaults live in the Makefile:
 # BENCH_EMBED_URL / BENCH_RERANK_URL point at 127.0.0.1:18081 / 127.0.0.1:18082).
 services:
+  # A benchmark stack must never warm, populate or invalidate the persistent
+  # embedding-index volume: the arms measure the cold embed path, and the
+  # in-process harness pins the same value (tests/benchmark/harness/config.py
+  # ::disable_embedding_cache). Merged over the base file this only bites if the
+  # MCP service is started under this override — `make benchmark-sidecars-up`
+  # starts the sidecars alone.
+  architecture-pattern-mcp:
+    environment:
+      - EMBEDDING_CACHE=0
+
   pattern-tei-embed:
     ports:
       - "127.0.0.1:${BENCH_EMBED_PORT:-18081}:8080"    # container port is the base file's 8080

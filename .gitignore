@@ -182,3 +182,8 @@ verify/fizz/out/
 data/benchmark-runs/
 # named run dirs from `make benchmark-* OUT=benchmarks/<arm>` (same artifacts, same rule)
 benchmarks/
+
+# embedding-index cache snapshots (runtime artifact of the dense retrieval leg).
+# Containers use the named `embedding-index` volume, not this path; the rule
+# covers host runs and deployments still carrying the pre-volume env value.
+config/embedding-index/

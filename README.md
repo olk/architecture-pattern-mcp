@@ -5,7 +5,7 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![M8ven Score](https://m8ven.ai/badge/mcp/olk-architecture-pattern-mcp-1x6yt9)](https://m8ven.ai/mcp/olk-architecture-pattern-mcp-1x6yt9)
 
-An MCP (Model Context Protocol) server that provides architecture design expertise to AI coding agents. Given a requirements string and a domain, it analyses the problem, selects matching architecture patterns (from 40 built-in patterns), generates a concrete architecture design with components, relationships, API contracts, data models, and event contracts, and evaluates it against quality attributes (maintainability, scalability, reliability, security, performance).
+An MCP (Model Context Protocol) server that provides architecture design expertise to AI coding agents. Given a requirements string and a domain, it analyses the problem, selects matching architecture patterns (from 128 built-in patterns), generates a concrete architecture design with components, relationships, API contracts, data models, and event contracts, and evaluates it against quality attributes (maintainability, scalability, reliability, security, performance).
 
 ---
 
@@ -397,7 +397,7 @@ Each pattern includes: `name`, `category`, `context`, `benefits`, `tradeoffs`, `
 
 ## Working Together with design-pattern-mcp-local
 
-This server answers *which system shape to build* (architecture); the sibling [design-pattern-mcp-local](https://git.odvlh.xyz/olli/design-pattern-mcp-local) answers *how each unit inside it is coded* (design patterns). An **architecture pattern** structures the whole system — its components, their relationships, and its API/data/event contracts (e.g. `event-driven`, `pipe-and-filter`, `microservices`, chosen from the 40-pattern catalog above). A **design pattern** solves one recurring implementation problem inside a single component — its participants, interactions, and language-bound code (e.g. `observer`, `process-manager`, `circuit-breaker`, chosen from the sibling's 438-pattern catalog with 13 language bindings each).
+This server answers *which system shape to build* (architecture); the sibling [design-pattern-mcp-local](https://git.odvlh.xyz/olli/design-pattern-mcp-local) answers *how each unit inside it is coded* (design patterns). An **architecture pattern** structures the whole system — its components, their relationships, and its API/data/event contracts (e.g. `event-driven`, `pipe-and-filter`, `microservices`, chosen from the 128-pattern catalog above). A **design pattern** solves one recurring implementation problem inside a single component — its participants, interactions, and language-bound code (e.g. `observer`, `process-manager`, `circuit-breaker`, chosen from the sibling's 438-pattern catalog with 13 language bindings each).
 
 Recommended order — macro first, micro second:
 
@@ -457,7 +457,7 @@ architecture-pattern-mcp --transport stdio
 
 The TEI embedder (Qwen3-Embedding-0.6B) is required for domain-scoped pattern retrieval. Without it, the server falls back to the default pattern. Docker compose starts it automatically; local users must run it separately on port 8080.
 
-The retrieval indexes (FAISS + BM25) are built at server startup so a misconfigured or unreachable TEI sidecar prevents startup (fail-fast) rather than breaking the user's first design request. Docker compose's `service_healthy` dependency ordering guarantees TEI is ready before the app starts.
+The retrieval legs are built at server startup: BM25 always, the FAISS dense leg from the [embedding-index cache](#embedding-index-cache-dense-retrieval-snapshot) when a valid snapshot exists (otherwise embedded from scratch). Startup stays fail-fast — every start makes one probe embedding call, so a misconfigured or unreachable TEI sidecar aborts warmup rather than breaking the user's first design request. Docker compose's `service_healthy` dependency ordering guarantees TEI is ready before the app starts.
 
 > **TEI startup:** both sidecar images (`docker/Dockerfile.tei-embed`, `docker/Dockerfile.tei-rerank`) ship a self-built TEI router (v1.9.4 + unmerged [PR #884](https://github.com/huggingface/text-embeddings-inference/pull/884)) with `WARMUP_TOKENS=0` by default — this skips the synthetic warmup pass (measured ~131 s embed / ~78 s rerank) so containers become ready after weight load only. Override per sidecar via `TEI_WARMUP_TOKENS` / `TEI_RERANK_WARMUP_TOKENS` (positive N warms with N tokens instead; values > `MAX_BATCH_TOKENS` are rejected at startup).
 
@@ -544,6 +544,7 @@ If the configured model already contains a provider prefix (e.g. `openai/gpt-4o-
 | `EMBEDDER_BATCH_SIZE` | `16` | Embedding batch size |
 | `EMBEDDER_QUERY_INSTRUCTION` | *(empty)* | Query instruction prefix |
 | `EMBEDDER_TEXT_INSTRUCTION` | *(empty)* | Text instruction prefix |
+| `EMBEDDING_CACHE` | image: `/var/cache/architecture-pattern-mcp/embedding-index` · host: `~/.config/architecture-pattern-mcp/embedding-index` | Dense-leg snapshot path: reloaded on restart (zero corpus re-embedding), rebuilt on any embedder/corpus/probe change. `0`/`false`/`off`/`no` disables. See [Embedding-index cache](#embedding-index-cache-dense-retrieval-snapshot) |
 | `RETRIEVAL_BM25_TOP_K` | `0` | BM25 stage-1 recall cap (0=full corpus) |
 | `RETRIEVAL_DENSE_TOP_K` | `0` | Dense stage-1 recall cap (0=full corpus) |
 | `RETRIEVAL_DENSE_WEIGHT` | `0.7` | **Stage-1 fusion leg weight** on the dense leg. Pairs with `RETRIEVAL_BM25_WEIGHT`; both must be > 0 and sum to 1.0 (±1e-3, startup validation). Either weight < 0.05 logs a startup warning. Distinct from the Stage-2 selection blend weights (`RETRIEVAL_ANALYSIS_BLEND_WEIGHT` / `RETRIEVAL_FUSION_BLEND_WEIGHT`). Note: config keys unknown to an older image fail fast at startup. |
@@ -574,6 +575,53 @@ If the configured model already contains a provider prefix (e.g. `openai/gpt-4o-
 | `PATTERN_DIRECTORY` | `~/.config/architecture-pattern-mcp/pattern` | Pattern files directory |
 | `VALIDATION_MAX_RETRIES` | `2` | Max self-healing retry attempts |
 | `VALIDATION_RETRY_ON_FAIL` | `true` | Retry on validation failure |
+| `ARCHITECTURE_PATTERN_JOBS_DB` | `~/.config/architecture-pattern-mcp/jobs.db` | SQLite path for async job trio. Override for test isolation |
+| `TASKS_HEARTBEAT_ENABLED` | `true` | Emit progress notifications during long tool calls |
+| `TASKS_HEARTBEAT_INTERVAL_SECONDS` | `30` | Heartbeat interval in seconds (keep below client idle timeout) |
+| `TRANSPORT` | `streamable-http` | Transport mode: `stdio`, `streamable-http` |
+| `HOST` | `0.0.0.0` | HTTP bind host |
+| `PORT` | `8050` | HTTP bind port |
+| `LOGGING_LEVEL` | `INFO` | Logging level |
+| `LOGGING_FORMAT` | `json` | Logging format: `json`, `text` |
+| `CONFIG_PATH` | `~/.config/architecture-pattern-mcp/config.json` | Config file path |
+
+### Embedding-index cache (dense retrieval snapshot)
+
+The dense retrieval leg is one FAISS index over every catalogue domain slug
+(~254). Its embeddings are snapshotted to disk after a cold build and reloaded on
+the next start, so a warm start costs **one probe embedding** instead of a full
+corpus pass (measured on the dev compose stack: 16.5 s → 0.3 s). BM25 is cheap and
+rebuilt every start.
+
+- **Path**: `EMBEDDING_CACHE`. The image bakes
+  `/var/cache/architecture-pattern-mcp/embedding-index`; host runs (`uv`) use
+  `~/.config/architecture-pattern-mcp/embedding-index`.
+- **Where the files live**: the logged path is the *in-container* view. Docker
+  stores the named volume at `/var/lib/docker/volumes/<volume-name>/_data`
+  (root-owned), so `/var/cache` on the host stays empty by design. Inspect
+  without sudo: `docker exec <container> ls
+  /var/cache/architecture-pattern-mcp/embedding-index`, or
+  `docker volume inspect -f '{{.Mountpoint}}' <volume-name>` for the host side.
+- **Containers persist it in a named volume**
+  (`architecture-pattern-mcp-dev-embedding-index` /
+  `architecture-pattern-mcp-systemd-embedding-index`), so the snapshot survives
+  image rebuilds, container recreation and `docker compose down`. Reset it with
+  `docker compose down -v` or `docker volume rm <name>`; a bare `docker run`
+  needs `-v apmcp-embedding-index:/var/cache/architecture-pattern-mcp/embedding-index`.
+- **Rebuilt automatically** when the embedding function changes (provider,
+  `base_url`, resolved model name, query/text instruction prefixes), when the slug
+  corpus changes, or when a probe vector shows a *different model behind an
+  unchanged config* (e.g. a redeployed TEI sidecar). Log lines:
+  `Embedding index cache hit: N slugs, 0 corpus embed calls (snapshot
+  <cache-dir>)` / `Embedding index cache miss (<reason>); embedding corpus` /
+  `Embedding index snapshot written: N slugs (path <cache-dir>)` — emitted
+  immediately after the embedding pass, before any other startup step — and,
+  with the cache switched off, `Embedding index cache disabled; embedding corpus`
+  (never reported as a miss).
+- **Single writer**: no locking — run one server process per cache directory.
+  A failed snapshot write only logs a warning; the server runs cacheless and
+  never fails the start.
+- Operations notes (volumes, permissions, disable switch): [INSTALL.md](INSTALL.md#embedding-index-cache).
 
 ---
 
@@ -635,15 +683,6 @@ across design-loop attempts but not the first pass.
 Set `LOGGING_LEVEL=DEBUG` to capture the authored `thought` and tool response
 for every per-step reasoning call. Docker/systemd stacks default to INFO;
 export `LOGGING_LEVEL=DEBUG` before `make docker-up`.
-| `ARCHITECTURE_PATTERN_JOBS_DB` | `~/.config/architecture-pattern-mcp/jobs.db` | SQLite path for async job trio. Override for test isolation |
-| `TASKS_HEARTBEAT_ENABLED` | `true` | Emit progress notifications during long tool calls |
-| `TASKS_HEARTBEAT_INTERVAL_SECONDS` | `30` | Heartbeat interval in seconds (keep below client idle timeout) |
-| `TRANSPORT` | `streamable-http` | Transport mode: `stdio`, `streamable-http` |
-| `HOST` | `0.0.0.0` | HTTP bind host |
-| `PORT` | `8050` | HTTP bind port |
-| `LOGGING_LEVEL` | `INFO` | Logging level |
-| `LOGGING_FORMAT` | `json` | Logging format: `json`, `text` |
-| `CONFIG_PATH` | `~/.config/architecture-pattern-mcp/config.json` | Config file path |
 
 ### CLI flags
 
@@ -659,7 +698,7 @@ export `LOGGING_LEVEL=DEBUG` before `make docker-up`.
 
 ## Extending with Custom Patterns
 
-Pattern files are loaded from `~/.config/architecture-pattern-mcp/pattern/` (configurable via `PATTERN_DIRECTORY`). Drop a JSON file alongside the 40 built-in patterns.
+Pattern files are loaded from `~/.config/architecture-pattern-mcp/pattern/` (configurable via `PATTERN_DIRECTORY`). Drop a JSON file alongside the 128 built-in patterns.
 
 **Minimal pattern structure:**
 
@@ -691,7 +730,7 @@ Full JSON Schema with all enums: `docs/pattern-schema.json`
 
 ## Long-running tools & timeouts
 
-`design_architecture` (and to a lesser extent `analyze_architecture`, `generate_architecture`, `evaluate_architecture`) run multi-stage LLM pipelines that **can take 5–10 minutes per call**. This is inherent to the workload, not a bug: the generator LLM must process a large input payload — the selected pattern definitions from the 36-pattern catalog, your requirements, and the full output of every previous stage — and produce a large, strictly structured JSON document (components, relationships, API contracts, data models, event contracts, quality scores) one token at a time. The `design_architecture` pipeline repeats generate → evaluate up to three times, so a single call can comprise 9+ LLM round trips.
+`design_architecture` (and to a lesser extent `analyze_architecture`, `generate_architecture`, `evaluate_architecture`) run multi-stage LLM pipelines that **can take 5–10 minutes per call**. This is inherent to the workload, not a bug: the generator LLM must process a large input payload — the selected pattern definitions from the 128-pattern catalog, your requirements, and the full output of every previous stage — and produce a large, strictly structured JSON document (components, relationships, API contracts, data models, event contracts, quality scores) one token at a time. The `design_architecture` pipeline repeats generate → evaluate up to three times, so a single call can comprise 9+ LLM round trips.
 
 ### The timeout problem
 

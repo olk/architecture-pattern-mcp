@@ -355,6 +355,7 @@ pytest_add_cli_args_test_selection = [
     # oracle for a module that left do_not_mutate alongside it.
     "tests/unit/test_pattern_loader.py",        # src/patterns/loader.py
     "tests/unit/test_pattern_embedder.py",      # src/patterns/embedder.py (_normalize)
+    "tests/unit/test_embedding_cache.py",       # src/patterns/embedding_cache.py
     "tests/unit/test_reasoning_prompts.py",     # src/reasoning/prompts.py
     "tests/unit/test_adapters.py",              # src/tools/_adapters.py + src/errors.py
     "tests/unit/test_submit_architecture_design.py",  # submit/cancel tool trio

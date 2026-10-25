@@ -38,6 +38,13 @@ services:
       - EMBEDDER_BATCH_SIZE=8
       - EMBEDDER_API_KEY=not-needed
 
+      # Embedding-index snapshot cache: the dense retrieval leg is persisted
+      # here and reloaded on restart (zero corpus embed calls once warm).
+      # The path is backed by the named volume below, so it survives image
+      # rebuilds, container recreation and config re-installs. Same value as
+      # the image ENV (kept explicit per stack). Set to 0 to disable.
+      - EMBEDDING_CACHE=/var/cache/architecture-pattern-mcp/embedding-index
+
       - PATTERN_DIRECTORY=./pattern
 
       # Wall-clock budget for one complete design run (all phases, all retry
@@ -95,6 +102,10 @@ services:
       - "8810:8050"
     volumes:
       - /etc/architecture-pattern-mcp/config:/app/config
+      # Embedding-index snapshot (see the env var above): a NAMED volume keeps
+      # it across image upgrades and container recreation. Force a cold
+      # re-embed: docker volume rm architecture-pattern-mcp-systemd-embedding-index
+      - embedding-index:/var/cache/architecture-pattern-mcp/embedding-index
     restart: on-failure
     healthcheck:
       # Same TCP readiness probe as the image HEALTHCHECK: connect = serving.
@@ -113,3 +124,9 @@ services:
 networks:
   pattern-tei-shared:
     external: true
+
+volumes:
+  # Fixed name (no compose project prefix): one stable cache per stack.
+  # `docker compose down -v` deletes it (the next start re-embeds the corpus).
+  embedding-index:
+    name: architecture-pattern-mcp-systemd-embedding-index

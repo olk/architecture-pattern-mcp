@@ -1250,13 +1250,21 @@ class ArchitecturePipeline(Workflow):
             duration_ms,
         )
 
-    def _build_retrievers(self) -> None:
+    def _build_retrievers(self) -> None:  # noqa: PLR0912, PLR0915 — the embed-or-load
+        # decision tree is one sequence of guards; splitting it would scatter the
+        # cache-invalidation contract away from its only caller (see
+        # src/patterns/embedding_cache.py).  Modelled in verify/fizz/embedding_cache.fizz.
         """Build the dense + BM25 retrieval legs over the shared domain slugs.
 
         Collects unique domain slugs from every pattern's suitable_domains,
         builds both legs, and stores them for HybridPatternRetriever
         injection.  A retrieval_config top_k of 0 means "full corpus"
         (lossless stage-1 recall) and is resolved to the slug count here.
+
+        The dense leg comes from the embedding-index snapshot when it is valid
+        (flushed by ``embedding_cache.persist_index`` after a cold build);
+        every invalidation — embedder config, corpus, probe vector — falls
+        back to embedding the corpus.
         """
         all_patterns = self._pattern_loader.load_all()
 
@@ -1275,7 +1283,8 @@ class ArchitecturePipeline(Workflow):
             )
             return
 
-        from src.patterns.embedder import build_embedder
+        from src.patterns import embedding_cache
+        from src.patterns.embedder import build_embedder, resolve_model_name
         from src.patterns.nodes import (
             build_bm25_retriever,
             build_domain_nodes,
@@ -1296,9 +1305,72 @@ class ArchitecturePipeline(Workflow):
         dense_k = self._retrieval_config.dense_top_k or corpus_n
         bm25_k = self._retrieval_config.bm25_top_k or corpus_n
 
-        self._dense_retriever = build_vector_index(nodes, embedder).as_retriever(
-            similarity_top_k=dense_k
+        # Exactly one embed call on every path: the probe is the dimension
+        # probe for a cold build and the "same model?" check for a cache hit.
+        probe_vector = embedder.get_query_embedding(embedding_cache.PROBE_TEXT)
+        dim = len(probe_vector)
+        fingerprint = embedding_cache.compute_fingerprint(
+            provider=self._embedder_config.provider,
+            base_url=self._embedder_config.config.base_url,
+            model_name=resolve_model_name(self._embedder_config.provider),
+            query_instruction=self._embedder_config.config.query_instruction,
+            text_instruction=self._embedder_config.config.text_instruction,
         )
+        cache_dir = embedding_cache.resolve_cache_dir()
+
+        dense_retriever: BaseRetriever | None = None
+        miss_reason: str | None = None  # None ⇒ caching disabled (not a miss)
+        if cache_dir is not None:
+            miss_reason = "no/invalid manifest"
+            manifest = embedding_cache.load_manifest(cache_dir)
+            if manifest is None:
+                miss_reason = "no/invalid manifest"
+            elif manifest.fingerprint != fingerprint:
+                miss_reason = "embedder config changed"
+            elif manifest.corpus_sha256 != embedding_cache.corpus_fingerprint(all_domains):
+                miss_reason = "corpus changed"
+            elif not embedding_cache.probe_matches(probe_vector, manifest):
+                miss_reason = "probe mismatch (model changed behind same config)"
+            else:
+                cached = embedding_cache.load_cached_index(cache_dir, embedder)
+                if cached is None:
+                    miss_reason = "snapshot unreadable"
+                else:
+                    dense_retriever = cached.as_retriever(similarity_top_k=dense_k)
+
+        if dense_retriever is not None:
+            self._dense_retriever = dense_retriever
+            logger.info(
+                "Embedding index cache hit: %d slugs, 0 corpus embed calls (snapshot %s)",
+                corpus_n,
+                cache_dir,
+            )
+        else:
+            if miss_reason is None:
+                logger.info("Embedding index cache disabled; embedding corpus")
+            else:
+                logger.info("Embedding index cache miss (%s); embedding corpus", miss_reason)
+            built = build_vector_index(nodes, embedder, dim=dim)
+            # Persist FIRST, immediately after the embedding pass: the snapshot
+            # must be on disk before any other startup step can fail.
+            if cache_dir is not None:
+                persisted = embedding_cache.persist_index(
+                    built,
+                    cache_dir,
+                    embedding_cache.CacheManifest(
+                        format_version=embedding_cache.CACHE_FORMAT_VERSION,
+                        fingerprint=fingerprint,
+                        corpus_sha256=embedding_cache.corpus_fingerprint(all_domains),
+                        dim=dim,
+                        probe_vector=probe_vector,
+                    ),
+                )
+                if persisted:
+                    logger.info(
+                        "Embedding index snapshot written: %d slugs (path %s)", corpus_n, cache_dir
+                    )
+            self._dense_retriever = built.as_retriever(similarity_top_k=dense_k)
+
         self._bm25_retriever = build_bm25_retriever(nodes, bm25_k)
         self._retrieval_corpus_size = corpus_n
         # Lossless cap for the fused result set: the union of both legs can

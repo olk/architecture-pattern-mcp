@@ -424,3 +424,58 @@ ops = [
 ]
 timeout_s = 300
 note = "escalation leaves the loop alive (outcome stays NONE) instead of aborting — DL6 must fire"
+
+# --- added 2026-10-25 with the embedding-index snapshot cache: the
+# embed-or-load decision of _build_retrievers entered embedding_cache.fizz —
+# EMB-1..EMB-4 are its kill rules.
+
+[[mutant]]
+id = "FG-35"
+spec = "embedding_cache"
+status = "expect-fail"
+assertion = "EMB1_BuildsEventually"
+ops = [
+  { kind = "replace", find = '''        require self.case != "NONE" and self.case != "HIT"''', replace = '''        require self.case == "HIT"''' },
+]
+timeout_s = 300
+note = "build restricted to the hit path: a cache-miss start never builds a dense leg — the mutated model deadlocks (documented deadlock kill mode for EMB-1)"
+
+[[mutant]]
+id = "FG-36"
+spec = "embedding_cache"
+status = "expect-fail"
+assertion = "EMB2_HitEmbedsNothing"
+ops = [
+  { kind = "replace", find = '''        self.loaded = True
+        self.built_retriever = True''', replace = '''        self.loaded = True
+        self.built_retriever = True
+        self.embed_calls = 1''' },
+]
+timeout_s = 300
+note = "a load that re-embeds the corpus — the cache would still cost a full warmup on every start"
+
+[[mutant]]
+id = "FG-37"
+spec = "embedding_cache"
+status = "expect-fail"
+assertion = "EMB3_ProbeMismatchRebuilds"
+ops = [
+  { kind = "replace", find = '''        require self.case == "HIT"
+        require self.loaded == False and self.built == False''', replace = '''        require self.case == "HIT" or self.case == "MISS_PROBE"
+        require self.loaded == False and self.built == False''' },
+]
+timeout_s = 300
+note = "probe guard dropped: a different model behind an unchanged config reuses foreign vectors (silent retrieval corruption)"
+
+[[mutant]]
+id = "FG-38"
+spec = "embedding_cache"
+status = "expect-fail"
+assertion = "EMB4_PersistFailureKeepsBuild"
+ops = [
+  { kind = "replace", find = '''        self.persist_failed = True''', replace = '''        self.persist_failed = True
+        self.built_retriever = False
+        self.built = False''' },
+]
+timeout_s = 300
+note = "a failed snapshot write discards the built index — a read-only/root-owned cache volume would take the server down with it"

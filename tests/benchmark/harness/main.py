@@ -94,6 +94,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"--out {args.out} is not empty; pass --force to overwrite", file=sys.stderr)
         return 2
     cfg.configure_logging(args.log_level)
+    # Cache off for EVERY mode, before anything builds retrievers: a snapshot hit
+    # would turn a warm start into a measured stage, and offline/live arms would
+    # no longer be comparable. The value is recorded in the run manifest
+    # (masked_env_snapshot), so a mismatch between arms stays attributable.
+    cfg.disable_embedding_cache()
     options = RunOptions(
         mode=args.mode,
         scenarios_path=args.scenarios,

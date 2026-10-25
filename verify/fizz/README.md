@@ -18,6 +18,7 @@
 | `reasoning_retry.fizz` | reasoning-client timeout/retry discipline (`src/reasoning/client.py`: wait_for budget deadline, silent degradation; `_run_cached`: LRU + single-flight) | E5F-1, E5F-2, E5F-3, E5F-4 |
 | `tei_fallback.fizz` | TEI reranker verdict discipline (`src/patterns/safe_tei_rerank.py`) + the retrieval rerank-error path (`src/patterns/retriever.py`) | TEI-1, RET-1 |
 | `retrieval_fusion.fizz` | retrieval resolution + fallback decision (`src/patterns/retriever.py` resolve/floor/tag tail) | FUS-1, FUS-2, FUS-3 |
+| `embedding_cache.fizz` | the embed-or-load decision of `ArchitecturePipeline._build_retrievers` (`src/pipeline.py`) over `src/patterns/embedding_cache.py`: manifest-as-commit-marker, fingerprint/corpus/probe invalidation, best-effort persist | EMB-1, EMB-2, EMB-3, EMB-4 |
 
 ## Ledger
 
@@ -56,6 +57,10 @@
 | `DL-6` | A wire-schema integrity rejection (DIV-2..5 gate) that survives the internal generate retries aborts the loop — never scored, never retried | `always` | `design_loop.fizz::DL6_ValidationEscalationAborts` (FG-34 must violate) | n/a | n/a — recovery (rejection at the wire schema + correction-prompt retry) is pinned by L1 `tests/unit/test_design_validation_internals.py`, `tests/schemas/test_schemas.py::TestArchitectureDesignResponseIntegrity`, `test_validation.py` | planned |
 | `J-1..J-4 (stateful)` | Shadow-automaton agreement over generated RULE sequences (superset sample of the J-oracle list replay) | n/a | n/a | n/a | `test_jobs_stateful.py` *(2026-09-12; RuleBasedStateMachine, one loop per machine run)* | `test_fizz_conformance.py` |
 | `N-1..N-4` | normalization idempotence (N-1) and dedup/coverage/subset (N-2..N-4) | n/a | n/a — pure decision logic, no interleavings; pinned by the L2 Hypothesis oracle, not a `.fizz` model | n/a (no static contract) | `test_normalization_idempotence.py` | `tests/unit/test_normalization.py` |
+| `EMB-1` | Every server start ends with a dense retriever: a hit loads the snapshot, every miss builds it | `always eventually` | `embedding_cache.fizz::EMB1_BuildsEventually` (progress witnesses: fair `Observe`/`LoadHit`/`BuildMiss`; FG-35 must violate) | n/a (warmup liveness beyond static scope) | `test_embedding_cache.py::TestWarmStartThroughPipeline` *(2026-10-25)* | n/a |
+| `EMB-2` | A snapshot hit embeds ZERO corpus texts (the cache's entire purpose) | `always` | `embedding_cache.fizz::EMB2_HitEmbedsNothing` (FG-36 must violate) | n/a | `test_embedding_cache.py::TestWarmStartThroughPipeline::test_cold_then_warm_start` (embedder call counters) *(2026-10-25)* | n/a |
+| `EMB-3` | A probe mismatch — a different model behind an unchanged config — always rebuilds, never reuses foreign vectors | `always` | `embedding_cache.fizz::EMB3_ProbeMismatchRebuilds` (FG-37 must violate) | n/a | `test_embedding_cache.py::TestWarmStartThroughPipeline::test_probe_mismatch_forces_rebuild` *(2026-10-25)* | n/a |
+| `EMB-4` | A failed snapshot write never discards the built index (caching is best-effort) | `always` | `embedding_cache.fizz::EMB4_PersistFailureKeepsBuild` (FG-38 must violate) | n/a (`persist_index` swallows by contract — unit-pinned, not a static contract) | `test_embedding_cache.py::TestWarmStartThroughPipeline::test_persist_failure_still_builds_retriever` *(2026-10-25)* | n/a |
 
 ## Spec garden (vacuity authority for model assertions, testing-strategies §3.4)
 
@@ -112,6 +117,10 @@ change.
 | FG-32 | `pipeline_control`: drop the `FailAttempt` bound (`attempts < MAX_ATTEMPTS`) | `P1_AttemptBound` *(added 2026-09-11 — audit finding: P-1 had no kill mutant; the AGENTS.md coverage rule was unmet)* |
 | FG-33 | `pipeline_control`: `Finish` writes a non-terminal outcome | `FP4_TotalOutcome` *(added 2026-09-11 — audit finding: FP-4 had no kill mutant)* |
 | FG-34 | `design_loop`: `AttemptEscalated` leaves the loop alive (sets the witness, drops the `outcome = "RAISED"` write) | `DL6_ValidationEscalationAborts` *(added 2026-09-20 with the design-integrity gate — the escalation path entered the model, DL-6 had no kill mutant)* |
+| FG-35 | `embedding_cache`: `BuildMiss` restricted to the hit case (`case == "HIT"`) | `EMB1_BuildsEventually` (a cache-miss start never builds: the model deadlocks with no dense leg — the pre-cache warmup contract) *(added 2026-10-25 with the snapshot cache)* |
+| FG-36 | `embedding_cache`: `LoadHit` also increments `embed_calls` (a load that re-embeds the corpus) | `EMB2_HitEmbedsNothing` *(added 2026-10-25)* |
+| FG-37 | `embedding_cache`: `LoadHit` accepts the probe-mismatch case (probe guard dropped) | `EMB3_ProbeMismatchRebuilds` (silent retrieval corruption: foreign vectors reused) *(added 2026-10-25)* |
+| FG-38 | `embedding_cache`: `PersistFail` clears `built_retriever` and `built` (a failed snapshot write discards the index) | `EMB4_PersistFailureKeepsBuild` *(added 2026-10-25)* |
 
 Every row above has a machine-executable encoding in `verify/fizz/garden.toml`
 (same ID set, same expected assertion — `scripts/fizz_garden.py` enforces 1:1
@@ -164,6 +173,7 @@ HEAD behaviour):
 | `reasoning_retry.fizz` | PASSED (F4: E5F-1..E5F-4) | 4 213 | 6.7 s |
 | `tei_fallback.fizz` | PASSED (F5: TEI-1, RET-1) | 19 | <0.1 s |
 | `retrieval_fusion.fizz` | PASSED (F6a: FUS-1..FUS-3) | 4 | <0.1 s |
+| `embedding_cache.fizz` | PASSED (EMB-1..EMB-4; 2026-10-25, added with the embedding-index snapshot cache) | 23 | <0.1 s |
 | `jobs_runner.fizz` A/B flip `GUARDED=False` | validated 2026-09-10: `J1_TerminalImmutable` violation trace reproduces the pre-Week-0 bug; `make verify-fizz` gate fails (exit ≠ 0) | — | — |
 | `pipeline_control.fizz` FG-16/FG-17 flips | validated 2026-09-10: both violate `FP5_EventualOutcome` | — | — |
 

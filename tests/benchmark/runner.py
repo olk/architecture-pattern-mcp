@@ -37,6 +37,7 @@ and the reranker sidecar. See README.md in this directory for the full procedure
 
 import argparse
 import asyncio
+import os
 import json
 import re
 import sys
@@ -137,6 +138,12 @@ def load_cases(path: str, only: list[str] | None, limit: int | None) -> list[dic
 
 
 def build_pipeline() -> Any:
+    # The embedding-index snapshot cache is off: with it on, the first arm
+    # writes a snapshot and every later arm loads it, so the arms would
+    # measure a warm start instead of the cold embed the comparison assumes
+    # (and the operator's own cache directory would be overwritten).
+    os.environ["EMBEDDING_CACHE"] = "0"
+
     from src.agent import SoftwareArchitectAgent
     from src.config import ConfigManager, RerankerConfig, RetrievalConfig, ServerConfig
     from src.patterns.loader import PatternLoader

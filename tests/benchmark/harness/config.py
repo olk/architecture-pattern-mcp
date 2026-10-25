@@ -77,7 +77,26 @@ _ENV_EXTRA_KEYS: tuple[str, ...] = (
     "MINIMAXAI_API_KEY",
     "OPENAI_API_KEY",
     "ANTHROPIC_API_KEY",
+    # Snapshot/cache paths change what an arm actually measures — record them
+    # so a cold-vs-warm mismatch between arms is attributable from the artifact.
+    "EMBEDDING_CACHE",
+    "ARCHITECTURE_PATTERN_JOBS_DB",
 )
+
+#: Env var of the dense-leg embedding-index snapshot cache (src/patterns/embedding_cache.py).
+EMBEDDING_CACHE_ENV = "EMBEDDING_CACHE"
+
+
+def disable_embedding_cache() -> None:
+    """Pin the embedding-index snapshot cache OFF for this process.
+
+    The cache is a warm-start optimisation, not a benchmark variable: an arm
+    that loaded the previous arm's snapshot would skip ``build.embed``, so
+    arm-vs-arm timing would compare a cold start against a warm one, and the
+    snapshot would be written into (and later invalidated in) the operator's
+    own ``~/.config/architecture-pattern-mcp/embedding-index``.
+    """
+    os.environ[EMBEDDING_CACHE_ENV] = "0"
 
 
 def utc_now_iso() -> str:

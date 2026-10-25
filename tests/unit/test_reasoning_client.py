@@ -469,6 +469,14 @@ class TestTraceCache:
         assert agent.calls == 2
 
 
+#: Upper bound for every await in the single-flight tests. Without it a mutant
+#: that stalls the generation leaves the test awaiting forever: the process
+#: hangs until mutmut's wall-clock limit and the mutant is recorded as a
+#: TIMEOUT instead of a kill (a timeout proves nothing — observed 2026-10-25 on
+#: `_cache_key`/`_run_cached` mutants, 11 verdicts flipped killed→timeout).
+GATE_TIMEOUT_S = 5.0
+
+
 class _FakeGeneration:
     """Scripted stand-in for ReasoningClient._generate_trace.
 
@@ -557,12 +565,12 @@ class TestSingleFlight:
         generator = _FakeGeneration(gate=gate_ev)
         client._generate_trace = generator.__call__  # type: ignore[method-assign]
         task_a = asyncio.create_task(client.run_pre_llm("analyze", {"requirements": "same"}))
-        await gate_ev.wait()  # caller A is inside the generation
+        await asyncio.wait_for(gate_ev.wait(), timeout=GATE_TIMEOUT_S)  # caller A is inside the generation
         task_b = asyncio.create_task(client.run_pre_llm("analyze", {"requirements": "same"}))
         for _ in range(5):
             await asyncio.sleep(0)  # let caller B reach the inflight check
         gate_ev.set()
-        trace_a, trace_b = await asyncio.gather(task_a, task_b)
+        trace_a, trace_b = await asyncio.wait_for(asyncio.gather(task_a, task_b), timeout=GATE_TIMEOUT_S)
         assert generator.calls == 1  # single flight: one generation, two waiters
         assert trace_a.steps == trace_b.steps
         assert client._inflight == {}
@@ -609,7 +617,7 @@ class TestSingleFlight:
         generator = _FakeGeneration(gate=gate_ev)
         client._generate_trace = generator.__call__  # type: ignore[method-assign]
         task = asyncio.create_task(client.run_pre_llm("analyze", {"requirements": "slow"}))
-        await gate_ev.wait()
+        await asyncio.wait_for(gate_ev.wait(), timeout=GATE_TIMEOUT_S)
         task.cancel()
         with pytest.raises(asyncio.CancelledError):
             await task

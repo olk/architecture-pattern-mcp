@@ -176,6 +176,9 @@ class LiveExecutor:
         proxies so every request-side retrieval lands in ``retrieval.dense`` /
         ``retrieval.bm25``. Rerank time stays in the residual (see :mod:`.probes`).
         """
+        # Every arm measures the cold embed path; a snapshot hit would report a
+        # warm start under ``build.embed`` and leak into the operator's cache dir.
+        cfg.disable_embedding_cache()
         agent_inner = SoftwareArchitectAgent(config)
         pipeline = ArchitecturePipeline(
             agent=agent_inner,
