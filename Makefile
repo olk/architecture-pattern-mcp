@@ -19,7 +19,7 @@
 	verify-ledger verify-cross-consistency verify-patterns verify-all \
 	benchmark-selfcheck benchmark-offline benchmark-sidecars-up benchmark-live \
 	benchmark-analyze benchmark-e2e benchmark-draft benchmark-compare \
-	client docker-build docker-build-tei \
+	client-analyze client-design docker-build docker-build-tei \
 	docker-build-all docker-publish docker-publish-tei \
 	docker-publish-all \
 	docker-up docker-down docker-logs docker-logs-follow \
@@ -234,8 +234,11 @@ verify-all: ## Run every verify-* target (nightly entry point)
 	@echo "==> [6/6] verify-patterns";          $(MAKE) --no-print-directory verify-patterns
 
 ##@ Demo
-client: ## Run the pipes-and-filters MCP client demo (synchronous design_architecture)
-	@ARCHITECTURE_CLIENT_URL=http://localhost:8820/mcp uv run python examples/architecture_client.py
+client-analyze: ## Run the analyze_architecture MCP client demo (synchronous)
+	@ARCHITECTURE_CLIENT_URL=http://localhost:8820/mcp uv run python examples/architecture_client.py --tool analyze
+
+client-design: ## Run the design_architecture MCP client demo (synchronous, long-running)
+	@ARCHITECTURE_CLIENT_URL=http://localhost:8820/mcp uv run python examples/architecture_client.py --tool design
 
 client-async: ## Run the async job trio demo (submit_architecture_design_job + get_architecture_design_status)
 	@ARCHITECTURE_CLIENT_URL=http://localhost:8820/mcp uv run python examples/architecture_client_async.py

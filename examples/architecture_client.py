@@ -20,24 +20,27 @@
 # SOFTWARE.
 
 """
-Architecture Pattern MCP — Client Demo
+Architecture Pattern MCP — client demo
 
-Connects to a running MCP server over HTTP, calls design_architecture
-with a pipes-and-filters requirements string, and pretty-prints the
-returned JSON to stdout.
+Connects to a running MCP server over HTTP and calls one tool with a
+pipes-and-filters requirements string, then pretty-prints the JSON result:
 
-For clients with short request timeouts see examples/architecture_client_async.py
-which uses submit_architecture_design_job + get_architecture_design_status + cancel_architecture_design.
+- analyze_architecture (default) — ANALYZE phase only: recommended style,
+  selected patterns with scores, matched domains. Fast; no design generated.
+- design_architecture (--tool design) — full design artifact: analyze →
+  generate → evaluate → refine. Long-running (minutes).
 
 Usage:
     # Terminal 1: start the server
     $ python -m src.main
 
     # Terminal 2: run the client
-    $ uv run python examples/architecture_client.py
+    $ uv run python examples/architecture_client.py                  # analyze (fast)
+    $ uv run python examples/architecture_client.py --tool design    # full design
 
 Or pipe the JSON output:
-    $ uv run python examples/architecture_client.py 2>/dev/null | jq '.design.overview'
+    $ uv run python examples/architecture_client.py 2>/dev/null | jq '.recommended_style'
+    $ uv run python examples/architecture_client.py --tool design 2>/dev/null | jq '.design.overview'
 
 Requires:
     - MCP server running on http://localhost:8050/mcp (default)
@@ -52,6 +55,7 @@ import os
 import sys
 from typing import Any
 
+import click
 from fastmcp import Client  # type: ignore[attr-defined]
 
 SERVER_URL = os.environ.get("ARCHITECTURE_CLIENT_URL", "http://localhost:8050/mcp")
@@ -70,8 +74,15 @@ once delivery to sinks.
 DOMAIN = "data-processing"
 
 
-async def call_design_architecture(server_url: str) -> dict[str, Any]:
-    """Connect to the MCP server and call the design_architecture tool."""
+TOOL_NAMES: dict[str, str] = {
+    "analyze": "analyze_architecture",
+    "design": "design_architecture",
+}
+
+
+async def call_architecture_tool(server_url: str, tool: str) -> dict[str, Any]:
+    """Connect to the MCP server and call the selected architecture tool."""
+    tool_name = TOOL_NAMES[tool]
     client = Client(server_url)
 
     async with client:
@@ -79,15 +90,16 @@ async def call_design_architecture(server_url: str) -> dict[str, Any]:
         print(f"Connected to {server_url}", file=sys.stderr)
         print(f"Available tools: {[t.name for t in tools]}", file=sys.stderr)
 
-        print(f"Calling design_architecture(domain='{DOMAIN}')...", file=sys.stderr)
+        print(f"Calling {tool_name}(domain='{DOMAIN}')...", file=sys.stderr)
         result = await client.call_tool(
-            "design_architecture",
+            tool_name,
             {
                 "requirements": PIPES_AND_FILTERS_REQUIREMENTS,
                 "domain": DOMAIN,
             },
         )
-        return result.data
+        data: dict[str, Any] = result.data
+        return data
 
 
 def print_json(result: dict[str, Any]) -> None:
@@ -95,9 +107,9 @@ def print_json(result: dict[str, Any]) -> None:
     print(json.dumps(result, indent=2, ensure_ascii=False))
 
 
-async def amain() -> int:
+async def amain(tool: str) -> int:
     try:
-        result = await call_design_architecture(SERVER_URL)
+        result = await call_architecture_tool(SERVER_URL, tool)
     except Exception as exc:
         print(f"Error: {exc}", file=sys.stderr)
         print(
@@ -110,9 +122,20 @@ async def amain() -> int:
     return 0
 
 
-def main() -> int:
-    return asyncio.run(amain())
+@click.command()
+@click.option(
+    "--tool",
+    type=click.Choice(tuple(TOOL_NAMES)),
+    default="analyze",
+    show_default=True,
+    help="architecture tool to call (design runs the full pipeline)",
+)
+def cli(tool: str) -> None:
+    """Call analyze_architecture (default) or design_architecture on a running MCP server."""
+    exit_code = asyncio.run(amain(tool))
+    if exit_code:
+        raise SystemExit(exit_code)
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    cli()

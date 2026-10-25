@@ -51,8 +51,8 @@ export GENERATOR_API_KEY=your_key_here
 # 3. Start (Docker builds + starts everything)
 docker compose -f docker/docker-compose.yml up --build
 
-# 4. Demo
-make client
+# 4. Demo (analyze-only: fast. For the full design: make client-design)
+make client-analyze
 ```
 
 Server starts on **streamable-http** at `http://localhost:8820/mcp` (dev compose host port; systemd uses 8810). Then connect your agent below.
@@ -783,19 +783,20 @@ cancel_architecture_design(job_id)                                      → {can
 
 The job store is SQLite at `~/.config/architecture-pattern-mcp/jobs.db` (configurable via `ARCHITECTURE_PATTERN_JOBS_DB`).
 
-### Bypassing client timeouts entirely: `make client`
+### Bypassing client timeouts with a direct HTTP client
 
-The example client in `examples/architecture_client.py` is a **direct Python HTTP client** — it is not an MCP agent. It calls the server over HTTP without any MCP SDK, and therefore has **no client-side idle timeout**. It makes a single blocking request and waits for the full response, regardless of how long it takes.
+The example client in `examples/architecture_client.py` is a **direct Python HTTP client** — it is not an MCP agent. It calls the server over HTTP without an MCP SDK, and therefore has **no client-side idle timeout**: it makes a single blocking request and waits for the full response.
 
 ```bash
 # Start the server (from project root)
 docker compose -f docker/docker-compose.yml up --build
 
-# In another terminal, run the example client
-make client
+# In another terminal: fast analyze demo / full design demo (5-10 min)
+make client-analyze        # analyze_architecture only
+make client-design         # design_architecture, the long synchronous call
 ```
 
-`make client` is a development/demo tool. It demonstrates that the server **correctly completes** long requests — the timeout issue is purely a client-side problem. For production use with MCP agents, covers the majority of clients; async job trio is the universal fallback.
+Both targets drive the same direct client (`--tool analyze|design`). `make client-design` demonstrates that the server **correctly completes** long requests — the timeout issue is purely a client-side problem. Host applications that wrap MCP (Claude Desktop, Cursor, …) impose their own timeouts; use the async job trio there.
 
 ## Troubleshooting
 
@@ -838,7 +839,8 @@ docker compose -f docker/docker-compose.yml logs pattern-tei
 | `make check-static-typing` | Run mypy --strict type checking on src/ |
 | `make check-all` | Run every check-* quality gate (lint, types, dead code, deps) |
 | `make test-unit` | Run unit tests with uv (tests/unit/) |
-| `make client` | Run the example MCP client demo (requires server running) |
+| `make client-analyze` | Run the analyze-only MCP client demo (requires server running) |
+| `make client-design` | Run the synchronous design_architecture client demo (long-running; requires server running) |
 | `make docker-build` | Build the MCP server Docker image |
 | `make docker-build-all` | Build MCP server + TEI embedder images |
 | `make docker-publish` | Push image to Docker Hub + GHCR (version + latest) |
