@@ -112,7 +112,7 @@ services:
 
   pattern-tei-embed:
     image: ${TEI_IMAGE:-pattern-tei-embed:latest}
-    container_name: pattern-tei-embed-dev
+    container_name: architecture-pattern-tei-embed-dev
     restart: unless-stopped
     # No ports published — internal only (reached by MCP via Docker DNS)
     environment:
@@ -137,7 +137,7 @@ services:
 
   pattern-tei-rerank:
     image: ${TEI_RERANK_IMAGE:-pattern-tei-rerank:latest}
-    container_name: pattern-tei-rerank-dev
+    container_name: architecture-pattern-tei-rerank-dev
     restart: unless-stopped
     # No ports published — internal only (reached by MCP via Docker DNS)
     environment:
