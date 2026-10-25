@@ -91,6 +91,8 @@ Existing design to score?
 ├── YES → evaluate_architecture (device mcp__architecture_pattern_evaluate_architecture)
 └── NO
     ├── Explore the catalog first   → list_architecture_patterns (category?/domain?) → get_architecture_pattern(name)
+    ├── Only pattern expertise —    → analyze_architecture (returns style + patterns and generates NO design;
+    │   the agent writes the code     it is still a ~66 s call, so raise the server timeout first)
     ├── Full design + evaluation    → job trio: submit_architecture_design_job → get_architecture_design_status
     │                                  (use design_architecture directly only when the server timeout in
     │                                   ~/.omp/agent/mcp.json is >= 600000 or 0)
@@ -102,7 +104,7 @@ Existing design to score?
 | Device suffix | Purpose | Latency | Notes |
 |---------------|---------|---------|-------|
 | `design_architecture` | Full pipeline, one call | 5–10 min | needs a raised MCP timeout |
-| `analyze_architecture` | Style + pattern recommendations | 66 s measured | aborts under the 30 s deadline |
+| `analyze_architecture` | Style + pattern recommendations — the cheap path when the agent writes the code itself (no design generated) | 66 s measured | aborts under the 30 s deadline |
 | `generate_architecture` | Design from explicit `style` + `selected_patterns` | 211 s measured | aborts under the 30 s deadline |
 | `evaluate_architecture` | Score an existing design dict | 197 s measured | aborts under the 30 s deadline |
 | `submit_architecture_design_job` | Start pipeline, returns `job_id` | 0.03 s | default entry point |

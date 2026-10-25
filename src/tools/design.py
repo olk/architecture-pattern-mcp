@@ -87,43 +87,26 @@ class DesignArchitectureOutput(BaseModel):
         final_quality_score: Final quality score after best attempt
     """
 
-    design: dict[str, Any] = Field(
-        default_factory=dict,
-        description="Complete architecture design"
-    )
+    design: dict[str, Any] = Field(default_factory=dict, description="Complete architecture design")
 
     evaluation: dict[str, Any] = Field(
-        default_factory=dict,
-        description="Full architecture evaluation with metrics, risks, and recommendations"
+        default_factory=dict, description="Full architecture evaluation with metrics, risks, and recommendations"
     )
 
-    attempts: int = Field(
-        default=1,
-        ge=1,
-        description="Total generate attempts made (initial + retries)"
-    )
+    attempts: int = Field(default=1, ge=1, description="Total generate attempts made (initial + retries)")
 
-    final_style: str = Field(
-        default="",
-        description="Final architecture style"
-    )
+    final_style: str = Field(default="", description="Final architecture style")
 
-    quality_metrics: dict[str, Any] | None = Field(
-        default=None,
-        description="Aggregated quality metrics from analysis"
-    )
+    quality_metrics: dict[str, Any] | None = Field(default=None, description="Aggregated quality metrics from analysis")
 
-    final_quality_score: float = Field(
-        default=0.0,
-        description="Final quality score after best attempt"
-    )
+    final_quality_score: float = Field(default=0.0, description="Final quality score after best attempt")
     matched_domains: list[dict[str, Any]] = Field(
         default_factory=list,
-        description="Top matched ArchitectureDomain slugs from BM25+FAISS retrieval with fusion scores"
+        description="Top matched ArchitectureDomain slugs from BM25+FAISS retrieval with fusion scores",
     )
     is_fallback: bool = Field(
         default=False,
-        description="True when no real domain match was found and the fallback layered-monolith pattern was used"
+        description="True when no real domain match was found and the fallback layered-monolith pattern was used",
     )
     alternative_styles: list[dict[str, Any]] = Field(
         default_factory=list,
@@ -137,22 +120,22 @@ class DesignArchitectureOutput(BaseModel):
 class DesignArchitectureTool:
     """
     High-level wrapper tool that delegates to the full architecture pipeline.
-    
+
     FR-224: The system SHALL provide a DesignArchitectureTool class
     AC-224: Verify DesignArchitectureTool class exists and delegates to pipeline.run
-    
+
     This tool provides a simplified interface for complete architecture design generation.
     It accepts requirements and domain, optionally allowing style override, and returns
     a complete architecture design with evaluation.
-    
+
     Attributes:
         _agent: SoftwareArchitectAgent instance for LLM interactions
         _pipeline: ArchitecturePipeline instance for orchestrating the design pipeline
-    
+
     Error Handling:
         E-1 (ERR_001): Requirements validation fails - logged with requirements context
         E-9 (ERR_009): LLM provider returned error - logged with provider context
-    
+
     # DP-4: Factory Pattern - Tool creation with consistent initialization
     # DP-5: Dependency Injection - Constructor injection of dependencies
     # DP-7: Adapter Pattern - Adapts FastMCP protocol to internal implementation
@@ -182,10 +165,7 @@ class DesignArchitectureTool:
 
         logger.debug(
             "DesignArchitectureTool initialized",
-            extra={
-                "agent_type": type(agent).__name__,
-                "pipeline_type": type(pipeline).__name__
-            }
+            extra={"agent_type": type(agent).__name__, "pipeline_type": type(pipeline).__name__},
         )
 
     @tool(
@@ -193,7 +173,10 @@ class DesignArchitectureTool:
         description=(
             "Default tool for creating an architecture design. Runs the full pipeline "
             "(analyze → generate → evaluate → refine, up to 3 attempts) and returns the complete design, "
-            "evaluation, and quality scores in a single response. Takes 5-10 minutes; emits progress "
+            "evaluation, and quality scores in a single response. Use this when the caller wants the "
+            "design artifact itself (components, relationships, API contracts, data models); when the agent "
+            "only needs pattern guidance and writes the code itself, call analyze_architecture instead — it "
+            "skips design generation. Takes 5-10 minutes; emits progress "
             "notifications every 30 s so clients stay connected. Use this whenever the user wants an "
             "architecture design, including when they explicitly request design_architecture. "
             "Do NOT use submit_architecture_design_job for ordinary design requests — that tool is only for clients "
@@ -209,44 +192,52 @@ class DesignArchitectureTool:
         ),
     )
     async def design(  # noqa: PLR0912
-
         self,
-        requirements: Annotated[PrintableText, Field(description="Architecture requirements description (1-100000 chars, must contain visible text)")],
-        domain: Annotated[DomainName, Field(description="Target architecture domain (1-200 chars, must contain visible text)")],
-        override_style: Annotated[PrintableText | None, Field(description="Override the derived architecture style")] = None,
+        requirements: Annotated[
+            PrintableText,
+            Field(description="Architecture requirements description (1-100000 chars, must contain visible text)"),
+        ],
+        domain: Annotated[
+            DomainName, Field(description="Target architecture domain (1-200 chars, must contain visible text)")
+        ],
+        override_style: Annotated[
+            PrintableText | None, Field(description="Override the derived architecture style")
+        ] = None,
         ctx: Context | None = None,
     ) -> dict[str, Any]:
         """
         Generate complete architecture design with evaluation.
-        
+
         FR-224: DesignArchitectureTool class delegates to pipeline.run
         CF-1: design_architecture function with requirements, domain, optional override_style
         API-1: /tools/design_architecture endpoint
-        
+
         DF-1: Flow - MCP Client -> MCPArchitectServer -> DesignArchitectureTool.design()
               -> ArchitecturePipeline.run() -> RefinedArchitecture
-        
+
         This method:
         1. Validates inputs (E-1)
         2. Delegates to ArchitecturePipeline.run()
         3. Maps RefinedArchitecture to output dict
         4. Handles E-9 errors appropriately
-        
+
         Args:
             requirements: Architecture requirements description
             domain: Target architecture domain
             override_style: Optional architecture style override
             ctx: FastMCP context for logging and progress reporting
-            
+
         Returns:
             dict with complete design and evaluation
-            
+
         Error Responses:
             E-1: Requirements validation fails (raised as ToolError)
             E-9: LLM provider returned error (raised as ToolError)
         """
         if ctx is not None:
-            await ctx.info(f"design_architecture: domain={domain}, req_len={len(requirements)}, override_style={override_style}")
+            await ctx.info(
+                f"design_architecture: domain={domain}, req_len={len(requirements)}, override_style={override_style}"
+            )
 
         try:
             try:
@@ -262,9 +253,7 @@ class DesignArchitectureTool:
             hb = self._start_heartbeat(ctx, "design_architecture")
             try:
                 refined = await self._pipeline.run_design(
-                    requirements=requirements,
-                    domain=domain,
-                    style=override_style
+                    requirements=requirements, domain=domain, style=override_style
                 )
             finally:
                 if hb is not None:
@@ -286,9 +275,7 @@ class DesignArchitectureTool:
         except MalformedArchitectureOverviewError as exc:
             if ctx is not None:
                 await ctx.error(f"Malformed architecture overview: {exc.locator} failed validation")
-            raise ToolError(
-                f"{ERROR_INVALID_ARCHITECTURE}: {exc.locator} failed validation"
-            ) from exc
+            raise ToolError(f"{ERROR_INVALID_ARCHITECTURE}: {exc.locator} failed validation") from exc
 
         except Exception as e:
             error_msg = str(e)
@@ -302,9 +289,7 @@ class DesignArchitectureTool:
                 await ctx.error(f"Unexpected error during design: {error_msg}")
             raise
 
-    def _start_heartbeat(
-        self, ctx: Context | None, label: str
-    ) -> asyncio.Task[None] | None:
+    def _start_heartbeat(self, ctx: Context | None, label: str) -> asyncio.Task[None] | None:
         """Start a parallel heartbeat that emits progress notifications.
 
         Keeps client HTTP/stdio idle timers alive during long synchronous calls.
@@ -366,9 +351,12 @@ def pipeline_result_to_output(refined: PipelineResult) -> DesignArchitectureOutp
         DesignArchitectureOutput mapped from refined architecture
     """
     from src.tools._adapters import design_to_pydantic
+
     pd_design = design_to_pydantic(refined.design)
     design_dict = pd_design.model_dump()
-    eval_dict = refined.evaluation.model_dump() if hasattr(refined.evaluation, "model_dump") else dict(refined.evaluation)
+    eval_dict = (
+        refined.evaluation.model_dump() if hasattr(refined.evaluation, "model_dump") else dict(refined.evaluation)
+    )
     qm_dict = refined.quality_metrics.model_dump() if refined.quality_metrics else None
     return DesignArchitectureOutput(
         design=design_dict,

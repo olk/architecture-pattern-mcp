@@ -51,7 +51,7 @@ Most malformed arguments never reach the tool body: the FastMCP schema validator
 
 ### `analyze_architecture`
 
-Derives style + pattern recommendations. Does not produce a design.
+Derives style + pattern recommendations. Does not produce a design — this is the path for coding agents that write the code themselves: it returns the pattern expertise without spending the generate + evaluate phases. Use `design_architecture` when the caller wants the design artifact.
 
 ```ts
 {
@@ -116,7 +116,7 @@ Input validation is strict — `ERR_012: overview failed validation` when the ov
 
 ### `design_architecture`
 
-Full pipeline in one call: analyse → generate → evaluate → refine.
+Full pipeline in one call: analyse → generate → evaluate → refine. Use it when the caller wants the design artifact; `analyze_architecture` is the cheaper path when the agent only needs guidance and writes the code itself.
 
 ```ts
 {

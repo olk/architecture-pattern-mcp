@@ -17,6 +17,11 @@ Use this whenever the user wants a design. With OMP's default 30 s deadline the 
 are also the only ones that fit: `analyze_architecture` measured 66.2 s and `evaluate_architecture`
 196.9 s in a test, both aborted by the deadline, and `design_architecture` alone runs 5–10 minutes.
 
+> **Only need the pattern expertise?** When the agent writes the code itself, skip design
+> generation: call `analyze_architecture` (a raised server timeout is still required — ~66 s
+> measured) and hand its `recommended_style` + `selected_patterns` to the code-writing agent.
+> It returns no design artifact.
+
 **Step 1 — submit** (returns in ~30 ms):
 
 ```json

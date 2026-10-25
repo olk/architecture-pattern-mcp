@@ -201,6 +201,8 @@ and S3.
 
 Your agent calls `design_architecture` internally. The server returns a full architecture design: components (Kafka source, JSON parser filter, geolocation enricher, InfluxDB sink, S3 sink), quality attribute scores (scalability: 9.1, maintainability: 8.2, …), and specific recommendations.
 
+That is the **design** path: the server's LLM generates the design artifact for you, which is why a call takes minutes. If your agent writes the code itself and only needs the pattern expertise, call `analyze_architecture` instead — it returns the recommended style, selected patterns with scores, requirement weights, quality metrics and matched domains **without** generating a design. Two measured facts from the committed benchmark corpus: generate + evaluate are ~92 % of a design call's wall clock (`benchmarks/base-noreasoning/`), and the two paths agree on the style in all 31 completed records (15 base + 16 no-reasoning; the one remaining base record is a design call that failed with a malformed-JSON validation error and produced no design) — a design call buys the artifact, not a better pattern choice.
+
 **Or call tools directly** from your agent:
 
 ```
@@ -310,10 +312,10 @@ Show me details about the event-driven architecture pattern.
 
 | Tool | Description |
 |---|---|
-| `analyze_architecture` | Analyse requirements and domain → recommended style, patterns, quality metrics. *Long-running (LLM call). Not idempotent.* |
+| `analyze_architecture` | Analysis-only path for agents that write the code themselves: requirements + domain → recommended style, selected patterns, quality metrics, matched domains. Generates no design. *One lightweight LLM call. Not idempotent.* |
 | `generate_architecture` | Generate an architecture design from requirements and selected patterns. *Long-running (LLM call). Not idempotent.* |
 | `evaluate_architecture` | Score an existing design against quality attributes. *Long-running (LLM call). Not idempotent.* |
-| `design_architecture` | Default tool for full architecture design (analyse → generate → evaluate → refine, up to 3 attempts). *Long-running (5–10 min); use this unless your client has a short request timeout.* |
+| `design_architecture` | Design-artifact path for callers that want the generated design: analyse → generate → evaluate → refine, up to 3 attempts, returning components, relationships, API contracts and data models. *Long-running (5–10 min); use this unless your client has a short request timeout.* |
 | `submit_architecture_design_job` | Start a background design job and return a `job_id` immediately. **ONLY for clients with short request timeouts** (Cursor, Claude Desktop, TS-SDK). For other clients use `design_architecture`. Poll `get_architecture_design_status` every 10–30 s. |
 | `get_architecture_design_status` | Poll job status. Returns the current status, progress message, and the full design output when `completed`. |
 | `cancel_architecture_design` | Cancel a running job (best-effort; takes effect at the next pipeline stage boundary; may take up to one LLM call). |
@@ -730,7 +732,7 @@ Full JSON Schema with all enums: `docs/pattern-schema.json`
 
 ## Long-running tools & timeouts
 
-`design_architecture` (and to a lesser extent `analyze_architecture`, `generate_architecture`, `evaluate_architecture`) run multi-stage LLM pipelines that **can take 5–10 minutes per call**. This is inherent to the workload, not a bug: the generator LLM must process a large input payload — the selected pattern definitions from the 128-pattern catalog, your requirements, and the full output of every previous stage — and produce a large, strictly structured JSON document (components, relationships, API contracts, data models, event contracts, quality scores) one token at a time. The `design_architecture` pipeline repeats generate → evaluate up to three times, so a single call can comprise 9+ LLM round trips.
+`design_architecture` and its job-trio counterpart run a multi-stage LLM pipeline that **can take 5–10 minutes per call**. The single-phase tools are far cheaper: `analyze_architecture` is one lightweight LLM call (≈20 s mean on the committed benchmark corpus, 66 s measured on a contended host) and `generate_architecture` / `evaluate_architecture` are one large completion each (≈2–3 minutes). The long design call is inherent to the workload, not a bug: the generator LLM must process a large input payload — the selected pattern definitions from the 128-pattern catalog, your requirements, and the full output of every previous stage — and produce a large, strictly structured JSON document (components, relationships, API contracts, data models, event contracts, quality scores) one token at a time. The `design_architecture` pipeline repeats generate → evaluate up to three times, so a single call can comprise 9+ LLM round trips.
 
 ### The timeout problem
 
