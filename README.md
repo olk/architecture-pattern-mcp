@@ -973,8 +973,6 @@ journalctl -u architecture-pattern-mcp -n 50
 docker compose -p apmcp-systemd -f /etc/architecture-pattern-mcp/docker-compose.yml ps
 # GET /health is 404 by design; the JSON-RPC initialize POST is the probe.
 curl -s -o /dev/null -w '%{http_code}\n' -X POST "http://localhost:8810/mcp" \
-  -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' \
-  -d '{"jsonrpc":"2.0","method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"probe","version":"0.0.0"}},"id":1}'
 ```
 
 ### Day-to-day

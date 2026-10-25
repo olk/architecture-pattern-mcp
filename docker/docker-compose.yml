@@ -95,7 +95,16 @@ services:
       - ../config:/app/config
     restart: on-failure
     healthcheck:
-      test: ["CMD", "python", "-m", "src.main", "--health"]
+      # TCP probe on the serving port: the server binds only AFTER lifespan
+      # warmup, so connect = fully ready. `python -m src.main --health`
+      # always prints OK without touching the serving path — not a probe.
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import socket; socket.create_connection(('127.0.0.1', 8050), timeout=5).close()",
+        ]
       interval: 30s
       timeout: 10s
       retries: 3

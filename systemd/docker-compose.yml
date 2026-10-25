@@ -97,7 +97,14 @@ services:
       - /etc/architecture-pattern-mcp/config:/app/config
     restart: on-failure
     healthcheck:
-      test: ["CMD", "python", "-m", "src.main", "--health"]
+      # Same TCP readiness probe as the image HEALTHCHECK: connect = serving.
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import socket; socket.create_connection(('127.0.0.1', 8050), timeout=5).close()",
+        ]
       interval: 30s
       timeout: 10s
       retries: 3
