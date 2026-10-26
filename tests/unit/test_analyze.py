@@ -40,6 +40,7 @@ from src.agent import SoftwareArchitectAgent
 # Import for mocking the pipeline
 from src.pipeline import AnalysisResult, ArchitecturePipeline
 from src.schemas.quality import QualityMetrics
+from src.schemas.analysis import RequirementWeights
 
 # Import the tool class and related components
 from fastmcp.exceptions import ToolError
@@ -52,6 +53,7 @@ from src.tools.analyze import (
 )
 
 # Test fixtures
+
 
 @pytest.fixture
 def mock_agent():
@@ -78,16 +80,20 @@ def sample_analysis_result():
         weaknesses=["Complex initial setup"],
         recommendations=["Consider using patterns for microservices"],
         quality_metrics=QualityMetrics(
-            maintainability=8.0,
-            scalability=9.0,
-            reliability=7.5,
-            security=8.0,
-            performance=7.0
+            maintainability=8.0, scalability=9.0, reliability=7.5, security=8.0, performance=7.0
         ),
         recommended_style="microservices",
+        requirement_weights=RequirementWeights(
+            scalability=1.0,
+            maintainability=0.5,
+            reliability=0.6,
+            security=0.3,
+            performance=0.8,
+            simplicity=0.2,
+        ),
         selected_patterns=[
             {"name": "microservices-architecture", "context": "Distributed system design", "category": "structural"},
-            {"name": "cqrs-pattern", "context": "Read/write separation", "category": "structural"}
+            {"name": "cqrs-pattern", "context": "Read/write separation", "category": "structural"},
         ],
     )
 
@@ -96,16 +102,12 @@ def sample_analysis_result():
 def sample_quality_metrics():
     """Create sample QualityMetrics for testing."""
     return QualityMetrics(
-        maintainability=8.0,
-        scalability=9.0,
-        reliability=7.5,
-        security=8.0,
-        performance=7.0,
-        testability=7.0
+        maintainability=8.0, scalability=9.0, reliability=7.5, security=8.0, performance=7.0, testability=7.0
     )
 
 
 # AC-221: Verify AnalyzeArchitectureTool class exists, accepts SoftwareArchitectAgent
+
 
 class TestAnalyzeArchitectureToolInit:
     """Test suite for AnalyzeArchitectureTool initialization."""
@@ -113,7 +115,7 @@ class TestAnalyzeArchitectureToolInit:
     def test_tool_initialization_with_agent_and_pipeline(self, mock_agent, mock_pipeline):
         """
         AC-221: Verify AnalyzeArchitectureTool class exists, accepts SoftwareArchitectAgent
-        
+
         given_precondition: SoftwareArchitectAgent initialized
         when_action: System creates AnalyzeArchitectureTool instance
         then_outcome: AnalyzeArchitectureTool class exists with proper initialization
@@ -130,7 +132,7 @@ class TestAnalyzeArchitectureToolInit:
     def test_factory_function_creates_tool(self, mock_agent, mock_pipeline):
         """
         DP-4: Factory Pattern - Consistent tool initialization
-        
+
         given_precondition: agent and pipeline available
         when_action: Factory function is called
         then_outcome: Properly initialized tool is returned
@@ -151,7 +153,7 @@ class TestAnalyzeArchitectureOutput:
     def test_output_model_with_all_fields(self, sample_quality_metrics):
         """
         ENT-4: AnalysisResult with strengths, weaknesses, recommendations, etc.
-        
+
         given_precondition: AnalysisResult data available
         when_action: Creating output model
         then_outcome: All fields are properly set
@@ -163,7 +165,16 @@ class TestAnalyzeArchitectureOutput:
             recommendations=["Use patterns"],
             recommended_style="microservices",
             selected_patterns=[{"name": "test-pattern"}],
-            quality_metrics={"maintainability": 8.0}
+            quality_metrics={"maintainability": 8.0},
+            requirement_weights=RequirementWeights(
+                scalability=1.0,
+                maintainability=0.5,
+                reliability=0.6,
+                security=0.3,
+                performance=0.8,
+                simplicity=0.2,
+            ),
+            style_fallback=True,
         )
 
         # Then: All fields should be set correctly
@@ -172,6 +183,9 @@ class TestAnalyzeArchitectureOutput:
         assert len(output.recommendations) == 1
         assert output.recommended_style == "microservices"
         assert len(output.selected_patterns) == 1
+        assert output.requirement_weights is not None
+        assert output.requirement_weights.scalability == 1.0
+        assert output.style_fallback is True
 
     def test_output_model_default_values(self):
         """
@@ -189,21 +203,18 @@ class TestAnalyzeArchitectureOutput:
         assert output.recommended_style == ""
         assert output.selected_patterns == []
         assert output.quality_metrics is None
+        assert output.requirement_weights is None
+        assert output.style_fallback is False
 
 
 class TestAnalyzeArchitectureToolAnalyze:
     """Test suite for AnalyzeArchitectureTool.analyze() method."""
 
     @pytest.mark.asyncio
-    async def test_analyze_returns_output_successfully(
-        self,
-        mock_agent,
-        mock_pipeline,
-        sample_analysis_result
-    ):
+    async def test_analyze_returns_output_successfully(self, mock_agent, mock_pipeline, sample_analysis_result):
         """
         FR-221: AnalyzeArchitectureTool class analyzes requirements
-        
+
         given_precondition: Pipeline configured with patterns
         when_action: analyze() is called with requirements and domain
         then_outcome: dict is returned with analysis
@@ -214,29 +225,21 @@ class TestAnalyzeArchitectureToolAnalyze:
         tool = AnalyzeArchitectureTool(agent=mock_agent, pipeline=mock_pipeline)
 
         # When: Calling analyze with requirements and domain
-        output = await tool.analyze(
-            requirements="System needs high scalability",
-            domain="microservices"
-        )
+        output = await tool.analyze(requirements="System needs high scalability", domain="microservices")
 
         # Then: Should return properly formatted output
         assert isinstance(output, dict)
-        assert len(output['strengths']) == 2
-        assert len(output['weaknesses']) == 1
-        assert len(output['recommendations']) == 1
-        assert output['recommended_style'] == "microservices"
-        assert len(output['selected_patterns']) == 2
+        assert len(output["strengths"]) == 2
+        assert len(output["weaknesses"]) == 1
+        assert len(output["recommendations"]) == 1
+        assert output["recommended_style"] == "microservices"
+        assert len(output["selected_patterns"]) == 2
 
     @pytest.mark.asyncio
-    async def test_analyze_maps_quality_metrics_correctly(
-        self,
-        mock_agent,
-        mock_pipeline,
-        sample_analysis_result
-    ):
+    async def test_analyze_maps_quality_metrics_correctly(self, mock_agent, mock_pipeline, sample_analysis_result):
         """
         ENT-1: QualityMetrics with maintainability, scalability, reliability, security, performance
-        
+
         given_precondition: AnalysisResult with QualityMetrics
         when_action: analyze() is called
         then_outcome: Quality metrics are properly mapped to dict
@@ -247,31 +250,23 @@ class TestAnalyzeArchitectureToolAnalyze:
         tool = AnalyzeArchitectureTool(agent=mock_agent, pipeline=mock_pipeline)
 
         # When: Calling analyze
-        output = await tool.analyze(
-            requirements="System needs high scalability",
-            domain="microservices"
-        )
+        output = await tool.analyze(requirements="System needs high scalability", domain="microservices")
 
         # Then: Quality metrics should be mapped correctly
-        assert output['quality_metrics'] is not None
-        assert "maintainability" in output['quality_metrics']
-        assert "scalability" in output['quality_metrics']
-        assert "reliability" in output['quality_metrics']
-        assert "security" in output['quality_metrics']
-        assert "performance" in output['quality_metrics']
-        assert "testability" in output['quality_metrics']
+        assert output["quality_metrics"] is not None
+        assert "maintainability" in output["quality_metrics"]
+        assert "scalability" in output["quality_metrics"]
+        assert "reliability" in output["quality_metrics"]
+        assert "security" in output["quality_metrics"]
+        assert "performance" in output["quality_metrics"]
+        assert "testability" in output["quality_metrics"]
 
     @pytest.mark.asyncio
-    async def test_analyze_delegates_to_pipeline(
-        self,
-        mock_agent,
-        mock_pipeline,
-        sample_analysis_result
-    ):
+    async def test_analyze_delegates_to_pipeline(self, mock_agent, mock_pipeline, sample_analysis_result):
         """
         DF-2: Flow - MCP Client -> AnalyzeArchitectureTool.analyze()
               -> ArchitecturePipeline.analyze()
-        
+
         given_precondition: Pipeline configured
         when_action: analyze() is called
         then_outcome: Pipeline.analyze is called with correct parameters
@@ -282,16 +277,65 @@ class TestAnalyzeArchitectureToolAnalyze:
         tool = AnalyzeArchitectureTool(agent=mock_agent, pipeline=mock_pipeline)
 
         # When: Calling analyze
-        await tool.analyze(
-            requirements="System needs high scalability",
-            domain="microservices"
-        )
+        await tool.analyze(requirements="System needs high scalability", domain="microservices")
 
         # Then: Pipeline.analyze should be called once with correct parameters
         mock_pipeline.analyze.assert_called_once_with(
-            requirements="System needs high scalability",
-            domain="microservices"
+            requirements="System needs high scalability", domain="microservices"
         )
+
+    @pytest.mark.asyncio
+    async def test_analyze_passes_through_requirement_weights(self, mock_agent, mock_pipeline, sample_analysis_result):
+        """Pipeline requirement weights are surfaced on the analyze output."""
+        mock_pipeline.analyze.return_value = sample_analysis_result
+
+        tool = AnalyzeArchitectureTool(agent=mock_agent, pipeline=mock_pipeline)
+
+        output = await tool.analyze(requirements="System needs high scalability", domain="microservices")
+
+        assert set(output["requirement_weights"]) == {
+            "scalability",
+            "maintainability",
+            "reliability",
+            "security",
+            "performance",
+            "simplicity",
+        }
+        assert output["requirement_weights"]["scalability"] == 1.0
+
+    @pytest.mark.asyncio
+    async def test_analyze_style_fallback_true_when_style_differs_from_top_pattern(self, mock_agent, mock_pipeline):
+        """style_fallback is True when recommended_style is the threshold substitution."""
+        mock_pipeline.analyze.return_value = AnalysisResult(
+            strengths=[],
+            weaknesses=[],
+            recommendations=[],
+            recommended_style="layered-monolith",
+            selected_patterns=[{"name": "event-driven", "context": "Async messaging", "category": "structural"}],
+        )
+
+        tool = AnalyzeArchitectureTool(agent=mock_agent, pipeline=mock_pipeline)
+
+        output = await tool.analyze(requirements="System needs high scalability", domain="event-driven")
+
+        assert output["style_fallback"] is True
+
+    @pytest.mark.asyncio
+    async def test_analyze_style_fallback_false_when_style_matches_top_pattern(self, mock_agent, mock_pipeline):
+        """style_fallback is False when recommended_style equals the top pattern."""
+        mock_pipeline.analyze.return_value = AnalysisResult(
+            strengths=[],
+            weaknesses=[],
+            recommendations=[],
+            recommended_style="event-driven",
+            selected_patterns=[{"name": "event-driven", "context": "Async messaging", "category": "structural"}],
+        )
+
+        tool = AnalyzeArchitectureTool(agent=mock_agent, pipeline=mock_pipeline)
+
+        output = await tool.analyze(requirements="System needs high scalability", domain="event-driven")
+
+        assert output["style_fallback"] is False
 
 
 class TestAnalyzeArchitectureErrorHandling:
@@ -301,33 +345,29 @@ class TestAnalyzeArchitectureErrorHandling:
     async def test_llm_error_raises_tool_error(self, mock_agent, mock_pipeline):
         """
         E-9: ERR_009 - LLM provider returned error (HTTP 502, severity: error)
-        
+
         given_precondition: LLM provider returns error
         when_action: analyze() is called
         then_outcome: ToolError is raised
         """
         # Given: Pipeline raises LLMError
         from src.agent import LLMError
+
         mock_pipeline.analyze.side_effect = LLMError(
-            provider="openai",
-            error=ERROR_LLM_PROVIDER,
-            provider_message="API rate limit exceeded"
+            provider="openai", error=ERROR_LLM_PROVIDER, provider_message="API rate limit exceeded"
         )
 
         tool = AnalyzeArchitectureTool(agent=mock_agent, pipeline=mock_pipeline)
 
         # When/Then: Should raise ToolError
         with pytest.raises(ToolError):
-            await tool.analyze(
-                requirements="System needs high scalability",
-                domain="microservices"
-            )
+            await tool.analyze(requirements="System needs high scalability", domain="microservices")
 
     @pytest.mark.asyncio
     async def test_no_patterns_error_returns_empty_result(self, mock_agent, mock_pipeline):
         """
         E-2: ERR_002 - No patterns found for domain (HTTP 404, severity: info)
-        
+
         given_precondition: No patterns found for domain
         when_action: analyze() is called
         then_outcome: Empty result is returned with warning message
@@ -338,22 +378,19 @@ class TestAnalyzeArchitectureErrorHandling:
         tool = AnalyzeArchitectureTool(agent=mock_agent, pipeline=mock_pipeline)
 
         # When: Calling analyze
-        output = await tool.analyze(
-            requirements="System needs high scalability",
-            domain="unknown-domain"
-        )
+        output = await tool.analyze(requirements="System needs high scalability", domain="unknown-domain")
 
         # Then: Should return empty result with warning
-        assert output['strengths'] == []
-        assert len(output['weaknesses']) > 0
-        assert "No patterns found" in output['weaknesses'][0]
-        assert output['recommended_style'] == "layered-monolith"
-        assert output['selected_patterns'] == []
+        assert output["strengths"] == []
+        assert len(output["weaknesses"]) > 0
+        assert "No patterns found" in output["weaknesses"][0]
+        assert output["recommended_style"] == "layered-monolith"
+        assert output["selected_patterns"] == []
 
     def test_is_llm_error_detects_llm_errors(self, mock_agent, mock_pipeline):
         """
         E-9: Error detection helper method
-        
+
         given_precondition: LLMError instance
         when_action: _is_llm_error() is called
         then_outcome: Returns True for LLMError instances
@@ -363,6 +400,7 @@ class TestAnalyzeArchitectureErrorHandling:
 
         # When: Checking if LLMError is detected
         from src.agent import LLMError
+
         error = LLMError(provider="openai", error="ERR_009", provider_message="test")
 
         # Then: Should return True for LLMError
@@ -371,7 +409,7 @@ class TestAnalyzeArchitectureErrorHandling:
     def test_is_no_patterns_error_detects_pattern_errors(self, mock_agent, mock_pipeline):
         """
         E-2: Error detection helper method
-        
+
         given_precondition: Exception with "no patterns" message
         when_action: _is_no_patterns_error() is called
         then_outcome: Returns True for no patterns errors
